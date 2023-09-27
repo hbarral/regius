@@ -1,5 +1,11 @@
 package regius
 
+import (
+	"fmt"
+
+	"github.com/joho/godotenv"
+)
+
 const version = "1.0.0"
 
 type Regius struct {
@@ -20,6 +26,16 @@ func (c *Regius) New(rootPath string) error {
 		return err
 	}
 
+	err = c.checkDotEnv(rootPath)
+	if err != nil {
+		return nil
+	}
+
+	err = godotenv.Load(rootPath + "/.env")
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -31,6 +47,16 @@ func (c *Regius) Init(p initPath) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (c *Regius) checkDotEnv(path string) error {
+	err := c.CreateFileIfNotExists(fmt.Sprintf("%s/.env", path))
+
+	if err != nil {
+		return err
 	}
 
 	return nil
