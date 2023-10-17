@@ -3,10 +3,14 @@ package regius
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
+	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
+	"gitlab.com/hbarral/regius/render"
 )
 
 const version = "1.0.0"
@@ -18,6 +22,8 @@ type Regius struct {
 	ErrorLog *log.Logger
 	InfoLog  *log.Logger
 	RootPath string
+	Routes   *chi.Mux
+	Render   *render.Render
 	config   config
 }
 
@@ -54,10 +60,13 @@ func (c *Regius) New(rootPath string) error {
 	c.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
 	c.Version = version
 	c.RootPath = rootPath
+	c.Routes = c.routes().(*chi.Mux)
 	c.config = config{
 		port:     os.Getenv("PORT"),
 		renderer: os.Getenv("RENDERER"),
 	}
+
+	c.createRenderer()
 
 	return nil
 }
@@ -73,6 +82,22 @@ func (c *Regius) Init(p initPath) error {
 	}
 
 	return nil
+}
+
+func (r *Regius) ListenAndServe() {
+	srv := &http.Server{
+		Addr:         fmt.Sprintf(":%s", os.Getenv("PORT")),
+		ErrorLog:     r.ErrorLog,
+		Handler:      r.Routes,
+		IdleTimeout:  30 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 600 * time.Second,
+	}
+
+	r.InfoLog.Printf("Listening on port %s", os.Getenv("PORT"))
+
+	err := srv.ListenAndServe()
+	r.ErrorLog.Fatal(err)
 }
 
 func (c *Regius) checkDotEnv(path string) error {
@@ -93,4 +118,14 @@ func (c *Regius) startLoggers() (*log.Logger, *log.Logger) {
 	errorLog = log.New(os.Stdout, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
 	return infoLog, errorLog
+}
+
+func (r *Regius) createRenderer() {
+	myrenderer := render.Render{
+		Renderer: r.config.renderer,
+		RootPath: r.RootPath,
+		Port:     r.config.port,
+	}
+
+	r.Render = &myrenderer
 }
