@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/CloudyKit/jet/v6"
+	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
 	"gitlab.com/hbarral/regius/render"
+	"gitlab.com/hbarral/regius/session"
 )
 
 const version = "1.0.0"
@@ -27,11 +29,14 @@ type Regius struct {
 	Render   *render.Render
 	JetViews *jet.Set
 	config   config
+	Session  *scs.SessionManager
 }
 
 type config struct {
-	port     string
-	renderer string
+	port        string
+	renderer    string
+	cookie      cookieConfig
+	sessionType string
 }
 
 func (c *Regius) New(rootPath string) error {
@@ -66,7 +71,25 @@ func (c *Regius) New(rootPath string) error {
 	c.config = config{
 		port:     os.Getenv("PORT"),
 		renderer: os.Getenv("RENDERER"),
+		cookie: cookieConfig{
+			name:     os.Getenv("COOKIE_NAME"),
+			lifetime: os.Getenv("COOKIE_LIFETIME"),
+			persist:  os.Getenv("COOKIE_PERSISTS"),
+			secure:   os.Getenv("COOKIE_SECURE"),
+			domain:   os.Getenv("COOKIE_DOMAIN"),
+		},
+		sessionType: os.Getenv("SESSION_TYPE"),
 	}
+
+	sess := session.Session{
+		CookieLifetime: c.config.cookie.lifetime,
+		CookiePersist:  c.config.cookie.persist,
+		CookieName:     c.config.cookie.name,
+		CookieDomain:   c.config.cookie.domain,
+		SessionType:    c.config.sessionType,
+	}
+
+	c.Session = sess.InitSession()
 
 	var views = jet.NewSet(
 		jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views/", rootPath)),

@@ -19,6 +19,7 @@ func (r *Regius) routes() http.Handler {
 	}
 
 	mux.Use(middleware.Recoverer)
+	mux.Use(r.SessionLoad)
 
 	return mux
 }
