@@ -180,6 +180,7 @@ func (r *Regius) createRenderer() {
 		RootPath: r.RootPath,
 		Port:     r.config.port,
 		JetViews: r.JetViews,
+		Session:  r.Session,
 	}
 
 	r.Render = &myrenderer
