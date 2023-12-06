@@ -30,7 +30,7 @@ func (c *Session) InitSession() *scs.SessionManager {
 		persist = true
 	}
 
-	if strings.ToLower(c.CookiePersist) == "true" {
+	if strings.ToLower(c.CookieSecure) == "true" {
 		secure = true
 	}
 
