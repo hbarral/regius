@@ -24,7 +24,7 @@ func main() {
 	switch arg1 {
 	case "help":
 		showHelp()
-	case "vesion":
+	case "version":
 		color.Yellow("Application version: " + version)
 
 	case "migrate":
@@ -73,13 +73,6 @@ func validateInput() (string, string, string, error) {
 	}
 
 	return arg1, arg2, arg3, nil
-}
-
-func showHelp() {
-	color.Yellow(`Available commands:
-  help            - show the help commands
-  version         - print application version
-  `)
 }
 
 func exitGracefully(err error, msg ...string) {

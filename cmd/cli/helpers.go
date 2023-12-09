@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/fatih/color"
 	"github.com/joho/godotenv"
 )
 
@@ -52,4 +53,17 @@ func getDSN() string {
 		return dsn
 	}
 	return "mysql://" + reg.BuildDSN()
+}
+
+func showHelp() {
+	color.Yellow(`Available commands:
+
+  help                   - show the help commands
+  version                - print application version
+  migration              - runs all up mirgrations that have not been run previously
+  migration down         - reverses the most recent migration
+  migration reset        - runs all down mirgrations in reverse order, and then all up migrations
+  make migration <name>  - creates two new up and down migrations in the migrations folder
+
+  `)
 }
