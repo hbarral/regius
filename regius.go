@@ -44,11 +44,10 @@ type config struct {
 func (c *Regius) New(rootPath string) error {
 	pathConfig := initPath{
 		rootPath:    rootPath,
-		folderNames: []string{"handlers", "migratios", "views", "data", "public", "tmp", "logs", "middleware"},
+		folderNames: []string{"handlers", "migrations", "views", "data", "public", "tmp", "logs", "middleware"},
 	}
 
 	err := c.Init(pathConfig)
-
 	if err != nil {
 		return err
 	}
@@ -111,7 +110,7 @@ func (c *Regius) New(rootPath string) error {
 
 	c.Session = sess.InitSession()
 
-	var views = jet.NewSet(
+	views := jet.NewSet(
 		jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views/", rootPath)),
 		jet.InDevelopmentMode(),
 	)
@@ -127,7 +126,6 @@ func (c *Regius) Init(p initPath) error {
 	root := p.rootPath
 	for _, path := range p.folderNames {
 		err := c.CreateDirIfNotExist(root + "/" + path)
-
 		if err != nil {
 			return err
 		}
@@ -156,7 +154,6 @@ func (r *Regius) ListenAndServe() {
 
 func (c *Regius) checkDotEnv(path string) error {
 	err := c.CreateFileIfNotExists(fmt.Sprintf("%s/.env", path))
-
 	if err != nil {
 		return err
 	}
