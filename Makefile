@@ -9,3 +9,6 @@ cover:
 ## coverage: displays test coverage
 coverage:
 	@go test -cover ./...
+
+build_cli:
+	@go build -o ../regius-app/regius ./cmd/cli
