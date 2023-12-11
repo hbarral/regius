@@ -112,7 +112,6 @@ func (t *Token) DeleteByToken(plainText string) error {
 func (t *Token) Insert(token Token, u User) error {
 	collection := upper.Collection(t.Table())
 
-	// delete existing tokens
 	res := collection.Find(up.Cond{"user_id": u.ID})
 	err := res.Delete()
 	if err != nil {
