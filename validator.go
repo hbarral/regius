@@ -53,7 +53,7 @@ func (v *Validation) Check(ok bool, key, message string) {
 	}
 }
 
-func (v *Validation) IsMail(field, value string) {
+func (v *Validation) IsEmail(field, value string) {
 	if !govalidator.IsEmail(value) {
 		v.AddError(field, "Invalid email address")
 	}
