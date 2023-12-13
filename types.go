@@ -24,3 +24,7 @@ type Database struct {
 	DataType string
 	Pool     *sql.DB
 }
+
+type Encryption struct {
+	Key []byte
+}

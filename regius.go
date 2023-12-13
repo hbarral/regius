@@ -19,18 +19,19 @@ import (
 const version = "1.0.0"
 
 type Regius struct {
-	AppName  string
-	Debug    bool
-	Version  string
-	ErrorLog *log.Logger
-	InfoLog  *log.Logger
-	RootPath string
-	Routes   *chi.Mux
-	Render   *render.Render
-	JetViews *jet.Set
-	config   config
-	Session  *scs.SessionManager
-	DB       Database
+	AppName       string
+	Debug         bool
+	Version       string
+	ErrorLog      *log.Logger
+	InfoLog       *log.Logger
+	RootPath      string
+	Routes        *chi.Mux
+	Render        *render.Render
+	JetViews      *jet.Set
+	config        config
+	Session       *scs.SessionManager
+	DB            Database
+	EncryptionKey string
 }
 
 type config struct {
@@ -41,18 +42,18 @@ type config struct {
 	database    databaseConfig
 }
 
-func (c *Regius) New(rootPath string) error {
+func (r *Regius) New(rootPath string) error {
 	pathConfig := initPath{
 		rootPath:    rootPath,
 		folderNames: []string{"handlers", "migrations", "views", "data", "public", "tmp", "logs", "middleware"},
 	}
 
-	err := c.Init(pathConfig)
+	err := r.Init(pathConfig)
 	if err != nil {
 		return err
 	}
 
-	err = c.checkDotEnv(rootPath)
+	err = r.checkDotEnv(rootPath)
 	if err != nil {
 		return nil
 	}
@@ -62,28 +63,28 @@ func (c *Regius) New(rootPath string) error {
 		return err
 	}
 
-	infoLog, errorLog := c.startLoggers()
+	infoLog, errorLog := r.startLoggers()
 
 	if os.Getenv("DATABASE_TYPE") != "" {
-		db, err := c.OpenDB(os.Getenv("DATABASE_TYPE"), c.BuildDSN())
+		db, err := r.OpenDB(os.Getenv("DATABASE_TYPE"), r.BuildDSN())
 		if err != nil {
 			errorLog.Println(err)
 			os.Exit(1)
 		}
 
-		c.DB = Database{
+		r.DB = Database{
 			DataType: os.Getenv("DATABASE_TYPE"),
 			Pool:     db,
 		}
 	}
 
-	c.InfoLog = infoLog
-	c.ErrorLog = errorLog
-	c.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
-	c.Version = version
-	c.RootPath = rootPath
-	c.Routes = c.routes().(*chi.Mux)
-	c.config = config{
+	r.InfoLog = infoLog
+	r.ErrorLog = errorLog
+	r.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
+	r.Version = version
+	r.RootPath = rootPath
+	r.Routes = r.routes().(*chi.Mux)
+	r.config = config{
 		port:     os.Getenv("PORT"),
 		renderer: os.Getenv("RENDERER"),
 		cookie: cookieConfig{
@@ -96,37 +97,38 @@ func (c *Regius) New(rootPath string) error {
 		sessionType: os.Getenv("SESSION_TYPE"),
 		database: databaseConfig{
 			database: os.Getenv("DATABASE_TYPE"),
-			dsn:      c.BuildDSN(),
+			dsn:      r.BuildDSN(),
 		},
 	}
 
 	sess := session.Session{
-		CookieLifetime: c.config.cookie.lifetime,
-		CookiePersist:  c.config.cookie.persist,
-		CookieName:     c.config.cookie.name,
-		CookieDomain:   c.config.cookie.domain,
-		SessionType:    c.config.sessionType,
-		DBPool:         c.DB.Pool,
+		CookieLifetime: r.config.cookie.lifetime,
+		CookiePersist:  r.config.cookie.persist,
+		CookieName:     r.config.cookie.name,
+		CookieDomain:   r.config.cookie.domain,
+		SessionType:    r.config.sessionType,
+		DBPool:         r.DB.Pool,
 	}
 
-	c.Session = sess.InitSession()
+	r.Session = sess.InitSession()
+	r.EncryptionKey = os.Getenv("KEY")
 
 	views := jet.NewSet(
 		jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views/", rootPath)),
 		jet.InDevelopmentMode(),
 	)
 
-	c.JetViews = views
+	r.JetViews = views
 
-	c.createRenderer()
+	r.createRenderer()
 
 	return nil
 }
 
-func (c *Regius) Init(p initPath) error {
+func (r *Regius) Init(p initPath) error {
 	root := p.rootPath
 	for _, path := range p.folderNames {
-		err := c.CreateDirIfNotExist(root + "/" + path)
+		err := r.CreateDirIfNotExist(root + "/" + path)
 		if err != nil {
 			return err
 		}
@@ -153,8 +155,8 @@ func (r *Regius) ListenAndServe() {
 	r.ErrorLog.Fatal(err)
 }
 
-func (c *Regius) checkDotEnv(path string) error {
-	err := c.CreateFileIfNotExists(fmt.Sprintf("%s/.env", path))
+func (r *Regius) checkDotEnv(path string) error {
+	err := r.CreateFileIfNotExists(fmt.Sprintf("%s/.env", path))
 	if err != nil {
 		return err
 	}
@@ -162,7 +164,7 @@ func (c *Regius) checkDotEnv(path string) error {
 	return nil
 }
 
-func (c *Regius) startLoggers() (*log.Logger, *log.Logger) {
+func (r *Regius) startLoggers() (*log.Logger, *log.Logger) {
 	var infoLog *log.Logger
 	var errorLog *log.Logger
 
