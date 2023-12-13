@@ -54,10 +54,6 @@ func (c *Regius) CreateFileIfNotExists(path string) error {
 	return nil
 }
 
-type Encryption struct {
-	Key []byte
-}
-
 func (e *Encryption) Encrypt(text string) (string, error) {
 	plainText := []byte(text)
 
