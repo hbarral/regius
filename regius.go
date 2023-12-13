@@ -19,18 +19,19 @@ import (
 const version = "1.0.0"
 
 type Regius struct {
-	AppName  string
-	Debug    bool
-	Version  string
-	ErrorLog *log.Logger
-	InfoLog  *log.Logger
-	RootPath string
-	Routes   *chi.Mux
-	Render   *render.Render
-	JetViews *jet.Set
-	config   config
-	Session  *scs.SessionManager
-	DB       Database
+	AppName       string
+	Debug         bool
+	Version       string
+	ErrorLog      *log.Logger
+	InfoLog       *log.Logger
+	RootPath      string
+	Routes        *chi.Mux
+	Render        *render.Render
+	JetViews      *jet.Set
+	config        config
+	Session       *scs.SessionManager
+	DB            Database
+	EncryptionKey string
 }
 
 type config struct {
@@ -110,6 +111,7 @@ func (c *Regius) New(rootPath string) error {
 	}
 
 	c.Session = sess.InitSession()
+	c.EncryptionKey = os.Getenv("KEY")
 
 	views := jet.NewSet(
 		jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views/", rootPath)),
