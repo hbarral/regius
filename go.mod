@@ -15,6 +15,7 @@ require (
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/golang-migrate/migrate/v4 v4.16.2
+	github.com/gomodule/redigo v1.8.9
 	github.com/iancoleman/strcase v0.3.0
 	github.com/jackc/pgconn v1.14.1
 	github.com/jackc/pgx/v4 v4.18.1
