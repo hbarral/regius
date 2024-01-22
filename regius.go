@@ -11,7 +11,9 @@ import (
 	"github.com/CloudyKit/jet/v6"
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
+	"github.com/gomodule/redigo/redis"
 	"github.com/joho/godotenv"
+	"gitlab.com/hbarral/regius/cache"
 	"gitlab.com/hbarral/regius/render"
 	"gitlab.com/hbarral/regius/session"
 )
@@ -40,6 +42,7 @@ type config struct {
 	cookie      cookieConfig
 	sessionType string
 	database    databaseConfig
+	redis       redisConfig
 }
 
 func (r *Regius) New(rootPath string) error {
@@ -78,6 +81,11 @@ func (r *Regius) New(rootPath string) error {
 		}
 	}
 
+	if os.Getenv("CACHE") == "redis" {
+		myRedisCache := r.createClientRedisCache()
+		r.Cache = myRedisCache
+	}
+
 	r.InfoLog = infoLog
 	r.ErrorLog = errorLog
 	r.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
@@ -98,6 +106,11 @@ func (r *Regius) New(rootPath string) error {
 		database: databaseConfig{
 			database: os.Getenv("DATABASE_TYPE"),
 			dsn:      r.BuildDSN(),
+		},
+		redis: redisConfig{
+			host:     os.Getenv("REDIS_HOST"),
+			password: os.Getenv("REDIS_PASSWORD"),
+			prefix:   os.Getenv("REDIS_PREFIX"),
 		},
 	}
 
@@ -184,6 +197,33 @@ func (r *Regius) createRenderer() {
 	}
 
 	r.Render = &myrenderer
+}
+
+func (r *Regius) createClientRedisCache() *cache.RedisCache {
+	cacheClient := cache.RedisCache{
+		Conn:   r.createRedisPool(),
+		Prefix: r.config.redis.prefix,
+	}
+
+	return &cacheClient
+}
+
+func (r *Regius) createRedisPool() *redis.Pool {
+	return &redis.Pool{
+		MaxIdle:     50,
+		MaxActive:   10000,
+		IdleTimeout: 240 * time.Second,
+		Dial: func() (redis.Conn, error) {
+			return redis.Dial("tcp",
+				r.config.redis.host,
+				redis.DialPassword(r.config.redis.password))
+		},
+
+		TestOnBorrow: func(conn redis.Conn, t time.Time) error {
+			_, err := conn.Do("PING")
+			return err
+		},
+	}
 }
 
 func (r *Regius) BuildDSN() string {

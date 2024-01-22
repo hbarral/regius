@@ -33,3 +33,25 @@ func (r *RedisCache) Has(str string) (bool, error) {
 
 	return ok, nil
 }
+
+func (r *RedisCache) Get(str string) (interface, error) {
+
+  return "", nil
+}
+
+func (r *RedisCache) Set(str string, data interface{}, ttl ...int) error {
+
+  return nil
+}
+
+func (r *RedisCache) Forget(str string) error {
+  return nil
+}
+
+func (r *RedisCache) EmptyByMatch(str string) error {
+  return nil
+}
+
+func (r *RedisCache) Empty() error {
+  return nil
+}
