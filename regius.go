@@ -13,6 +13,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gomodule/redigo/redis"
 	"github.com/joho/godotenv"
+
+	// cache "gitlab.com/hbarral/regius"
 	"gitlab.com/hbarral/regius/cache"
 	"gitlab.com/hbarral/regius/render"
 	"gitlab.com/hbarral/regius/session"
@@ -34,6 +36,7 @@ type Regius struct {
 	Session       *scs.SessionManager
 	DB            Database
 	EncryptionKey string
+	Cache         cache.Cache
 }
 
 type config struct {
