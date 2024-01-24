@@ -10,6 +10,7 @@ import (
 
 	"github.com/CloudyKit/jet/v6"
 	"github.com/alexedwards/scs/v2"
+	"github.com/justinas/nosurf"
 )
 
 type Render struct {
@@ -37,6 +38,7 @@ type TemplateData struct {
 func (s *Render) defaultData(td *TemplateData, r *http.Request) *TemplateData {
 	td.Secure = s.Secure
 	td.ServerName = s.ServerName
+	td.CSRFToken = nosurf.Token(r)
 	td.Port = s.Port
 	if s.Session.Exists(r.Context(), "userID") {
 		td.IsAuthenticated = true
@@ -46,7 +48,6 @@ func (s *Render) defaultData(td *TemplateData, r *http.Request) *TemplateData {
 }
 
 func (c *Render) Page(w http.ResponseWriter, r *http.Request, view string, variables, data interface{}) error {
-
 	switch strings.ToLower(c.Renderer) {
 	case "go":
 		return c.GoPage(w, r, view, data)
@@ -59,9 +60,7 @@ func (c *Render) Page(w http.ResponseWriter, r *http.Request, view string, varia
 }
 
 func (c *Render) GoPage(w http.ResponseWriter, r *http.Request, view string, data interface{}) error {
-
 	tmpl, err := template.ParseFiles(fmt.Sprintf("%s/views/%s.page.tmpl", c.RootPath, view))
-
 	if err != nil {
 		return err
 	}
@@ -98,7 +97,6 @@ func (c *Render) JetPage(w http.ResponseWriter, r *http.Request, templateName st
 	td = c.defaultData(td, r)
 
 	t, err := c.JetViews.GetTemplate(fmt.Sprintf("%s.jet", templateName))
-
 	if err != nil {
 		log.Println(err)
 
@@ -112,5 +110,4 @@ func (c *Render) JetPage(w http.ResponseWriter, r *http.Request, templateName st
 	}
 
 	return nil
-
 }
