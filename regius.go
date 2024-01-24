@@ -136,12 +136,18 @@ func (r *Regius) New(rootPath string) error {
 	r.Session = sess.InitSession()
 	r.EncryptionKey = os.Getenv("KEY")
 
-	views := jet.NewSet(
-		jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views/", rootPath)),
-		jet.InDevelopmentMode(),
-	)
-
-	r.JetViews = views
+	if r.Debug {
+		views := jet.NewSet(
+			jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views/", rootPath)),
+			jet.InDevelopmentMode(),
+		)
+		r.JetViews = views
+	} else {
+		views := jet.NewSet(
+			jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views/", rootPath)),
+		)
+		r.JetViews = views
+	}
 
 	r.createRenderer()
 
