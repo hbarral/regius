@@ -16,7 +16,7 @@ func (r *Regius) NoSurf(next http.Handler) http.Handler {
 	csrfHandler := nosurf.New(next)
 	secure, _ := strconv.ParseBool(r.config.cookie.secure)
 
-	// csrfHandler.ExemptGlob("/someapi/*")
+	csrfHandler.ExemptGlob("/api/*")
 
 	csrfHandler.SetBaseCookie(http.Cookie{
 		HttpOnly: true,
