@@ -28,3 +28,9 @@ type Database struct {
 type Encryption struct {
 	Key []byte
 }
+
+type redisConfig struct {
+	host     string
+	password string
+	prefix   string
+}
