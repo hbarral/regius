@@ -14,13 +14,14 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/joho/godotenv"
 
-	// cache "gitlab.com/hbarral/regius"
 	"gitlab.com/hbarral/regius/cache"
 	"gitlab.com/hbarral/regius/render"
 	"gitlab.com/hbarral/regius/session"
 )
 
 const version = "1.0.0"
+
+var myRedisCache *cache.RedisCache
 
 type Regius struct {
 	AppName       string
@@ -84,8 +85,8 @@ func (r *Regius) New(rootPath string) error {
 		}
 	}
 
-	if os.Getenv("CACHE") == "redis" {
-		myRedisCache := r.createClientRedisCache()
+	if os.Getenv("CACHE") == "redis" || os.Getenv("SESSION_TYPE") == "redis" {
+		myRedisCache = r.createClientRedisCache()
 		r.Cache = myRedisCache
 	}
 
@@ -123,7 +124,13 @@ func (r *Regius) New(rootPath string) error {
 		CookieName:     r.config.cookie.name,
 		CookieDomain:   r.config.cookie.domain,
 		SessionType:    r.config.sessionType,
-		DBPool:         r.DB.Pool,
+	}
+
+	switch r.config.sessionType {
+	case "redis":
+		sess.RedisPool = myRedisCache.Conn
+	case "mysql", "postgres", "postgresql", "mariadb":
+		sess.DBPool = r.DB.Pool
 	}
 
 	r.Session = sess.InitSession()
