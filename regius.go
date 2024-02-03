@@ -10,9 +10,11 @@ import (
 
 	"github.com/CloudyKit/jet/v6"
 	"github.com/alexedwards/scs/v2"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/go-chi/chi/v5"
 	"github.com/gomodule/redigo/redis"
 	"github.com/joho/godotenv"
+	"github.com/robfig/cron/v3"
 
 	"gitlab.com/hbarral/regius/cache"
 	"gitlab.com/hbarral/regius/render"
@@ -21,7 +23,12 @@ import (
 
 const version = "1.0.0"
 
-var myRedisCache *cache.RedisCache
+var (
+	myRedisCache  *cache.RedisCache
+	myBadgerCache *cache.BadgerCache
+	redisPool     *redis.Pool
+	badgerConn    *badger.DB
+)
 
 type Regius struct {
 	AppName       string
@@ -38,6 +45,7 @@ type Regius struct {
 	DB            Database
 	EncryptionKey string
 	Cache         cache.Cache
+	Scheduler     *cron.Cron
 }
 
 type config struct {
@@ -88,6 +96,23 @@ func (r *Regius) New(rootPath string) error {
 	if os.Getenv("CACHE") == "redis" || os.Getenv("SESSION_TYPE") == "redis" {
 		myRedisCache = r.createClientRedisCache()
 		r.Cache = myRedisCache
+		redisPool = myRedisCache.Conn
+	}
+
+	scheduler := cron.New()
+	r.Scheduler = scheduler
+
+	if os.Getenv("CACHE") == "badger" {
+		myBadgerCache = r.createClientBadgerCache()
+		r.Cache = myBadgerCache
+		badgerConn = myBadgerCache.Conn
+
+		_, err = r.Scheduler.AddFunc("@daily", func() {
+			_ = myBadgerCache.Conn.RunValueLogGC(0.7)
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	r.InfoLog = infoLog
@@ -176,7 +201,17 @@ func (r *Regius) ListenAndServe() {
 		WriteTimeout: 600 * time.Second,
 	}
 
-	defer r.DB.Pool.Close()
+	if r.DB.Pool != nil {
+		defer r.DB.Pool.Close()
+	}
+
+	if redisPool != nil {
+		defer redisPool.Close()
+	}
+
+	if badgerConn != nil {
+		defer badgerConn.Close()
+	}
 
 	r.InfoLog.Printf("Listening on port %s", os.Getenv("PORT"))
 
@@ -224,6 +259,14 @@ func (r *Regius) createClientRedisCache() *cache.RedisCache {
 	return &cacheClient
 }
 
+func (r *Regius) createClientBadgerCache() *cache.BadgerCache {
+	cacheClient := cache.BadgerCache{
+		Conn: r.createBadgerConn(),
+	}
+
+	return &cacheClient
+}
+
 func (r *Regius) createRedisPool() *redis.Pool {
 	return &redis.Pool{
 		MaxIdle:     50,
@@ -240,6 +283,15 @@ func (r *Regius) createRedisPool() *redis.Pool {
 			return err
 		},
 	}
+}
+
+func (r *Regius) createBadgerConn() *badger.DB {
+	db, err := badger.Open(badger.DefaultOptions(r.RootPath + "/tmp/badger"))
+	if err != nil {
+		return nil
+	}
+
+	return db
 }
 
 func (r *Regius) BuildDSN() string {
