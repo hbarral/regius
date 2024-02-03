@@ -1,11 +1,13 @@
 package cache
 
 import (
+	"log"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	badger "github.com/dgraph-io/badger/v3"
 	"github.com/gomodule/redigo/redis"
 )
 
@@ -35,15 +37,15 @@ func TestMain(m *testing.M) {
 
 	defer testRedisCache.Conn.Close()
 
-	_ = os.RemovalAll("./testdata/tmp/badger")
+	_ = os.RemoveAll("./testdata/tmp/badger")
 
 	if _, err := os.Stat("./testdata/tmp"); os.IsNotExist(err) {
-		err := os.Mkdir("./testdata/tmp", 0755)
+		err := os.Mkdir("./testdata/tmp", 0o755)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
-	err = os.Mkdir("./testdata/tmp/badger", 0755)
+	err = os.Mkdir("./testdata/tmp/badger", 0o755)
 	if err != nil {
 		log.Fatal(err)
 	}

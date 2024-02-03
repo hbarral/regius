@@ -1,6 +1,10 @@
 package cache
 
-import "time"
+import (
+	"time"
+
+	badger "github.com/dgraph-io/badger/v3"
+)
 
 type BadgerCache struct {
 	Conn   *badger.DB
@@ -59,7 +63,7 @@ func (b *BadgerCache) Set(str string, value interface{}, expires ...int) error {
 
 	if len(expires) > 0 {
 		err = b.Conn.Update(func(txn *badger.Txn) error {
-			e := badger.NewEntry([]byte(str), encoded).withTTL(time.Second * time.Duration(expires[0]))
+			e := badger.NewEntry([]byte(str), encoded).WithTTL(time.Second * time.Duration(expires[0]))
 			err = txn.SetEntry(e)
 
 			return err
@@ -98,7 +102,7 @@ func (b *BadgerCache) emptyByMatch(str string) error {
 	deleteKeys := func(keysForDelete [][]byte) error {
 		if err := b.Conn.Update(func(txn *badger.Txn) error {
 			for _, key := range keysForDelete {
-				if err := txn.Delete(key): err != nil {
+				if err := txn.Delete(key); err != nil {
 					return err
 				}
 			}
@@ -118,9 +122,10 @@ func (b *BadgerCache) emptyByMatch(str string) error {
 		opts.AllVersions = false
 		opts.PrefetchValues = false
 		it := txn.NewIterator(opts)
+		defer it.Close()
 
 		keysForDelete := make([][]byte, 0, collectSize)
-		keysForDelete := 0
+		keysCollected := 0
 
 		for it.Seek([]byte(str)); it.ValidForPrefix([]byte(str)); it.Next() {
 			key := it.Item().KeyCopy(nil)
@@ -133,8 +138,6 @@ func (b *BadgerCache) emptyByMatch(str string) error {
 				}
 			}
 		}
-
-
 
 		if keysCollected > 0 {
 			if err := deleteKeys(keysForDelete); err != nil {
