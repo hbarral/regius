@@ -17,6 +17,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"gitlab.com/hbarral/regius/cache"
+	"gitlab.com/hbarral/regius/mailer"
 	"gitlab.com/hbarral/regius/render"
 	"gitlab.com/hbarral/regius/session"
 )
@@ -46,6 +47,7 @@ type Regius struct {
 	EncryptionKey string
 	Cache         cache.Cache
 	Scheduler     *cron.Cron
+	Mail          mailer.Mail
 }
 
 type config struct {
@@ -60,7 +62,7 @@ type config struct {
 func (r *Regius) New(rootPath string) error {
 	pathConfig := initPath{
 		rootPath:    rootPath,
-		folderNames: []string{"handlers", "migrations", "views", "data", "public", "tmp", "logs", "middleware"},
+		folderNames: []string{"handlers", "migrations", "views", "mail", "data", "public", "tmp", "logs", "middleware"},
 	}
 
 	err := r.Init(pathConfig)
@@ -120,6 +122,7 @@ func (r *Regius) New(rootPath string) error {
 	r.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
 	r.Version = version
 	r.RootPath = rootPath
+	r.Mail = r.createMailer()
 	r.Routes = r.routes().(*chi.Mux)
 	r.config = config{
 		port:     os.Getenv("PORT"),
@@ -175,6 +178,7 @@ func (r *Regius) New(rootPath string) error {
 	}
 
 	r.createRenderer()
+	go r.Mail.ListenForMail()
 
 	return nil
 }
@@ -248,6 +252,28 @@ func (r *Regius) createRenderer() {
 	}
 
 	r.Render = &myrenderer
+}
+
+func (r *Regius) createMailer() mailer.Mail {
+	port, _ := strconv.Atoi(os.Getenv("SMTP_PORT"))
+	m := mailer.Mail{
+		Domain:      os.Getenv("MAIL_DOMAIN"),
+		Templates:   r.RootPath + "/mail",
+		Host:        os.Getenv("SMTP_HOST"),
+		Port:        port,
+		Username:    os.Getenv("SMTP_USERNAME"),
+		Password:    os.Getenv("SMTP_PASSWORD"),
+		Encryption:  os.Getenv("SMTP_ENCRYPTION"),
+		FromName:    os.Getenv("FROM_NAME"),
+		FromAddress: os.Getenv("FROM_ADDRESS"),
+		Jobs:        make(chan mailer.Message, 20),
+		Results:     make(chan mailer.Result, 20),
+		API:         os.Getenv("MAILER_API"),
+		APIKey:      os.Getenv("MAILER_KEY"),
+		APIUrl:      os.Getenv("MAILER_URL"),
+	}
+
+	return m
 }
 
 func (r *Regius) createClientRedisCache() *cache.RedisCache {

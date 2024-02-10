@@ -3,7 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -59,7 +59,7 @@ func doMake(arg2, arg3 string) error {
 		handler := string(data)
 		handler = strings.ReplaceAll(handler, "$HANDLER_NAME", strcase.ToCamel(arg3))
 
-		err = ioutil.WriteFile(fileName, []byte(handler), 0644)
+		err = os.WriteFile(fileName, []byte(handler), 0o644)
 		if err != nil {
 			exitGracefully(err)
 		}
@@ -109,6 +109,24 @@ func doMake(arg2, arg3 string) error {
 	case "key":
 		rnd := reg.RandomString(32)
 		color.Yellow("32 character encryption key: %s", rnd)
+
+	case "mail":
+		if arg3 == "" {
+			exitGracefully(errors.New("you must give the mail template a name"))
+		}
+
+		htmlMail := reg.RootPath + "/mail/" + strings.ToLower(arg3) + ".html.tmpl"
+		plainMail := reg.RootPath + "/mail/" + strings.ToLower(arg3) + ".plain.tmpl"
+
+		err := copyFileFromTemplate("templates/mailer/mail.html.tmpl", htmlMail)
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		err = copyFileFromTemplate("templates/mailer/mail.plain.tmpl", plainMail)
+		if err != nil {
+			exitGracefully(err)
+		}
 
 	}
 
