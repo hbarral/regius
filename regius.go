@@ -119,10 +119,10 @@ func (r *Regius) New(rootPath string) error {
 
 	r.InfoLog = infoLog
 	r.ErrorLog = errorLog
-	r.Mail = r.createMailer()
 	r.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
 	r.Version = version
 	r.RootPath = rootPath
+	r.Mail = r.createMailer()
 	r.Routes = r.routes().(*chi.Mux)
 	r.config = config{
 		port:     os.Getenv("PORT"),
