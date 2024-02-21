@@ -40,12 +40,20 @@ func main() {
 
 	case "make":
 		if arg2 == "" {
-			exitGracefully(errors.New("make requires a subcommand: (migration|model|handler|auth|mail)"))
+			exitGracefully(
+				errors.New("make requires a subcommand: (migration|model|handler|auth|mail)"),
+			)
 		}
 		err = doMake(arg2, arg3)
 		if err != nil {
 			exitGracefully(err)
 		}
+
+	case "new":
+		if arg2 == "" {
+			exitGracefully(errors.New("new requires an application name"))
+		}
+		doNew(arg2)
 
 	default:
 		showHelp()
