@@ -33,6 +33,8 @@ type TemplateData struct {
 	Port            string
 	ServerName      string
 	Secure          bool
+	Error           string
+	Flash           string
 }
 
 func (s *Render) defaultData(td *TemplateData, r *http.Request) *TemplateData {
@@ -47,7 +49,12 @@ func (s *Render) defaultData(td *TemplateData, r *http.Request) *TemplateData {
 	return td
 }
 
-func (c *Render) Page(w http.ResponseWriter, r *http.Request, view string, variables, data interface{}) error {
+func (c *Render) Page(
+	w http.ResponseWriter,
+	r *http.Request,
+	view string,
+	variables, data interface{},
+) error {
 	switch strings.ToLower(c.Renderer) {
 	case "go":
 		return c.GoPage(w, r, view, data)
@@ -59,7 +66,12 @@ func (c *Render) Page(w http.ResponseWriter, r *http.Request, view string, varia
 	return errors.New("No rendering engine specified")
 }
 
-func (c *Render) GoPage(w http.ResponseWriter, r *http.Request, view string, data interface{}) error {
+func (c *Render) GoPage(
+	w http.ResponseWriter,
+	r *http.Request,
+	view string,
+	data interface{},
+) error {
 	tmpl, err := template.ParseFiles(fmt.Sprintf("%s/views/%s.page.tmpl", c.RootPath, view))
 	if err != nil {
 		return err
@@ -80,7 +92,12 @@ func (c *Render) GoPage(w http.ResponseWriter, r *http.Request, view string, dat
 	return nil
 }
 
-func (c *Render) JetPage(w http.ResponseWriter, r *http.Request, templateName string, variables, data interface{}) error {
+func (c *Render) JetPage(
+	w http.ResponseWriter,
+	r *http.Request,
+	templateName string,
+	variables, data interface{},
+) error {
 	var vars jet.VarMap
 
 	if variables == nil {
