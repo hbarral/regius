@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/CloudyKit/jet/v6"
@@ -48,6 +49,14 @@ type Regius struct {
 	Cache         cache.Cache
 	Scheduler     *cron.Cron
 	Mail          mailer.Mail
+	Server        Server
+}
+
+type Server struct {
+	ServerName string
+	Port       string
+	Secure     bool
+	URL        string
 }
 
 type config struct {
@@ -61,8 +70,18 @@ type config struct {
 
 func (r *Regius) New(rootPath string) error {
 	pathConfig := initPath{
-		rootPath:    rootPath,
-		folderNames: []string{"handlers", "migrations", "views", "mail", "data", "public", "tmp", "logs", "middleware"},
+		rootPath: rootPath,
+		folderNames: []string{
+			"handlers",
+			"migrations",
+			"views",
+			"mail",
+			"data",
+			"public",
+			"tmp",
+			"logs",
+			"middleware",
+		},
 	}
 
 	err := r.Init(pathConfig)
@@ -144,6 +163,17 @@ func (r *Regius) New(rootPath string) error {
 			password: os.Getenv("REDIS_PASSWORD"),
 			prefix:   os.Getenv("REDIS_PREFIX"),
 		},
+	}
+
+	secure := true
+	if strings.ToLower(os.Getenv("SECURE")) == "false" {
+		secure = false
+	}
+	r.Server = Server{
+		ServerName: os.Getenv("SERVER_NAME"),
+		Port:       os.Getenv("PORT"),
+		Secure:     secure,
+		URL:        os.Getenv("APP_URL"),
 	}
 
 	sess := session.Session{
@@ -325,7 +355,8 @@ func (r *Regius) BuildDSN() string {
 
 	switch os.Getenv("DATABASE_TYPE") {
 	case "postgres", "postgresql":
-		dsn = fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s timezone=UTC connect_timeout=5",
+		dsn = fmt.Sprintf(
+			"host=%s port=%s user=%s dbname=%s sslmode=%s timezone=UTC connect_timeout=5",
 			os.Getenv("DATABASE_HOST"),
 			os.Getenv("DATABASE_PORT"),
 			os.Getenv("DATABASE_USER"),
