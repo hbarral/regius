@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -25,6 +26,26 @@ func doNew(appName string) {
 		Progress: os.Stdout,
 		Depth:    1,
 	})
+	if err != nil {
+		exitGracefully(err)
+	}
+
+	err = os.RemoveAll(fmt.Sprintf("./%s/.git", appName))
+	if err != nil {
+		exitGracefully(err)
+	}
+
+	color.Yellow("\tCreating .env file...")
+	data, err := templateFS.ReadFile("templates/env")
+	if err != nil {
+		exitGracefully(err)
+	}
+
+	env := string(data)
+	env = strings.ReplaceAll(env, "${APP_NAME}", appName)
+	env = strings.ReplaceAll(env, "${KEY}", reg.RandomString(32))
+
+	err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/.env", appName))
 	if err != nil {
 		exitGracefully(err)
 	}
