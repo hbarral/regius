@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/fatih/color"
@@ -48,5 +49,59 @@ func doNew(appName string) {
 	err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/.env", appName))
 	if err != nil {
 		exitGracefully(err)
+	}
+
+	if runtime.GOOS == "linux" {
+		color.Yellow("\tCreating Makefile for linux...")
+
+		data, err := templateFS.ReadFile("templates/Makefile.linux")
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		env := string(data)
+		env = strings.ReplaceAll(env, "${NAME}", appName)
+		env = strings.ReplaceAll(env, "${BINARY_APP_NAME}", appName)
+
+		err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/Makefile", appName))
+		if err != nil {
+			exitGracefully(err)
+		}
+	}
+
+	if runtime.GOOS == "darwin" {
+		color.Yellow("\tCreating Makefile for MacOS...")
+
+		data, err := templateFS.ReadFile("templates/Makefile.mac")
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		env := string(data)
+		env = strings.ReplaceAll(env, "${NAME}", appName)
+		env = strings.ReplaceAll(env, "${BINARY_APP_NAME}", appName)
+
+		err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/Makefile", appName))
+		if err != nil {
+			exitGracefully(err)
+		}
+	}
+
+	if runtime.GOOS == "windows" {
+		color.Yellow("\tCreating Makefile for Windows...")
+
+		data, err := templateFS.ReadFile("templates/Makefile.windows")
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		env := string(data)
+		env = strings.ReplaceAll(env, "${NAME}", appName)
+		env = strings.ReplaceAll(env, "${BINARY_APP_NAME}", appName+".exe")
+
+		err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/Makefile", appName))
+		if err != nil {
+			exitGracefully(err)
+		}
 	}
 }

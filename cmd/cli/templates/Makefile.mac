@@ -1,0 +1,42 @@
+APP_NAME=${NAME}
+BINARY_NAME=${BINARY_APP_NAME}
+
+build:
+	@go mod vendor
+	@echo "Building ${APP_NAME}..."
+	@go build -o tmp/${BINARY_NAME} .
+	@echo "${APP_NAME} built!"
+
+run: build
+	@echo "Starting ${APP_NAME}..."
+	@./tmp/${BINARY_NAME} &
+	@echo "${APP_NAME} started!"
+
+clean:
+	@echo "Cleaning..."
+	@go clean
+	@rm tmp/${BINARY_NAME}
+	@echo "Cleaned!"
+
+test:
+	@echo "Testing..."
+	@go test ./...
+	@echo "Done!"
+
+start: run
+
+stop:
+	@echo "Stopping ${APP_NAME}..."
+	@-pkill -SIGTERM -f "./tmp/${BINARY_NAME}"
+	@echo "Stopped ${APP_NAME}"
+
+restart: stop start
+
+start_compose:
+	docker compose up -d
+
+stop_compose:
+	docker compose down
+
+coverprofile:
+	go test -coverprofile=coverage.out
