@@ -11,8 +11,11 @@ import (
 	"github.com/go-git/go-git/v5"
 )
 
+var appURL string
+
 func doNew(appName string) {
 	appName = strings.ToLower(appName)
+	appURL = appName
 
 	if strings.Contains(appName, "/") {
 		exploded := strings.SplitAfter(appName, "/")
@@ -103,5 +106,21 @@ func doNew(appName string) {
 		if err != nil {
 			exitGracefully(err)
 		}
+	}
+
+	color.Yellow("\tCreating go.mod file...")
+	_ = os.Remove("./" + appName + "/go.mod")
+
+	data, err = templateFS.ReadFile("templates/go_mod")
+	if err != nil {
+		exitGracefully(err)
+	}
+
+	mod := string(data)
+	mod = strings.ReplaceAll(mod, "${APP_NAME}", appName)
+
+	err = copyDataToFile([]byte(mod), fmt.Sprintf("./%s/go.mod", appName))
+	if err != nil {
+		exitGracefully(err)
 	}
 }
