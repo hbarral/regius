@@ -123,4 +123,8 @@ func doNew(appName string) {
 	if err != nil {
 		exitGracefully(err)
 	}
+
+	color.Yellow("\tUpdating source files...")
+	os.Chdir("./" + appName)
+	updateSource()
 }

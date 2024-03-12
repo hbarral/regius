@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/joho/godotenv"
@@ -74,4 +76,42 @@ func showHelp() {
   make mail <name>       - creates two starter mail templates in the mail directory
 
   `)
+}
+
+func updateSourceFiles(path string, fi os.FileInfo, err error) error {
+	if err != nil {
+		return err
+	}
+
+	if fi.IsDir() {
+		return nil
+	}
+
+	matched, err := filepath.Match("*.go", fi.Name())
+	if err != nil {
+		return err
+	}
+
+	if matched {
+		read, err := os.ReadFile(path)
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		newContents := strings.Replace(string(read), "regius-app", appURL, -1)
+
+		err = os.WriteFile(path, []byte(newContents), 0644)
+		if err != nil {
+			exitGracefully(err)
+		}
+	}
+
+	return nil
+}
+
+func updateSource() {
+	err := filepath.Walk(".", updateSourceFiles)
+	if err != nil {
+		exitGracefully(err)
+	}
 }
