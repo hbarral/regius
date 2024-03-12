@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 
@@ -127,4 +128,14 @@ func doNew(appName string) {
 	color.Yellow("\tUpdating source files...")
 	os.Chdir("./" + appName)
 	updateSource()
+
+	color.Yellow("\tRunning go mod tidy...")
+	cmd := exec.Command("go", "mod", "tidy")
+	err = cmd.Start()
+	if err != nil {
+		exitGracefully(err)
+	}
+
+	color.Green("\tDone building " + appURL)
+	color.Green("\tGo build something real!")
 }
