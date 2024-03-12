@@ -11,7 +11,7 @@ require (
 	github.com/justinas/nosurf v1.1.1
 	github.com/ory/dockertest/v3 v3.10.0
 	github.com/upper/db/v4 v4.6.0
-	gitlab.com/hbarral/regius v0.0.0-00010101000000-000000000000
+	gitlab.com/hbarral/regius v1.0.0
 	golang.org/x/crypto v0.7.0
 )
 
