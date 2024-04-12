@@ -27,7 +27,7 @@ func doNew(appName string) {
 
 	color.Green("\tCloning repository...")
 	_, err := git.PlainClone("./"+appName, false, &git.CloneOptions{
-		URL:      "git@gitlab.com:hbarral/regius-app.git",
+		URL:      "https://gitlab.com/hbarral/regius-app.git",
 		Progress: os.Stdout,
 		Depth:    1,
 	})
