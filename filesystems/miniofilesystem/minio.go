@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"path"
+	"strings"
 
 	minio "github.com/minio/minio-go/v7"
 
@@ -54,4 +55,40 @@ func (m *Minio) Put(fileName, folder string) error {
 	}
 
 	return nil
+}
+
+func (m *Minio) List(prefix string) ([]filesystems.Listing, error) {
+	var listing []filesystems.Listing
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := m.getCredentials()
+
+	objectCh := client.ListObjects(ctx, m.Bucket, minio.ListObjectsOptions{
+		Prefix:    prefix,
+		Recursive: true,
+	})
+
+	for object := range objectCh {
+		if object.Err != nil {
+			fmt.Println(object.Err)
+			return listing, object.Err
+		}
+
+		if !strings.HasPrefix(object.Key, ".") {
+			b := float64(object.Size)
+			kb := b / 1024
+			mb := kb / 1024
+			item := filesystems.Listing{
+				Etag:         object.Etag,
+				LastModified: object.LastModified,
+				Key:          object.Key,
+				Size:         mb,
+			}
+			lising = append(listing, item)
+		}
+	}
+
+	return listing, nil
 }
