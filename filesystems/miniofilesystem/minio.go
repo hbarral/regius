@@ -92,3 +92,23 @@ func (m *Minio) List(prefix string) ([]filesystems.Listing, error) {
 
 	return listing, nil
 }
+
+func (m *Minio) Delete(itemsToDelete []string) bool {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := m.getCredentials()
+
+	opts := minio.RemoveObjectOptions{
+		GovernaceBypass: true,
+	}
+
+	for _, item := range itemsToDelete {
+		err := client.RemoveObject(ctx, m.Bucket, item, opts)
+		if err != nil {
+			fmt.Println(err)
+			return false
+		}
+	}
+	return false
+}
