@@ -50,6 +50,7 @@ type Regius struct {
 	Scheduler     *cron.Cron
 	Mail          mailer.Mail
 	Server        Server
+	FileSystems   map[string]interface{}
 }
 
 type Server struct {
@@ -208,6 +209,7 @@ func (r *Regius) New(rootPath string) error {
 	}
 
 	r.createRenderer()
+	r.FileSystems = r.createFileSystems()
 	go r.Mail.ListenForMail()
 
 	return nil
@@ -372,4 +374,28 @@ func (r *Regius) BuildDSN() string {
 	}
 
 	return dsn
+}
+
+func (r *Regius) createFileSystems() map[string]interface{} {
+	fileSystems := make(map[string]interface{})
+
+	if os.Getenv("MINIO_SECRET") != "" {
+		useSSL := false
+
+		if strings.ToLower(os.Getenv("MINIO_USESSL")) == "true" {
+			useSSL = true
+		}
+
+		minio := miniofilesystem.Minio{
+			Endpoint: os.Getenv("MINIO_ENPOINT"),
+			Key:      os.Getenv("MINIO_KEY"),
+			Secret:   os.Getenv("MINIO_SECRET"),
+			UseSSL:   useSSL,
+			Region:   os.Getenv("MINIO_REGION"),
+			Bucket:   os.Getevn("MINIO_BUCKET"),
+		}
+		filesystems["MINIO"] = minio
+	}
+
+	return fileSystems
 }
