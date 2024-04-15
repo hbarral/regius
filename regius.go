@@ -18,6 +18,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"gitlab.com/hbarral/regius/cache"
+	"gitlab.com/hbarral/regius/filesystems/miniofilesystem"
 	"gitlab.com/hbarral/regius/mailer"
 	"gitlab.com/hbarral/regius/render"
 	"gitlab.com/hbarral/regius/session"
@@ -387,14 +388,14 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 		}
 
 		minio := miniofilesystem.Minio{
-			Endpoint: os.Getenv("MINIO_ENPOINT"),
+			Endpoint: os.Getenv("MINIO_ENDPOINT"),
 			Key:      os.Getenv("MINIO_KEY"),
 			Secret:   os.Getenv("MINIO_SECRET"),
 			UseSSL:   useSSL,
 			Region:   os.Getenv("MINIO_REGION"),
-			Bucket:   os.Getevn("MINIO_BUCKET"),
+			Bucket:   os.Getenv("MINIO_BUCKET"),
 		}
-		filesystems["MINIO"] = minio
+		fileSystems["MINIO"] = minio
 	}
 
 	return fileSystems

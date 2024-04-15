@@ -7,9 +7,10 @@ import (
 	"path"
 	"strings"
 
-	minio "github.com/minio/minio-go/v7"
+	"gitlab.com/hbarral/regius/filesystems"
 
-	credentials "github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 type Minio struct {
@@ -81,12 +82,12 @@ func (m *Minio) List(prefix string) ([]filesystems.Listing, error) {
 			kb := b / 1024
 			mb := kb / 1024
 			item := filesystems.Listing{
-				Etag:         object.Etag,
+				Etag:         object.ETag,
 				LastModified: object.LastModified,
 				Key:          object.Key,
 				Size:         mb,
 			}
-			lising = append(listing, item)
+			listing = append(listing, item)
 		}
 	}
 
@@ -100,7 +101,7 @@ func (m *Minio) Delete(itemsToDelete []string) bool {
 	client := m.getCredentials()
 
 	opts := minio.RemoveObjectOptions{
-		GovernaceBypass: true,
+		GovernanceBypass: true,
 	}
 
 	for _, item := range itemsToDelete {

@@ -5,11 +5,11 @@ import "time"
 type FS interface {
 	Put(fileName, folder string) error
 	Get(destination string, items ...string) error
-	List(prefix string) ([]Listen, error)
+	List(prefix string) ([]Listing, error)
 	Delete(itemsToDelete []string) bool
 }
 
-type Listen struct {
+type Listing struct {
 	Etag         string
 	LastModified time.Time
 	Key          string
