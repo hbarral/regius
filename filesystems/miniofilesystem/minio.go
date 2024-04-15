@@ -112,3 +112,26 @@ func (m *Minio) Delete(itemsToDelete []string) bool {
 	}
 	return false
 }
+
+func (m *Minio) Get(destination string, items ...string) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := m.getCredentials()
+
+	for _, item := range items {
+		err := client.FGetObject(
+			ctx,
+			m.Bucket,
+			item,
+			fmt.Sprintf("%s/%s", destination, path.Base(item)),
+			minio.GetObjectOptions{},
+		)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+	}
+
+	return nil
+}
