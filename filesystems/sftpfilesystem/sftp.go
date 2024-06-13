@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/pkg/sftp"
 	"gitlab.com/hbarral/regius/filesystems"
@@ -75,8 +76,33 @@ func (s *SFTP) Put(fileName, folder string) error {
 	return nil
 }
 
-func (s *SFTP) List(prefix string) ([]filesystem.Listing, error) {
-	var listing []fileSystems.Listing
+func (s *SFTP) List(prefix string) ([]filesystems.Listing, error) {
+	var listing []filesystems.Listing
+	client, err := s.getCredentials()
+	if err != nil {
+		return listing, err
+	}
+	defer client.Close()
+
+	files, err2 := client.ReadDir(prefix)
+	if err2 != nil {
+		return listing, err2
+	}
+
+	for _, x := range files {
+		var item filesystems.Listing
+
+		if !strings.HasPrefix(x.Name(), ".") {
+			b := float64(x.Size())
+			kb := b / 1024
+			mb := kb / 1024
+			item.Key = x.Name()
+			item.Size = mb
+			item.LastModified = x.ModTime()
+			item.IsDir = x.IsDir()
+			listing = append(listing, item)
+		}
+	}
 
 	return listing, nil
 }
