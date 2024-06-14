@@ -19,6 +19,7 @@ import (
 
 	"gitlab.com/hbarral/regius/cache"
 	"gitlab.com/hbarral/regius/filesystems/miniofilesystem"
+	"gitlab.com/hbarral/regius/filesystems/sftpfilesystem"
 	"gitlab.com/hbarral/regius/mailer"
 	"gitlab.com/hbarral/regius/render"
 	"gitlab.com/hbarral/regius/session"
@@ -396,6 +397,17 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 			Bucket:   os.Getenv("MINIO_BUCKET"),
 		}
 		fileSystems["MINIO"] = minio
+	}
+
+	if os.Getenv("SFTP_HOST") != "" {
+		sftp := sftpfilesystem.SFTP{
+			Host: os.Getenv("SFTP_HOST"),
+			Port: os.Getenv("SFTP_PORT"),
+			User: os.Getenv("SFTP_USER"),
+			Pass: os.Getenv("SFTP_PASS"),
+		}
+
+		fileSystems["SFTP"] = sftp
 	}
 
 	return fileSystems
