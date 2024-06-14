@@ -125,5 +125,37 @@ func (s *SFTP) Delete(itemsToDelete []string) bool {
 }
 
 func (s *SFTP) Get(destination string, items ...string) error {
+	client, err := s.getCredentials()
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	for _, x := range items {
+		destination_file, err := os.Create(fmt.Sprintf("%s/%s", destination, path.Base(x)))
+		if err != nil {
+			return err
+		}
+		defer destination_file.Close()
+
+		source_file, err2 := client.Open(x)
+		if err2 != nil {
+			return err
+		}
+		defer source_file.Close()
+
+		bytes, err := io.Copy(destination_file, source_file)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("Copied", bytes, "bytes")
+
+		err = destination_file.Sync()
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
