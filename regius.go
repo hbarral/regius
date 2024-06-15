@@ -18,6 +18,8 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"gitlab.com/hbarral/regius/cache"
+	"gitlab.com/hbarral/regius/filesystems/miniofilesystem"
+	"gitlab.com/hbarral/regius/filesystems/sftpfilesystem"
 	"gitlab.com/hbarral/regius/mailer"
 	"gitlab.com/hbarral/regius/render"
 	"gitlab.com/hbarral/regius/session"
@@ -50,6 +52,7 @@ type Regius struct {
 	Scheduler     *cron.Cron
 	Mail          mailer.Mail
 	Server        Server
+	FileSystems   map[string]interface{}
 }
 
 type Server struct {
@@ -208,6 +211,7 @@ func (r *Regius) New(rootPath string) error {
 	}
 
 	r.createRenderer()
+	r.FileSystems = r.createFileSystems()
 	go r.Mail.ListenForMail()
 
 	return nil
@@ -372,4 +376,39 @@ func (r *Regius) BuildDSN() string {
 	}
 
 	return dsn
+}
+
+func (r *Regius) createFileSystems() map[string]interface{} {
+	fileSystems := make(map[string]interface{})
+
+	if os.Getenv("MINIO_SECRET") != "" {
+		useSSL := false
+
+		if strings.ToLower(os.Getenv("MINIO_USESSL")) == "true" {
+			useSSL = true
+		}
+
+		minio := miniofilesystem.Minio{
+			Endpoint: os.Getenv("MINIO_ENDPOINT"),
+			Key:      os.Getenv("MINIO_KEY"),
+			Secret:   os.Getenv("MINIO_SECRET"),
+			UseSSL:   useSSL,
+			Region:   os.Getenv("MINIO_REGION"),
+			Bucket:   os.Getenv("MINIO_BUCKET"),
+		}
+		fileSystems["MINIO"] = minio
+	}
+
+	if os.Getenv("SFTP_HOST") != "" {
+		sftp := sftpfilesystem.SFTP{
+			Host: os.Getenv("SFTP_HOST"),
+			Port: os.Getenv("SFTP_PORT"),
+			User: os.Getenv("SFTP_USER"),
+			Pass: os.Getenv("SFTP_PASS"),
+		}
+
+		fileSystems["SFTP"] = sftp
+	}
+
+	return fileSystems
 }
