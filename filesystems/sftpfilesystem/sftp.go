@@ -42,6 +42,9 @@ func (s *SFTP) getCredentials() (*sftp.Client, error) {
 	}
 
 	cwd, err := client.Getwd()
+	if err != nil {
+		return nil, err
+	}
 	log.Println("Current working directory:", cwd)
 
 	return client, nil
@@ -52,21 +55,18 @@ func (s *SFTP) Put(fileName, folder string) error {
 	if err != nil {
 		return err
 	}
-
 	defer client.Close()
 
 	source_file, err := os.Open(fileName)
 	if err != nil {
 		return err
 	}
-
 	defer source_file.Close()
 
 	destination_file, err := client.Create(fmt.Sprintf("%s/%s", folder, path.Base(fileName)))
 	if err != nil {
 		return err
 	}
-
 	defer destination_file.Close()
 
 	if _, err := io.Copy(destination_file, source_file); err != nil {
@@ -132,26 +132,32 @@ func (s *SFTP) Get(destination string, items ...string) error {
 	defer client.Close()
 
 	for _, x := range items {
-		destination_file, err := os.Create(fmt.Sprintf("%s/%s", destination, path.Base(x)))
-		if err != nil {
-			return err
-		}
-		defer destination_file.Close()
+		err := func() error {
+			source_file, err2 := client.Open(x)
+			if err2 != nil {
+				return err
+			}
+			defer source_file.Close()
 
-		source_file, err2 := client.Open(x)
-		if err2 != nil {
-			return err
-		}
-		defer source_file.Close()
+			destination_file, err := os.Create(fmt.Sprintf("%s/%s", destination, path.Base(x)))
+			if err != nil {
+				return err
+			}
+			defer destination_file.Close()
 
-		bytes, err := io.Copy(destination_file, source_file)
-		if err != nil {
-			return err
-		}
+			bytes, err := io.Copy(destination_file, source_file)
+			if err != nil {
+				return err
+			}
+			fmt.Println("Copied", bytes, "bytes")
 
-		fmt.Println("Copied", bytes, "bytes")
+			err = destination_file.Sync()
+			if err != nil {
+				return err
+			}
 
-		err = destination_file.Sync()
+			return nil
+		}()
 		if err != nil {
 			return err
 		}
