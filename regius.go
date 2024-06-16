@@ -20,6 +20,7 @@ import (
 	"gitlab.com/hbarral/regius/cache"
 	"gitlab.com/hbarral/regius/filesystems/miniofilesystem"
 	"gitlab.com/hbarral/regius/filesystems/sftpfilesystem"
+	"gitlab.com/hbarral/regius/filesystems/webdavfilesystem"
 	"gitlab.com/hbarral/regius/mailer"
 	"gitlab.com/hbarral/regius/render"
 	"gitlab.com/hbarral/regius/session"
@@ -408,6 +409,23 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 		}
 
 		fileSystems["SFTP"] = sftp
+	}
+
+	if os.Getenv("WEBDAV_HOST") != "" {
+		useSSL := false
+		if strings.ToLower(os.Getenv("WEBDAV_USESSL")) == "true" {
+			useSSL = true
+		}
+
+		webdav := webdavfilesystem.WebDAV{
+			Host:   os.Getenv("WEBDAV_HOST"),
+			Port:   os.Getenv("WEBDAV_PORT"),
+			User:   os.Getenv("WEBDAV_USER"),
+			Pass:   os.Getenv("WEBDAV_PASS"),
+			UseSSL: useSSL,
+		}
+
+		fileSystems["WebDAV"] = webdav
 	}
 
 	return fileSystems

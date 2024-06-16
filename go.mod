@@ -32,6 +32,7 @@ require (
 	github.com/ory/dockertest/v3 v3.10.0
 	github.com/pkg/sftp v1.13.6
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/studio-b12/gowebdav v0.9.0
 	github.com/vanng822/go-premailer v1.20.2
 	github.com/xhit/go-simple-mail/v2 v2.16.0
 	golang.org/x/crypto v0.19.0
