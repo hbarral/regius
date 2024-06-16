@@ -480,6 +480,9 @@ github.com/sirupsen/logrus
 # github.com/skeema/knownhosts v1.2.1
 ## explicit; go 1.17
 github.com/skeema/knownhosts
+# github.com/studio-b12/gowebdav v0.9.0
+## explicit; go 1.17
+github.com/studio-b12/gowebdav
 # github.com/toorop/go-dkim v0.0.0-20201103131630-e1cd1a0a5208
 ## explicit
 github.com/toorop/go-dkim
