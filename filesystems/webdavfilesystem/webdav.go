@@ -80,5 +80,13 @@ func (w *WebDAV) Put(fileName, folder string) error {
 }
 
 func (w *WebDAV) Delete(itemsToDelete []string) bool {
+	client := w.getCredentials()
+	for _, item := range itemsToDelete {
+		err := client.Remove(item)
+		if err != nil {
+			return false
+		}
+	}
+
 	return true
 }
