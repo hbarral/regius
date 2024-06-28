@@ -19,6 +19,7 @@ import (
 
 	"gitlab.com/hbarral/regius/cache"
 	"gitlab.com/hbarral/regius/filesystems/miniofilesystem"
+	"gitlab.com/hbarral/regius/filesystems/s3filesystem"
 	"gitlab.com/hbarral/regius/filesystems/sftpfilesystem"
 	"gitlab.com/hbarral/regius/filesystems/webdavfilesystem"
 	"gitlab.com/hbarral/regius/mailer"
@@ -426,6 +427,17 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 		}
 
 		fileSystems["WebDAV"] = webdav
+	}
+
+	if os.Getenv("S3_KEY") != "" {
+		s3 := s3filesystem.S3{
+			Key:      os.Getenv("S3_KEY"),
+			Secret:   os.Getenv("S3_SECRET"),
+			Region:   os.Getenv("S3_REGION"),
+			Bucket:   os.Getenv("S3_BUCKET"),
+			Endpoint: os.Getenv("S3_ENDPOINT"),
+		}
+		fileSystems["S3"] = s3
 	}
 
 	return fileSystems

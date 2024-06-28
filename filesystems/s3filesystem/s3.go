@@ -1,0 +1,89 @@
+package s3filesystem
+
+import (
+	"bytes"
+	"fmt"
+	"net/http"
+	"os"
+	"path"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"gitlab.com/hbarral/regius/filesystems"
+)
+
+type S3 struct {
+	Key      string
+	Secret   string
+	Region   string
+	Endpoint string
+	Bucket   string
+}
+
+func (s *S3) getCredentials() *credentials.Credentials {
+	client := credentials.NewStaticCredentials(s.Key, s.Secret, "")
+	return client
+}
+
+func (s *S3) List(prefix string) ([]filesystems.Listing, error) {
+	var listing []filesystems.Listing
+	return listing, nil
+}
+
+func (s *S3) Get(destination string, items ...string) error {
+	return nil
+}
+
+func (s *S3) Put(fileName, folder string) error {
+	client := s.getCredentials()
+	sess := session.Must(session.NewSession(&aws.Config{
+		Endpoint:    &s.Endpoint,
+		Region:      &s.Region,
+		Credentials: client,
+	}))
+
+	uploader := s3manager.NewUploader(sess)
+	file, err := os.Open(fileName)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
+	size := fileInfo.Size()
+
+	buffer := make([]byte, size)
+	_, err = file.Read(buffer)
+	if err != nil {
+		return err
+	}
+
+	fileBytes := bytes.NewReader(buffer)
+	fileType := http.DetectContentType(buffer)
+
+	_, err = uploader.Upload(&s3manager.UploadInput{
+		Bucket: aws.String(s.Bucket),
+		Key:    aws.String(fmt.Sprintf("%s/%s", folder, path.Base(fileName))),
+		Body:   fileBytes,
+		// ACL:         aws.String("public-read"),
+		ContentType: aws.String(fileType),
+		Metadata: map[string]*string{
+			"Key": aws.String("MetadataValue"),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *S3) Delete(itemsToDelete []string) bool {
+	return true
+}
