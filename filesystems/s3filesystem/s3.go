@@ -8,8 +8,10 @@ import (
 	"path"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"gitlab.com/hbarral/regius/filesystems"
 )
@@ -29,6 +31,53 @@ func (s *S3) getCredentials() *credentials.Credentials {
 
 func (s *S3) List(prefix string) ([]filesystems.Listing, error) {
 	var listing []filesystems.Listing
+
+	if prefix == "/" {
+		prefix = ""
+	}
+
+	client := s.getCredentials()
+
+	sess := session.Must(session.NewSession(&aws.Config{
+		Endpoint:    &s.Endpoint,
+		Region:      &s.Region,
+		Credentials: client,
+	}))
+
+	service := s3.New(sess)
+	input := &s3.ListObjectsInput{
+		Bucket: aws.String(s.Bucket),
+		Prefix: aws.String(prefix),
+	}
+
+	result, err := service.ListObjects(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case s3.ErrCodeNoSuchBucket:
+				fmt.Println(s3.ErrCodeNoSuchBucket, aerr.Error())
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			fmt.Println(err.Error())
+		}
+		return nil, err
+	}
+
+	for _, item := range result.Contents {
+		b := float64(*item.Size)
+		kb := b / 1024
+		mb := kb / 1024
+		item := filesystems.Listing{
+			Etag:         *item.ETag,
+			LastModified: *item.LastModified,
+			Key:          *item.Key,
+			Size:         mb,
+		}
+		listing = append(listing, item)
+	}
+
 	return listing, nil
 }
 
