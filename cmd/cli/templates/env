@@ -89,3 +89,6 @@ RENDERER=jet
 
 # encryption key (32 characthers long)
 KEY=${KEY}
+
+# types of files allowed to upload
+ALLOWED_FILETYPES="image/png,image/jpeg,image/gif,application/pdf"

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/gabriel-vasile/mimetype"
 	"gitlab.com/hbarral/regius/filesystems"
 )
 
@@ -50,6 +51,20 @@ func (r *Regius) getFileToUpload(req *http.Request, fieldName string) (string, e
 	}
 	defer file.Close()
 
+	mimeType, err := mimetype.DetectReader(file)
+	if err != nil {
+		return "", err
+	}
+
+	_, err = file.Seek(0, 0)
+	if err != nil {
+		return "", err
+	}
+
+	if !inSlice(r.config.uploads.allowedTypes, mimeType.String()) {
+		return "", fmt.Errorf("invalid mime type: %s", mimeType.String())
+	}
+
 	destination, err := os.Create(fmt.Sprintf("./tmp/%s", handler.Filename))
 	if err != nil {
 		return "", err
@@ -62,4 +77,14 @@ func (r *Regius) getFileToUpload(req *http.Request, fieldName string) (string, e
 	}
 
 	return fmt.Sprintf("./tmp/%s", handler.Filename), nil
+}
+
+func inSlice(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+
+	return false
 }

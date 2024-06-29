@@ -75,6 +75,11 @@ type config struct {
 	sessionType string
 	database    databaseConfig
 	redis       redisConfig
+	uploads     uploadConfig
+}
+
+type uploadConfig struct {
+	allowedTypes []string
 }
 
 func (r *Regius) New(rootPath string) error {
@@ -152,6 +157,13 @@ func (r *Regius) New(rootPath string) error {
 	r.RootPath = rootPath
 	r.Mail = r.createMailer()
 	r.Routes = r.routes().(*chi.Mux)
+
+	exploded := strings.Split(os.Getenv("ALLOWED_FILETYPES"), ",")
+	var allowedTypes []string
+	for _, at := range exploded {
+		allowedTypes = append(allowedTypes, strings.TrimSpace(at))
+	}
+
 	r.config = config{
 		port:     os.Getenv("PORT"),
 		renderer: os.Getenv("RENDERER"),
@@ -171,6 +183,9 @@ func (r *Regius) New(rootPath string) error {
 			host:     os.Getenv("REDIS_HOST"),
 			password: os.Getenv("REDIS_PASSWORD"),
 			prefix:   os.Getenv("REDIS_PREFIX"),
+		},
+		uploads: uploadConfig{
+			allowedTypes: allowedTypes,
 		},
 	}
 
