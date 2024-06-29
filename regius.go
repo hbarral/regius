@@ -55,6 +55,10 @@ type Regius struct {
 	Mail          mailer.Mail
 	Server        Server
 	FileSystems   map[string]interface{}
+	S3            s3filesystem.S3
+	SFTP          sftpfilesystem.SFTP
+	WebDAV        webdavfilesystem.WebDAV
+	Minio         miniofilesystem.Minio
 }
 
 type Server struct {
@@ -399,6 +403,7 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 			Bucket:   os.Getenv("MINIO_BUCKET"),
 		}
 		fileSystems["MINIO"] = minio
+		r.Minio = minio
 	}
 
 	if os.Getenv("SFTP_HOST") != "" {
@@ -410,6 +415,7 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 		}
 
 		fileSystems["SFTP"] = sftp
+		r.SFTP = sftp
 	}
 
 	if os.Getenv("WEBDAV_HOST") != "" {
@@ -427,6 +433,7 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 		}
 
 		fileSystems["WebDAV"] = webdav
+		r.WebDAV = webdav
 	}
 
 	if os.Getenv("S3_KEY") != "" {
@@ -438,6 +445,7 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 			Endpoint: os.Getenv("S3_ENDPOINT"),
 		}
 		fileSystems["S3"] = s3
+		r.S3 = s3
 	}
 
 	return fileSystems
