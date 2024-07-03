@@ -2,6 +2,8 @@ package regius
 
 import (
 	"net/http"
+	"os"
+	"strconv"
 
 	chi "github.com/go-chi/chi/v5"
 	middleware "github.com/go-chi/chi/v5/middleware"
@@ -19,6 +21,8 @@ func (r *Regius) routes() http.Handler {
 	mux.Use(middleware.Recoverer)
 	mux.Use(r.SessionLoad)
 	mux.Use(r.NoSurf)
+	maxSize, _ := strconv.ParseInt(os.Getenv("MAX_FILESIZE"), 10, 64)
+	mux.Use(r.MaxRequestSize(maxSize))
 
 	return mux
 }
