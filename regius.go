@@ -55,6 +55,10 @@ type Regius struct {
 	Mail          mailer.Mail
 	Server        Server
 	FileSystems   map[string]interface{}
+	S3            s3filesystem.S3
+	SFTP          sftpfilesystem.SFTP
+	WebDAV        webdavfilesystem.WebDAV
+	Minio         miniofilesystem.Minio
 }
 
 type Server struct {
@@ -71,6 +75,11 @@ type config struct {
 	sessionType string
 	database    databaseConfig
 	redis       redisConfig
+	uploads     uploadConfig
+}
+
+type uploadConfig struct {
+	allowedTypes []string
 }
 
 func (r *Regius) New(rootPath string) error {
@@ -148,6 +157,13 @@ func (r *Regius) New(rootPath string) error {
 	r.RootPath = rootPath
 	r.Mail = r.createMailer()
 	r.Routes = r.routes().(*chi.Mux)
+
+	exploded := strings.Split(os.Getenv("ALLOWED_FILETYPES"), ",")
+	var allowedTypes []string
+	for _, at := range exploded {
+		allowedTypes = append(allowedTypes, strings.TrimSpace(at))
+	}
+
 	r.config = config{
 		port:     os.Getenv("PORT"),
 		renderer: os.Getenv("RENDERER"),
@@ -167,6 +183,9 @@ func (r *Regius) New(rootPath string) error {
 			host:     os.Getenv("REDIS_HOST"),
 			password: os.Getenv("REDIS_PASSWORD"),
 			prefix:   os.Getenv("REDIS_PREFIX"),
+		},
+		uploads: uploadConfig{
+			allowedTypes: allowedTypes,
 		},
 	}
 
@@ -399,6 +418,7 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 			Bucket:   os.Getenv("MINIO_BUCKET"),
 		}
 		fileSystems["MINIO"] = minio
+		r.Minio = minio
 	}
 
 	if os.Getenv("SFTP_HOST") != "" {
@@ -410,6 +430,7 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 		}
 
 		fileSystems["SFTP"] = sftp
+		r.SFTP = sftp
 	}
 
 	if os.Getenv("WEBDAV_HOST") != "" {
@@ -427,6 +448,7 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 		}
 
 		fileSystems["WebDAV"] = webdav
+		r.WebDAV = webdav
 	}
 
 	if os.Getenv("S3_KEY") != "" {
@@ -438,6 +460,7 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 			Endpoint: os.Getenv("S3_ENDPOINT"),
 		}
 		fileSystems["S3"] = s3
+		r.S3 = s3
 	}
 
 	return fileSystems
