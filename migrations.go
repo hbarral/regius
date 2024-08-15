@@ -4,6 +4,7 @@ import (
 	"log"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/gobuffalo/pop"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -119,6 +120,22 @@ func (r *Regius) PopMigrateDown(tx *pop.Connection, steps ...int) error {
 	}
 
 	err = fm.Down(step)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Regius) PopMigrateReset(tx *pop.Connection) error {
+	migrationPath := r.RootPath + "/migrations"
+
+	fm, err := pop.NewFileMigrator(migrationPath, tx)
+	if err != nil {
+		return err
+	}
+
+	err = fm.Reset()
 	if err != nil {
 		return err
 	}
