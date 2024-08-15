@@ -88,3 +88,19 @@ func (r *Regius) CreatePopMigration(up, down []bytes, migrationName, migrationTy
 
 	return nil
 }
+
+func (r *Regius) RunPopMigrations(tx *pop.Connection) error {
+	migrationPath := r.RootPath + "/migrations"
+
+	fm, err := pop.NewFileMigrator(migrationPath, tx)
+	if err != nil {
+		return err
+	}
+
+	err = fm.Up()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
