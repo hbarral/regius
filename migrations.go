@@ -104,3 +104,24 @@ func (r *Regius) RunPopMigrations(tx *pop.Connection) error {
 
 	return nil
 }
+
+func (r *Regius) PopMigrateDown(tx *pop.Connection, steps ...int) error {
+	migrationPath := r.RootPath + "/migrations"
+
+	step := 1
+	if len(steps) > 0 {
+		step = steps[0]
+	}
+
+	fm, err := pop.NewFileMigrator(migrationPath, tx)
+	if err != nil {
+		return err
+	}
+
+	err = fm.Down(step)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
