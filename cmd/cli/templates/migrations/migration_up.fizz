@@ -1,4 +1,4 @@
 create_table("example_table") {
-  t.Column("id", Integer, {primary_key: true})
-  t.Column("example_column", String, {"size": 255})
+  t.Column("id", "integer", {primary_key: true})
+  t.Column("example_column", "string", {"size": 255})
 }
