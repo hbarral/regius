@@ -71,7 +71,7 @@ func (r *Regius) MigrateForce(dsn string) error {
 	return nil
 }
 
-func (r *Regius) popConnect() (*pop.Connection, error) {
+func (r *Regius) PopConnect() (*pop.Connection, error) {
 	tx, err := pop.Connect("development")
 	if err != nil {
 		return nil, err
