@@ -2,35 +2,37 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/fatih/color"
 	"github.com/gertd/go-pluralize"
 	"github.com/iancoleman/strcase"
 )
 
-func doMake(arg2, arg3 string) error {
+func doMake(arg2, arg3, arg4 string) error {
 	switch arg2 {
 	case "migration":
-		dbType := reg.DB.DataType
+		checkForDB()
+
 		if arg3 == "" {
 			exitGracefully(errors.New("you must give the migration a name"))
 		}
 
-		fileName := fmt.Sprintf("%d_%s", time.Now().UnixMicro(), arg3)
+		migrationType := "fizz"
+		var up, down string
 
-		upFile := reg.RootPath + "/migrations/" + fileName + "." + dbType + ".up.sql"
-		downFile := reg.RootPath + "/migrations/" + fileName + "." + dbType + ".down.sql"
+		if arg4 == "fizz" || arg4 == "" {
+			upBytes, _ := templateFS.ReadFile("templates/migrations/migration_up.fizz")
+			downBytes, _ := templateFS.ReadFile("templates/migrations/migration_down.fizz")
 
-		err := copyFileFromTemplate("templates/migrations/migration."+dbType+".up.sql", upFile)
-		if err != nil {
-			exitGracefully(err)
+			up = string(upBytes)
+			down = string(downBytes)
+		} else {
+			migrationType = "sql"
 		}
 
-		err = copyFileFromTemplate("templates/migrations/migration."+dbType+".down.sql", downFile)
+		err := reg.CreatePopMigration([]byte(up), []byte(down), arg3, migrationType)
 		if err != nil {
 			exitGracefully(err)
 		}
