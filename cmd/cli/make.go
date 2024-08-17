@@ -13,6 +13,7 @@ import (
 func doMake(arg2, arg3, arg4 string) error {
 	switch arg2 {
 	case "migration":
+		checkForDB()
 
 		if arg3 == "" {
 			exitGracefully(errors.New("you must give the migration a name"))

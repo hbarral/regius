@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -63,17 +64,17 @@ func getDSN() string {
 func showHelp() {
 	color.Yellow(`Available commands:
 
-  help                   - show the help commands
-  version                - print application version
-  migration              - runs all up mirgrations that have not been run previously
-  migration down         - reverses the most recent migration
-  migration reset        - runs all down mirgrations in reverse order, and then all up migrations
-  make migration <name>  - creates two new up and down migrations in the migrations folder
-	make auth              - creates and runs migrations for authentication tables, and creates models and middleware
-	make handler <name>    - creates a stub handler in the handlers directory
-	make model <name>      - creates a new model in the data directory
-	make session           - creates a table in the database as session store
-  make mail <name>       - creates two starter mail templates in the mail directory
+  help                            - show the help commands
+  version                         - print application version
+  migration                       - runs all up mirgrations that have not been run previously
+  migration down                  - reverses the most recent migration
+  migration reset                 - runs all down mirgrations in reverse order, and then all up migrations
+  make migration <name> <format>  - creates two new up and down migrations in the migrations folder; format can be fizz or sql
+  make auth                       - creates and runs migrations for authentication tables, and creates models and middleware
+  make handler <name>             - creates a stub handler in the handlers directory
+  make model <name>               - creates a new model in the data directory
+  make session                    - creates a table in the database as session store
+  make mail <name>                - creates two starter mail templates in the mail directory
 
   `)
 }
@@ -100,7 +101,7 @@ func updateSourceFiles(path string, fi os.FileInfo, err error) error {
 
 		newContents := strings.Replace(string(read), "regius-app", appURL, -1)
 
-		err = os.WriteFile(path, []byte(newContents), 0644)
+		err = os.WriteFile(path, []byte(newContents), 0o644)
 		if err != nil {
 			exitGracefully(err)
 		}
@@ -113,5 +114,15 @@ func updateSource() {
 	err := filepath.Walk(".", updateSourceFiles)
 	if err != nil {
 		exitGracefully(err)
+	}
+}
+
+func checkForDB() {
+	if reg.DB.DataType == "" {
+		exitGracefully(errors.New("you must set DATABASE_TYPE in .env"))
+	}
+
+	if !fileExists(reg.RootPath + "/config/database.yml") {
+		exitGracefully(errors.New("config/database.yml not found"))
 	}
 }
