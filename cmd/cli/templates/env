@@ -7,6 +7,7 @@ DEBUG=true
 
 # The port should we listen on
 PORT=4000
+RPC_PORT=4001
 
 # Server name
 SERVER_NAME=localhost

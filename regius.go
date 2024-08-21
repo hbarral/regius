@@ -3,7 +3,9 @@ package regius
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"net/rpc"
 	"os"
 	"strconv"
 	"strings"
@@ -35,6 +37,8 @@ var (
 	redisPool     *redis.Pool
 	badgerConn    *badger.DB
 )
+
+var maintenanceMode bool
 
 type Regius struct {
 	AppName       string
@@ -272,6 +276,8 @@ func (r *Regius) ListenAndServe() {
 		defer badgerConn.Close()
 	}
 
+	go r.listenRPC()
+
 	r.InfoLog.Printf("Listening on port %s", os.Getenv("PORT"))
 
 	err := srv.ListenAndServe()
@@ -464,4 +470,49 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 	}
 
 	return fileSystems
+}
+
+type RPCServer struct {
+	Host string
+	Port string
+}
+
+func (r *RPCServer) MaintenanceMode(inMaintenanceMode bool, resp *string) error {
+	if inMaintenanceMode {
+		maintenanceMode = true
+		*resp = "Server in maintenance mode"
+	} else {
+		maintenanceMode = false
+		*resp = "Server live!"
+	}
+	return nil
+}
+
+func (r *Regius) listenRPC() {
+	if os.Getenv("RPC_PORT") != "" {
+		port := os.Getenv("RPC_PORT")
+		r.InfoLog.Println("Starting RPC server on port " + port)
+		err := rpc.Register(new(RPCServer))
+		if err != nil {
+			r.ErrorLog.Println(err)
+			return
+		}
+
+		listen, err := net.Listen("tcp", "127.0.0.1:"+port)
+		if err != nil {
+			r.ErrorLog.Println(err)
+			return
+		}
+
+		for {
+			rpcConn, err := listen.Accept()
+			if err != nil {
+				r.ErrorLog.Println(err)
+				continue
+			}
+
+			go rpc.ServeConn(rpcConn)
+		}
+
+	}
 }
