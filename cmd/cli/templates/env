@@ -94,3 +94,13 @@ KEY=${KEY}
 ALLOWED_FILETYPES="image/png,image/jpeg,image/gif,application/pdf"
 # 5MB
 MAX_FILESIZE=5242880
+
+# github oauth
+GITHUB_KEY=
+GITHUB_SECRET=
+GITHUB_CALLBACK=
+
+# google oauth
+GOOGLE_KEY=
+GOOGLE_SECRET=
+GOOGLE_CALLBACK=
