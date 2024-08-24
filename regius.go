@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"net/rpc"
 	"os"
 	"strconv"
@@ -252,36 +251,6 @@ func (r *Regius) Init(p initPath) error {
 	}
 
 	return nil
-}
-
-func (r *Regius) ListenAndServe() {
-	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%s", os.Getenv("PORT")),
-		ErrorLog:     r.ErrorLog,
-		Handler:      r.Routes,
-		IdleTimeout:  30 * time.Second,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 600 * time.Second,
-	}
-
-	if r.DB.Pool != nil {
-		defer r.DB.Pool.Close()
-	}
-
-	if redisPool != nil {
-		defer redisPool.Close()
-	}
-
-	if badgerConn != nil {
-		defer badgerConn.Close()
-	}
-
-	go r.listenRPC()
-
-	r.InfoLog.Printf("Listening on port %s", os.Getenv("PORT"))
-
-	err := srv.ListenAndServe()
-	r.ErrorLog.Fatal(err)
 }
 
 func (r *Regius) checkDotEnv(path string) error {
