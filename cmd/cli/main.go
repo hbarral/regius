@@ -55,6 +55,12 @@ func main() {
 		}
 		doNew(arg2)
 
+	case "up":
+		rpcClient(false)
+
+	case "down":
+		rpcClient(true)
+
 	default:
 		showHelp()
 	}

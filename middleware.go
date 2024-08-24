@@ -1,8 +1,10 @@
 package regius
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/justinas/nosurf"
 )
@@ -41,4 +43,19 @@ func (r *Regius) MaxRequestSize(maxBytes int64) func(next http.Handler) http.Han
 		}
 		return http.HandlerFunc(fn)
 	}
+}
+
+func (r *Regius) CheckForMaintenanceMode(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if maintenanceMode {
+			if !strings.Contains(req.URL.Path, "/public/maintenance.html") {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				w.Header().Set("Retry-After", "300")
+				w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0")
+				http.ServeFile(w, req, fmt.Sprintf("%s/public/maintenance.html", r.RootPath))
+				return
+			}
+		}
+		next.ServeHTTP(w, req)
+	})
 }
