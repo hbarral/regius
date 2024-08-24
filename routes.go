@@ -23,6 +23,7 @@ func (r *Regius) routes() http.Handler {
 	mux.Use(r.NoSurf)
 	maxSize, _ := strconv.ParseInt(os.Getenv("MAX_FILESIZE"), 10, 64)
 	mux.Use(r.MaxRequestSize(maxSize))
+	mux.Use(r.CheckForMaintenanceMode)
 
 	return mux
 }
