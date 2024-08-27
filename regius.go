@@ -98,6 +98,7 @@ func (r *Regius) New(rootPath string) error {
 			"tmp",
 			"logs",
 			"middleware",
+			"screenshots",
 		},
 	}
 
