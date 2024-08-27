@@ -27,3 +27,12 @@ func (r *Regius) TakeScreenShot(pageURL, testName string, w, h float64) {
 	fileName := time.Now().Format("2006-01-02_15-04-05.000") + "_" + testName
 	_ = utils.OutputFile(fmt.Sprintf("%s/screenshots/%s-%s.png", r.RootPath, testName, fileName), image)
 }
+
+func (r *Regius) FetchPage(pageURL string) *rod.Page {
+	return rod.New().MustConnect().MustIgnoreCertErrors(true).MustPage(pageURL).MustWaitLoad()
+}
+
+func (r *Regius) SelectElementByID(page *rod.Page, elementID string) *rod.Element {
+	js := fmt.Sprintf(`function() { return document.getElementById('%s'); }`, elementID)
+	return page.MustElementByJS(js)
+}
