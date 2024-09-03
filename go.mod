@@ -23,6 +23,7 @@ require (
 	github.com/gertd/go-pluralize v0.2.1
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/go-git/go-git/v5 v5.11.0
+	github.com/go-rod/rod v0.116.2
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/gobuffalo/pop v4.13.1+incompatible
 	github.com/golang-migrate/migrate/v4 v4.16.2
@@ -146,6 +147,11 @@ require (
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
+	github.com/ysmood/fetchup v0.2.3 // indirect
+	github.com/ysmood/goob v0.4.0 // indirect
+	github.com/ysmood/got v0.40.0 // indirect
+	github.com/ysmood/gson v0.7.3 // indirect
+	github.com/ysmood/leakless v0.9.0 // indirect
 	github.com/yuin/gopher-lua v1.1.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
