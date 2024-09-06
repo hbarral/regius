@@ -130,7 +130,14 @@ func doNew(appName string) {
 	updateSource()
 
 	color.Yellow("\tRunning go mod tidy...")
-	cmd := exec.Command("go", "mod", "tidy")
+
+	cmd := exec.Command("go", "get", "gitlab.com/hbarral/regius")
+	err = cmd.Start()
+	if err != nil {
+		exitGracefully(err)
+	}
+
+	cmd = exec.Command("go", "mod", "tidy")
 	err = cmd.Start()
 	if err != nil {
 		exitGracefully(err)

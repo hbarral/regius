@@ -1,13 +1,14 @@
 {{extends "./layouts/base.jet"}}
 
 {{block browserTitle()}}
-Sign In
+Sign in
 {{end}}
 
 {{block css()}} {{end}}
 
-{{block pageContent()}} 
-<h2 class="mt-5 text-center">Sign In</h2>
+{{block pageContent()}}
+<h2 class="mt-5 text-center">Sign in</h2>
+
 
 <hr>
 
@@ -16,41 +17,54 @@ Sign In
     {{.Flash}}
 </div>
 {{end}}
+<div class="row">
+    <div class="col text-center">
+        <a href="/auth/github?provider=github" class="btn btn-outline-secondary">
+            <i class="bi bi-github"></i>
+            Sign in with GitHub
+        </a>
 
-<form
-  id="signin-form"
-  name="signin-form"
-  method="post"
-  action="/users/signin"
-  class="d-block needs-validation"
-  autocomplete="off"
-  novalidate=""
-  >
-  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-  <div class="mb-3">
-    <label for="email" class="form-label">Email</label>
-    <input type="email" class="form-control" id="email" name="email" required="" autocomplete="email-new">
-  </div>
-  <div class="mb-3">
-    <label for="password" class="form-label">Password</label>
-    <input type="password" class="form-control" id="password" name="password" required="" autocomplete="password-new">
-  </div>
+        <br>
 
-  <div class="form-check form-switch">
-    <input class="form-check-input" type="checkbox" value="remember" name="remember" id="remember">
-    <label class="form-check-label" for="remember">Remember me</label>
-  </div>
+        <a href="/auth/google?provider=google" class="btn btn-outline-secondary mt-3">
+            <i class="bi bi-google"></i>
+            Sign in with Google
+        </a>
+    </div>
+    <div class="col">
+        <form method="post" action="/users/signin"
+              name="signin-form" id="signin-form"
+              class="d-block needs-validation"
+              autocomplete="off" novalidate="">
 
-  <hr>
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 
-  <a href="javascript:void(0)" class="btn btn-primary" onclick="val()">Sign In</a>
-  <p class="mt-2">
-    <small><a href="/users/forgot-password">Forgot password?</a></small>
-  </p>
-</form>
+            <div class="mb-3">
+                <label for="email" class="form-label">Email</label>
+                <input type="email" class="form-control" id="email" name="email"
+                       required="" autocomplete="email-new">
+            </div>
 
-<div class="text-center">
-  <a class="btn btn-outline-secondary" href="/">back</a>
+            <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" class="form-control" id="password" name="password"
+                       required="" autocomplete="password-new">
+            </div>
+
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" value="remember" name="remember" id="remember">
+                <label class="form-check-label" for="remember">Remember me</label>
+            </div>
+
+            <hr>
+
+            <a href="javascript:void(0)" class="btn btn-primary" onclick="val()">Sign in</a>
+            <p class="mt-2">
+                <small><a href="/users/forgot-password">Forgot password?</a></small>
+            </p>
+
+        </form>
+    </div>
 </div>
 
 <p>&nbsp;</p>
@@ -59,21 +73,17 @@ Sign In
 
 {{block js()}}
 <script>
-function val() {
-  let form = document.getElementById("signin-form")
+    function val() {
+        let form = document.getElementById("signin-form");
+        if (form.checkValidity() === false) {
+            this.event.preventDefault();
+            this.event.stopPropagation();
+            form.classList.add("was-validated");
+            return;
+        }
 
-  if (form.checkValidity() === false) {
-    this.event.preventDefault()
-    this.event.stopPropagation()
-    form.classList.add("was-validated")
-
-    return
-  }
-
-  form.classList.add("was-validated")
-  form.submit()
-}
+        form.classList.add("was-validated");
+        form.submit();
+    }
 </script>
 {{end}}
-
-
