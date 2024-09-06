@@ -39,6 +39,8 @@ func (r *Regius) UploadFile(
 		}
 	}
 
+	defer os.Remove(fileName)
+
 	return nil
 }
 
