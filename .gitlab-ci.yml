@@ -10,7 +10,7 @@ build_linux:
   image: golang:latest
   script:
     - mkdir -p $OUTPUT_DIR
-    - GOOS=linux GOARCH=amd64 go build -o $OUTPUT_DIR/regius-linux
+    - GOOS=linux GOARCH=amd64 go build -o $OUTPUT_DIR/regius-linux ./cmd/cli
   artifacts:
     paths:
       - $OUTPUT_DIR/regius-linux
@@ -22,7 +22,7 @@ build_windows:
   image: golang:latest
   script:
     - mkdir -p $OUTPUT_DIR
-    - GOOS=windows GOARCH=amd64 go build -o $OUTPUT_DIR/regius-windows.exe
+    - GOOS=windows GOARCH=amd64 go build -o $OUTPUT_DIR/regius-windows.exe ./cmd/cli
   artifacts:
     paths:
       - $OUTPUT_DIR/regius-windows.exe
@@ -34,7 +34,7 @@ build_mac:
   image: golang:latest
   script:
     - mkdir -p $OUTPUT_DIR
-    - GOOS=darwin GOARCH=amd64 go build -o $OUTPUT_DIR/regius-mac
+    - GOOS=darwin GOARCH=amd64 go build -o $OUTPUT_DIR/regius-mac ./cmd/cli
   artifacts:
     paths:
       - $OUTPUT_DIR/regius-mac
