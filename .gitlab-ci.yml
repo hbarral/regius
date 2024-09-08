@@ -3,11 +3,13 @@ stages:
 
 variables:
   OUTPUT_DIR: 'bin'
+  GOFLAGS: '-mod=mod'
 
 build_linux:
   stage: build
   image: golang:latest
   script:
+    - mkdir -p $OUTPUT_DIR
     - GOOS=linux GOARCH=amd64 go build -o $OUTPUT_DIR/regius-linux
   artifacts:
     paths:
@@ -19,6 +21,7 @@ build_windows:
   stage: build
   image: golang:latest
   script:
+    - mkdir -p $OUTPUT_DIR
     - GOOS=windows GOARCH=amd64 go build -o $OUTPUT_DIR/regius-windows.exe
   artifacts:
     paths:
@@ -30,6 +33,7 @@ build_mac:
   stage: build
   image: golang:latest
   script:
+    - mkdir -p $OUTPUT_DIR
     - GOOS=darwin GOARCH=amd64 go build -o $OUTPUT_DIR/regius-mac
   artifacts:
     paths:
