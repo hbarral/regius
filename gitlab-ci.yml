@@ -1,0 +1,38 @@
+stages:
+  - build
+
+variables:
+  OUTPUT_DIR: 'bin'
+
+build_linux:
+  stage: build
+  image: golang:latest
+  script:
+    - GOOS=linux GOARCH=amd64 go build -o $OUTPUT_DIR/regius-linux
+  artifacts:
+    paths:
+      - $OUTPUT_DIR/regius-linux
+  only:
+    - /^v1.\d+.\d+$/
+
+build_windows:
+  stage: build
+  image: golang:latest
+  script:
+    - GOOS=windows GOARCH=amd64 go build -o $OUTPUT_DIR/regius-windows.exe
+  artifacts:
+    paths:
+      - $OUTPUT_DIR/regius-windows.exe
+  only:
+    - /^v1.\d+.\d+$/
+
+build_mac:
+  stage: build
+  image: golang:latest
+  script:
+    - GOOS=darwin GOARCH=amd64 go build -o $OUTPUT_DIR/regius-mac
+  artifacts:
+    paths:
+      - $OUTPUT_DIR/regius-mac
+  only:
+    - /^v1.\d+.\d+$/
