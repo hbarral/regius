@@ -65,6 +65,7 @@ func showHelp() {
 	color.Yellow(`Available commands:
 
   help                            - show the help commands
+  new <name>                      - creates a new application
   version                         - print application version
   migration                       - runs all up mirgrations that have not been run previously
   migration down                  - reverses the most recent migration
@@ -75,8 +76,8 @@ func showHelp() {
   make model <name>               - creates a new model in the data directory
   make session                    - creates a table in the database as session store
   make mail <name>                - creates two starter mail templates in the mail directory
-	down                            - put the server in maintenance mode
-	up                              - bring the server back from maintenance mode
+  down                            - put the server in maintenance mode
+  up                              - bring the server back from maintenance mode
 
   `)
 }
