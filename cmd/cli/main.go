@@ -9,7 +9,7 @@ import (
 	"gitlab.com/hbarral/regius"
 )
 
-const version = "1.0.0"
+const version = "1.0.2"
 
 var reg regius.Regius
 

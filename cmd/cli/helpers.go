@@ -67,9 +67,9 @@ func showHelp() {
   help                            - show the help commands
   new <name>                      - creates a new application
   version                         - print application version
-  migration                       - runs all up mirgrations that have not been run previously
-  migration down                  - reverses the most recent migration
-  migration reset                 - runs all down mirgrations in reverse order, and then all up migrations
+  migrate                         - runs all up mirgrations that have not been run previously
+  migrate down                    - reverses the most recent migration
+  migrate reset                   - runs all down mirgrations in reverse order, and then all up migrations
   make migration <name> <format>  - creates two new up and down migrations in the migrations folder; format can be fizz or sql
   make auth                       - creates and runs migrations for authentication tables, and creates models and middleware
   make handler <name>             - creates a stub handler in the handlers directory
