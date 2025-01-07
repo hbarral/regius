@@ -1,9 +1,11 @@
 package render
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -14,13 +16,14 @@ import (
 )
 
 type Render struct {
-	Renderer   string
-	RootPath   string
-	Secure     bool
-	Port       string
-	ServerName string
-	JetViews   *jet.Set
-	Session    *scs.SessionManager
+	Renderer        string
+	RootPath        string
+	Secure          bool
+	Port            string
+	ServerName      string
+	JetViews        *jet.Set
+	Session         *scs.SessionManager
+	TemplComponents map[string]Template
 }
 
 type TemplateData struct {
@@ -63,6 +66,8 @@ func (c *Render) Page(
 		return c.GoPage(w, r, view, data)
 	case "jet":
 		return c.JetPage(w, r, view, variables, data)
+	case "templ":
+		return c.TemplPage(w, r, view, data)
 	default:
 	}
 
@@ -75,7 +80,7 @@ func (c *Render) GoPage(
 	view string,
 	data interface{},
 ) error {
-	tmpl, err := template.ParseFiles(fmt.Sprintf("%s/views/%s.page.tmpl", c.RootPath, view))
+	htmlTemplate, err := template.ParseFiles(fmt.Sprintf("%s/views/%s.page.template", c.RootPath, view))
 	if err != nil {
 		return err
 	}
@@ -86,10 +91,9 @@ func (c *Render) GoPage(
 		td = data.(*TemplateData)
 	}
 
-	err = tmpl.Execute(w, &td)
-
+	err = htmlTemplate.Execute(w, &td)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	return nil
@@ -130,4 +134,39 @@ func (c *Render) JetPage(
 	}
 
 	return nil
+}
+
+type Template interface {
+	Render(ctx context.Context, w io.Writer) error
+}
+
+func (re *Render) TemplPage(w http.ResponseWriter, r *http.Request, view string, data interface{}) error {
+	td := &TemplateData{}
+	if data != nil {
+		td = data.(*TemplateData)
+	}
+
+	td = re.defaultData(td, r)
+
+	tmpl, err := re.loadTemplComponent(view)
+	if err != nil {
+		return fmt.Errorf("error loading template %s: %w", view, err)
+	}
+
+	ctx := context.WithValue(r.Context(), "templateData", td)
+
+	if err := tmpl.Render(ctx, w); err != nil {
+		return fmt.Errorf("error rendering template %s: %w", view, err)
+	}
+
+	return nil
+}
+
+func (re *Render) loadTemplComponent(view string) (Template, error) {
+	tmpl, exists := re.TemplComponents[view]
+	if !exists {
+		return nil, fmt.Errorf("template %s not found", view)
+	}
+
+	return tmpl, nil
 }

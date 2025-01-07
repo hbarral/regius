@@ -85,7 +85,7 @@ MAILER_API=
 MAILER_KEY=
 MAILER_URL=
 
-# Template engine configuration (jet | go)
+# Template engine configuration (jet | go | templ)
 RENDERER=jet
 
 # encryption key (32 characthers long)
