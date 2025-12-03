@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"regius-app/data"
+	"${APP_NAME}/data"
 )
 
 func (m *Middleware) CheckRemember(next http.Handler) http.Handler {

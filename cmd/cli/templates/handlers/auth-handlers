@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
+	"${APP_NAME}/data"
 	"strings"
 	"time"
 
@@ -19,20 +21,22 @@ import (
 	"github.com/markbates/goth/gothic"
 	"github.com/markbates/goth/providers/github"
 	"github.com/markbates/goth/providers/google"
-	"regius-app/data"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"gitlab.com/hbarral/regius/mailer"
+	"gitlab.com/hbarral/regius/render"
 	"gitlab.com/hbarral/regius/urlsigner"
 )
 
-func (h *Handlers) UserSignIn(w http.ResponseWriter, r *http.Request) {
-	err := h.App.Render.Page(w, r, "login", nil, nil)
+func (h *Handlers) SignIn(w http.ResponseWriter, r *http.Request) {
+	err := h.App.Render.Page(w, r, "signin", nil, nil)
 	if err != nil {
 		h.App.ErrorLog.Println(err)
 	}
 }
 
-func (h *Handlers) PostUserSignIn(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) PostSignIn(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		w.Write([]byte(err.Error()))
@@ -99,6 +103,62 @@ func (h *Handlers) PostUserSignIn(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
+func (h *Handlers) SignUp(w http.ResponseWriter, r *http.Request) {
+	err := h.App.Render.Page(w, r, "signup", nil, nil)
+	if err != nil {
+		h.App.ErrorLog.Println(err)
+	}
+}
+
+func (h *Handlers) PostSignUp(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		h.App.ErrorStatus(w, http.StatusBadRequest)
+		return
+	}
+
+	first_name := r.Form.Get("first_name")
+	last_name := r.Form.Get("last_name")
+	email := r.Form.Get("email")
+	password := r.Form.Get("password")
+
+	if email == "" || !isValidEmail(email) {
+		h.App.InfoLog.Println("It is not a valid email:", email)
+		h.App.ErrorStatus(w, http.StatusBadRequest)
+		return
+	}
+
+	if password == "" {
+		h.App.InfoLog.Println("Empty password, not a valid password")
+		h.App.ErrorStatus(w, http.StatusBadRequest)
+		return
+	}
+
+	newUser := data.User{
+		Email:     email,
+		Password:  password,
+		FirstName: first_name,
+		LastName:  last_name,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	_, err = newUser.Insert(newUser)
+	if err != nil {
+		h.App.ErrorStatus(w, http.StatusInternalServerError)
+		return
+	}
+
+	h.App.Session.Put(r.Context(), "flash", "Successful registration. You can log in.")
+	http.Redirect(w, r, "/auth/signin", http.StatusSeeOther)
+}
+
+func isValidEmail(email string) bool {
+	email = strings.TrimSpace(email)
+	re := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	return re.MatchString(email)
+}
+
 func (h *Handlers) SignOut(w http.ResponseWriter, r *http.Request) {
 	if h.App.Session.Exists(r.Context(), "remember_token") {
 		rt := data.RememberToken{}
@@ -126,7 +186,7 @@ func (h *Handlers) SignOut(w http.ResponseWriter, r *http.Request) {
 	h.App.Session.Remove(r.Context(), "remember_token")
 	h.App.Session.Destroy(r.Context())
 	h.App.Session.RenewToken(r.Context())
-	http.Redirect(w, r, "/users/signin", http.StatusSeeOther)
+	http.Redirect(w, r, "/auth/signin", http.StatusSeeOther)
 }
 
 func (h *Handlers) Forgot(w http.ResponseWriter, r *http.Request) {
@@ -152,24 +212,36 @@ func (h *Handlers) PostForgot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	link := fmt.Sprintf("%s/users/reset-password?email=%s", h.App.Server.URL, email)
+	link := fmt.Sprintf("%s/auth/reset-password?email=%s", h.App.Server.URL, email)
 
 	sign := urlsigner.Signer{
 		Secret: []byte(h.App.EncryptionKey),
 	}
 	signedLink := sign.GenerateTokenFromString(link)
-	h.App.InfoLog.Println("Signed link is: ", signedLink)
-
+	appName := cases.Title(language.English).String(os.Getenv("APP_NAME"))
+	supportEmail := os.Getenv("SUPPORT_EMAIL")
 	var data struct {
-		Link string
+		Link         string
+		User         *data.User
+		AppName      string
+		SupportEmail string
 	}
+
 	data.Link = signedLink
+	data.User = u
+	data.AppName = appName
+	data.SupportEmail = supportEmail
+
+	subject := "Password reset request for ${APP_NAME}"
+	template := "password-reset"
+	from := os.Getenv("RESET_PASSWORD_MAILER_FROM")
+
 	msg := mailer.Message{
 		To:       u.Email,
-		Subject:  "Password Reset",
-		Template: "password-reset",
+		Subject:  subject,
+		Template: template,
 		Data:     data,
-		From:     "admin@some-example.com",
+		From:     from,
 	}
 	h.App.Mail.Jobs <- msg
 	res := <-h.App.Mail.Results
@@ -178,7 +250,7 @@ func (h *Handlers) PostForgot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/users/signin", http.StatusSeeOther)
+	http.Redirect(w, r, "/auth/signin", http.StatusSeeOther)
 }
 
 func (h *Handlers) ResetPasswordForm(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +279,12 @@ func (h *Handlers) ResetPasswordForm(w http.ResponseWriter, r *http.Request) {
 	vars := make(jet.VarMap)
 	vars.Set("email", encryptedEmail)
 
-	err := h.render(w, r, "reset-password", vars, nil)
+	data := &render.TemplateData{
+		Data: make(map[string]interface{}),
+	}
+	data.Data["Email"] = encryptedEmail
+
+	err := h.render(w, r, "reset-password", vars, data)
 	if err != nil {
 		return
 	}
@@ -240,7 +317,7 @@ func (h *Handlers) PostResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.App.Session.Put(r.Context(), "flash", "Password has been reset. You can now sign in.")
-	http.Redirect(w, r, "/users/signin", http.StatusSeeOther)
+	http.Redirect(w, r, "/auth/signin", http.StatusSeeOther)
 }
 
 func (h *Handlers) InitSocialAuth() {
@@ -329,7 +406,7 @@ func (h *Handlers) SocialCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func (h *Handlers) socialSignOut(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) socialSignOut(_ http.ResponseWriter, r *http.Request) {
 	provider, ok := h.App.Session.Get(r.Context(), "provider").(string)
 	if !ok {
 		return

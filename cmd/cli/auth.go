@@ -2,12 +2,18 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"strings"
 
 	"github.com/fatih/color"
 )
 
 func doAuth() error {
 	checkForDB()
+	appName := os.Getenv("APP_NAME")
+	appName = strings.ToLower(appName)
+	log.Println("APP NAME IS:", appName)
 	dbType := reg.DB.DataType
 
 	tx, err := reg.PopConnect()
@@ -61,18 +67,28 @@ func doAuth() error {
 		exitGracefully(err)
 	}
 
-	err = copyFileFromTemplate(
-		"templates/middleware/remember",
-		reg.RootPath+"/middleware/remember.go",
-	)
+	data, err := templateFS.ReadFile("templates/middleware/remember")
 	if err != nil {
 		exitGracefully(err)
 	}
 
-	err = copyFileFromTemplate(
-		"templates/handlers/auth-handlers",
-		reg.RootPath+"/handlers/auth-handlers.go",
-	)
+	rememberTokenFileContent := string(data)
+	rememberTokenFileContent = strings.ReplaceAll(rememberTokenFileContent, "${APP_NAME}", appName)
+
+	err = copyDataToFile([]byte(rememberTokenFileContent), "./middleware/remember.go")
+	if err != nil {
+		exitGracefully(err)
+	}
+
+	data, err = templateFS.ReadFile("templates/handlers/auth-handlers")
+	if err != nil {
+		exitGracefully(err)
+	}
+
+	authHandlerFileContent := string(data)
+	authHandlerFileContent = strings.ReplaceAll(authHandlerFileContent, "${APP_NAME}", appName)
+
+	err = copyDataToFile([]byte(authHandlerFileContent), "./handlers/auth-handlers.go")
 	if err != nil {
 		exitGracefully(err)
 	}
