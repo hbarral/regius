@@ -22,6 +22,7 @@ DATABASE_PORT=
 DATABASE_USER=
 DATABASE_PASS=
 DATABASE_NAME=
+# DATABASE_SSL_MODE (enable | disable)
 DATABASE_SSL_MODE=
 
 # minio settings
@@ -115,3 +116,9 @@ MYSQL_DATABASE=
 MYSQL_USER=
 MYSQL_PASSWORD=
 MYSQL_ROOT_PASSWORD=
+
+# reset password settings
+RESET_PASSWORD_MAILER_FROM="no-reply@${APP_NAME}.com"
+# support email
+SUPPORT_EMAIL="support@${APP_NAME}.com"
+
