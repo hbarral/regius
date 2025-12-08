@@ -33,6 +33,16 @@ func TestRender_Page(t *testing.T) {
 		testRenderer.Renderer = e.renderer
 		testRenderer.RootPath = "./testdata"
 
+		// Apply session middleware to load session data into context
+		var modifiedReq *http.Request
+		handler := testRenderer.Session.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			modifiedReq = r
+		}))
+		handler.ServeHTTP(httptest.NewRecorder(), r)
+		if modifiedReq != nil {
+			r = modifiedReq
+		}
+
 		err = testRenderer.Page(w, r, e.template, nil, nil)
 		if e.errorExpected {
 			if err == nil {
@@ -73,6 +83,16 @@ func TestRender_JetPage(t *testing.T) {
 	}
 
 	testRenderer.Renderer = "jet"
+
+	// Apply session middleware to load session data into context
+	var modifiedReq *http.Request
+	handler := testRenderer.Session.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		modifiedReq = r
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), r)
+	if modifiedReq != nil {
+		r = modifiedReq
+	}
 
 	err = testRenderer.Page(w, r, "home", nil, nil)
 	if err != nil {

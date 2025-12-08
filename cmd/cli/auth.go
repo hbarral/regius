@@ -102,16 +102,16 @@ func doAuth() error {
 	}
 
 	err = copyFileFromTemplate(
-		"templates/mailer/password-reset.html.tmpl",
-		reg.RootPath+"/mail/password-reset.html.tmpl",
+		"templates/mailer/password-reset.html.template",
+		reg.RootPath+"/mail/password-reset.html.template",
 	)
 	if err != nil {
 		exitGracefully(err)
 	}
 
 	err = copyFileFromTemplate(
-		"templates/mailer/password-reset.plain.tmpl",
-		reg.RootPath+"/mail/password-reset.plain.tmpl",
+		"templates/mailer/password-reset.plain.template",
+		reg.RootPath+"/mail/password-reset.plain.template",
 	)
 	if err != nil {
 		exitGracefully(err)

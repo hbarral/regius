@@ -211,7 +211,7 @@ func (m *Mail) getEncryption(e string) mail.Encryption {
 }
 
 func (m *Mail) buildHTMLMessage(msg Message) (string, error) {
-	templateToRender := fmt.Sprintf("%s/%s.html.tmpl", m.Templates, msg.Template)
+	templateToRender := fmt.Sprintf("%s/%s.html.template", m.Templates, msg.Template)
 
 	t, err := template.New("email-html").ParseFiles(templateToRender)
 	if err != nil {
@@ -233,7 +233,7 @@ func (m *Mail) buildHTMLMessage(msg Message) (string, error) {
 }
 
 func (m *Mail) buildPlainTextMessage(msg Message) (string, error) {
-	templateToRender := fmt.Sprintf("%s/%s.plain.tmpl", m.Templates, msg.Template)
+	templateToRender := fmt.Sprintf("%s/%s.plain.template", m.Templates, msg.Template)
 
 	t, err := template.New("email-html").ParseFiles(templateToRender)
 	if err != nil {

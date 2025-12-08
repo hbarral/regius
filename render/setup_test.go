@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/CloudyKit/jet/v6"
+	"github.com/alexedwards/scs/v2"
 )
 
 var views = jet.NewSet(
@@ -16,6 +17,7 @@ var testRenderer = Render{
 	Renderer: "",
 	RootPath: "",
 	JetViews: views,
+	Session:  scs.New(),
 }
 
 func TestMain(m *testing.M) {

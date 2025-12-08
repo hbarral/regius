@@ -12,7 +12,7 @@ func TestMail_SendSMTPMessage(t *testing.T) {
 		To:          "b@b.com",
 		Subject:     "test",
 		Template:    "test",
-		Attachments: []string{"./testdata/mail/test.html.tmpl"},
+		Attachments: []string{"./testdata/mail/test.html.template"},
 	}
 
 	err := mailer.SendSMTPMessage(msg)
@@ -28,7 +28,7 @@ func TestMail_SendUsingChan(t *testing.T) {
 		To:          "b@b.com",
 		Subject:     "test",
 		Template:    "test",
-		Attachments: []string{"./testdata/mail/test.html.tmpl"},
+		Attachments: []string{"./testdata/mail/test.html.template"},
 	}
 
 	mailer.Jobs <- msg
@@ -50,7 +50,7 @@ func TestMail_SendUsingAPI(t *testing.T) {
 		To:          "b@b.com",
 		Subject:     "test",
 		Template:    "test",
-		Attachments: []string{"./testdata/mail/test.html.tmpl"},
+		Attachments: []string{"./testdata/mail/test.html.template"},
 	}
 
 	mailer.API = "unknown"
@@ -74,7 +74,7 @@ func TestMail_buildHTMLMessage(t *testing.T) {
 		To:          "b@b.com",
 		Subject:     "test",
 		Template:    "test",
-		Attachments: []string{"./testdata/mail/test.html.tmpl"},
+		Attachments: []string{"./testdata/mail/test.html.template"},
 	}
 
 	_, err := mailer.buildHTMLMessage(msg)
@@ -90,7 +90,7 @@ func TestMail_buildPlainMessage(t *testing.T) {
 		To:          "b@b.com",
 		Subject:     "test",
 		Template:    "test",
-		Attachments: []string{"./testdata/mail/test.html.tmpl"},
+		Attachments: []string{"./testdata/mail/test.html.template"},
 	}
 
 	_, err := mailer.buildPlainTextMessage(msg)
@@ -106,7 +106,7 @@ func TestMail_send(t *testing.T) {
 		To:          "b@b.com",
 		Subject:     "test",
 		Template:    "test",
-		Attachments: []string{"./testdata/mail/test.html.tmpl"},
+		Attachments: []string{"./testdata/mail/test.html.template"},
 	}
 
 	err := mailer.Send(msg)
@@ -135,7 +135,7 @@ func TestMail_ChooseAPI(t *testing.T) {
 		To:          "b@b.com",
 		Subject:     "test",
 		Template:    "test",
-		Attachments: []string{"./testdata/mail/test.html.tmpl"},
+		Attachments: []string{"./testdata/mail/test.html.template"},
 	}
 
 	mailer.API = "unknown"
