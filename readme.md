@@ -31,6 +31,57 @@ Visit the official repository at [Regius on GitLab](https://gitlab.com/hbarral/r
 - `make mail <name>`: Creates two starter mail templates in the mail directory.
 - `down`: Put the server in maintenance mode.
 - `up`: Bring the server back from maintenance mode.
+- **Rate Limiting Middleware**: Protect your application from abuse and DDoS attacks with flexible rate limiting.
+
+  - Two algorithms: **Token Bucket** (steady request patterns) and **Sliding Window** (accurate for burst traffic)
+  - Multiple storage backends: **In-memory** (fastest), **Redis** (distributed), and **Badger** (embedded distributed)
+  - Configurable limits: Requests per time window (e.g., 100 requests per minute)
+  - IP whitelisting: Exclude specific IPs from rate limiting
+  - Proxy support: Trust X-Forwarded-For and X-Real-IP headers
+  - Standard HTTP headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Window, Retry-After
+  - Per-path rate limiting: Each route path gets its own rate limit
+  - Apply globally or to specific routes (API, auth, etc.)
+
+  **Usage Example in Your App:**
+
+  ```go
+  // In regius-app/routes.go - Apply to all routes
+  a.use(a.Middleware.RateLimit)
+
+  // In regius-app/routes-api.go - Apply to API routes
+  r.Use(a.Middleware.APIRateLimit)
+
+  // Or apply to specific routes
+  r.Post("/login", a.Middleware.RateLimitStrict(a.Handlers.Login))
+  ```
+
+  **Configuration Options:**
+
+  ```go
+  config := regius.RateLimiterConfig{
+      Enabled:    true,                    // Enable/disable rate limiting
+      Algorithm:  regius.RateLimiterAlgorithmSlidingWindow,  // "token_bucket" or "sliding_window"
+      Requests:   100,                   // Maximum requests per window
+      Window:     time.Minute,           // Time duration (time.Second, time.Minute, time.Hour)
+      Storage:    "",                     // "" for in-memory, "redis" or "badger"
+      TrustProxy: true,                   // Trust proxy headers
+      Whitelist:  []string{"127.0.0.1", "::1"},  // IPs to exclude
+  }
+  ```
+
+  **Testing:**
+  The skeleton app includes comprehensive testing tools in `test-tools/` directory:
+
+  - `ratelimit-test.py` - Python-based tester with detailed output
+  - `ratelimit-test.sh` - Shell script using curl
+  - `ratelimit-tester.go` - Go-based high-performance tester
+
+  **Documentation:**
+
+  - Full documentation: `regius/RATE_LIMITER.md`
+  - Implementation details: `regius/RATE_LIMITER_IMPLEMENTATION.md`
+  - Testing guide: `regius-app/test-tools/README.md`
+  - Quick start: `regius-app/test-tools/QUICKSTART.md`
 
 ## 🚀 Getting Started
 

@@ -59,3 +59,5 @@ func (r *Regius) CheckForMaintenanceMode(next http.Handler) http.Handler {
 		next.ServeHTTP(w, req)
 	})
 }
+
+// Rate limiter is available as r.RateLimiter(config) - see ratelimiter.go for details
