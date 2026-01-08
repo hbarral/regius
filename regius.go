@@ -18,14 +18,14 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/robfig/cron/v3"
 
-	"gitlab.com/hbarral/regius/cache"
-	"gitlab.com/hbarral/regius/filesystems/miniofilesystem"
-	"gitlab.com/hbarral/regius/filesystems/s3filesystem"
-	"gitlab.com/hbarral/regius/filesystems/sftpfilesystem"
-	"gitlab.com/hbarral/regius/filesystems/webdavfilesystem"
-	"gitlab.com/hbarral/regius/mailer"
-	"gitlab.com/hbarral/regius/render"
-	"gitlab.com/hbarral/regius/session"
+	"github.com/hbarral/regius/cache"
+	"github.com/hbarral/regius/filesystems/miniofilesystem"
+	"github.com/hbarral/regius/filesystems/s3filesystem"
+	"github.com/hbarral/regius/filesystems/sftpfilesystem"
+	"github.com/hbarral/regius/filesystems/webdavfilesystem"
+	"github.com/hbarral/regius/mailer"
+	"github.com/hbarral/regius/render"
+	"github.com/hbarral/regius/session"
 )
 
 const version = "1.3.0"

@@ -27,8 +27,6 @@ github.com/PuerkitoBio/goquery v1.8.1 h1:uQxhNlArOIdbrH1tr0UXwdVFgDcZDrZVdcpygAc
 github.com/PuerkitoBio/goquery v1.8.1/go.mod h1:Q8ICL1kNUJ2sXGoAhPGUdYDJvgQgHzJsnnd3H7Ho5jQ=
 github.com/SparkPost/gosparkpost v0.2.0 h1:yzhHQT7cE+rqzd5tANNC74j+2x3lrPznqPJrxC1yR8s=
 github.com/SparkPost/gosparkpost v0.2.0/go.mod h1:S9WKcGeou7cbPpx0kTIgo8Q69WZvUmVeVzbD+djalJ4=
-github.com/a-h/templ v0.2.778 h1:VzhOuvWECrwOec4790lcLlZpP4Iptt5Q4K9aFxQmtaM=
-github.com/a-h/templ v0.2.778/go.mod h1:lq48JXoUvuQrU0VThrK31yFwdRjTCnIE5bcPCM9IP1w=
 github.com/ainsleyclark/go-mail v1.0.3 h1:ASkHtT/TJunG6Cdp1gC7amGKFfG9jLZYYiMKcMmyv5s=
 github.com/ainsleyclark/go-mail v1.0.3/go.mod h1:wOJDCAUZNyRFcrSgX+cNxdx3vJvTPDv2uGfbUm7oC5Y=
 github.com/alexedwards/scs/mysqlstore v0.0.0-20231113091146-cef4b05350c8 h1:SEZ5Io3GrrrTtQ4xPLpnQKZHtLUnf030FnN5hWj71q0=

@@ -6,8 +6,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/hbarral/regius/filesystems"
 	"github.com/studio-b12/gowebdav"
-	"gitlab.com/hbarral/regius/filesystems"
 )
 
 type WebDAV struct {

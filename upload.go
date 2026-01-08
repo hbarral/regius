@@ -8,7 +8,7 @@ import (
 	"path"
 
 	"github.com/gabriel-vasile/mimetype"
-	"gitlab.com/hbarral/regius/filesystems"
+	"github.com/hbarral/regius/filesystems"
 )
 
 func (r *Regius) UploadFile(

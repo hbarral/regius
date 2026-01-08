@@ -1,4 +1,4 @@
-module gitlab.com/hbarral/regius
+module github.com/hbarral/regius
 
 go 1.21
 
@@ -8,7 +8,6 @@ require github.com/joho/godotenv v1.5.1
 
 require (
 	github.com/CloudyKit/jet/v6 v6.2.0
-	github.com/a-h/templ v0.2.778
 	github.com/ainsleyclark/go-mail v1.0.3
 	github.com/alexedwards/scs/mysqlstore v0.0.0-20231113091146-cef4b05350c8
 	github.com/alexedwards/scs/postgresstore v0.0.0-20231113091146-cef4b05350c8

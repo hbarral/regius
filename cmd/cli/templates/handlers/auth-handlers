@@ -24,9 +24,9 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
-	"gitlab.com/hbarral/regius/mailer"
-	"gitlab.com/hbarral/regius/render"
-	"gitlab.com/hbarral/regius/urlsigner"
+	"github.com/hbarral/regius/mailer"
+	"github.com/hbarral/regius/render"
+	"github.com/hbarral/regius/urlsigner"
 )
 
 func (h *Handlers) SignIn(w http.ResponseWriter, r *http.Request) {

@@ -27,7 +27,7 @@ func doNew(appName string) {
 
 	color.Green("\tCloning repository...")
 	_, err := git.PlainClone("./"+appName, false, &git.CloneOptions{
-		URL:      "https://gitlab.com/hbarral/regius-app.git",
+		URL:      "https://github.com/hbarral/regius-app.git",
 		Progress: os.Stdout,
 		Depth:    1,
 	})
@@ -131,7 +131,7 @@ func doNew(appName string) {
 
 	color.Yellow("\tRunning go mod tidy...")
 
-	cmd := exec.Command("go", "get", "gitlab.com/hbarral/regius")
+	cmd := exec.Command("go", "get", "github.com/hbarral/regius")
 	err = cmd.Start()
 	if err != nil {
 		exitGracefully(err)

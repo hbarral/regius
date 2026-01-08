@@ -6,7 +6,7 @@ import (
 
 	"github.com/fatih/color"
 
-	"gitlab.com/hbarral/regius"
+	"github.com/hbarral/regius"
 )
 
 const version = "1.5.0"

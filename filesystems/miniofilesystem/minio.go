@@ -7,7 +7,7 @@ import (
 	"path"
 	"strings"
 
-	"gitlab.com/hbarral/regius/filesystems"
+	"github.com/hbarral/regius/filesystems"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"

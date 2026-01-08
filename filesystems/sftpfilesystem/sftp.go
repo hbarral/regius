@@ -8,8 +8,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/hbarral/regius/filesystems"
 	"github.com/pkg/sftp"
-	"gitlab.com/hbarral/regius/filesystems"
 
 	"golang.org/x/crypto/ssh"
 )
