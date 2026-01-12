@@ -7,7 +7,7 @@ Regius is a CLI application for building web pages, inspired by Laravel but buil
            margin-left: auto;
            margin-right: auto;
            width: 50%;"
-    src="https://raw.githubusercontent.com/hbarral/regius-app/main/public/images/regius.png" 
+    src="dist/regius-app/public/images/regius.png" 
     alt="Regius Logo">
 </img>
 
@@ -32,6 +32,7 @@ Visit the official repository at [Regius on GitHub](https://github.com/hbarral/r
 - `down`: Put the server in maintenance mode.
 - `up`: Bring the server back from maintenance mode.
 - **Rate Limiting Middleware**: Protect your application from abuse and DDoS attacks with flexible rate limiting.
+
   - Two algorithms: **Token Bucket** (steady request patterns) and **Sliding Window** (accurate for burst traffic)
   - Multiple storage backends: **In-memory** (fastest), **Redis** (distributed), and **Badger** (embedded distributed)
   - Configurable limits: Requests per time window (e.g., 100 requests per minute)
@@ -70,11 +71,13 @@ Visit the official repository at [Regius on GitHub](https://github.com/hbarral/r
 
   **Testing:**
   The skeleton app includes comprehensive testing tools in `test-tools/` directory:
+
   - `ratelimit-test.py` - Python-based tester with detailed output
   - `ratelimit-test.sh` - Shell script using curl
   - `ratelimit-tester.go` - Go-based high-performance tester
 
   **Documentation:**
+
   - Full documentation: `regius/RATE_LIMITER.md`
   - Implementation details: `regius/RATE_LIMITER_IMPLEMENTATION.md`
   - Testing guide: `regius-app/test-tools/README.md`
