@@ -10,7 +10,7 @@ import (
 
 	"github.com/gomodule/redigo/redis"
 
-	"gitlab.com/hbarral/regius/cache"
+	"github.com/hbarral/regius/cache"
 )
 
 type RateLimiterAlgorithm string
