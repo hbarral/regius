@@ -13,7 +13,7 @@ import (
 
 var reg regius.Regius
 
-const Version = "1.5.0"
+var Version = "dev"
 
 var rootCmd = &cobra.Command{
 	Use:   "regius",
