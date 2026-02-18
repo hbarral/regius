@@ -128,9 +128,9 @@ regius migrate --help
 
 Download the suitable binary for your operating system from the links below:
 
-- [Linux](https://gitlab.com/hbarral/regius/-/jobs/artifacts/main/download?job=build_linux)
-- [Windows](https://gitlab.com/hbarral/regius/-/jobs/artifacts/main/download?job=build_windows)
-- [Mac](https://gitlab.com/hbarral/regius/-/jobs/artifacts/main/download?job=build_mac)
+- [Linux](https://github.com/hbarral/regius/releases/download/v1.5.0/regius_Linux_x86_64.tar.gz)
+- [Windows](https://github.com/hbarral/regius/releases/download/v1.5.0/regius_Windows_x86_64.zip)
+- [Mac](https://github.com/hbarral/regius/releases/download/v1.5.0/regius_Darwin_x86_64.tar.gz)
 
 <details>
   <summary>Build from Source</summary>
@@ -380,13 +380,13 @@ For more details about usage and commands, refer to the CLI help:
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please follow the GitLab flow for contributions:
+Contributions are welcome! Please follow the GitHub flow for contributions:
 
 1. Fork the project.
 2. Create a new branch (`git checkout -b feature-new-feature`).
 3. Make your changes and commit (`git commit -am 'Add new feature'`).
 4. Push to the branch (`git push origin feature-new-feature`).
-5. Open a Merge Request.
+5. Open a Pull Request.
 
 ## 📄 License
 
