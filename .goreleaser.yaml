@@ -48,13 +48,3 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
-
-brews:
-  - repository:
-      owner: hbarral
-      name: homebrew-tap
-    directory: Formula
-    homepage: "https://github.com/hbarral/regius"
-    description: "Regius CLI tool for web application development"
-    install: |
-      bin.install "regius"
