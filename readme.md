@@ -1,15 +1,15 @@
-# 🌟 Regius
-
-Regius is a CLI application for building web pages, inspired by Laravel but built with Go. It offers tools for database migrations and code generation, providing an agile and organized development experience.
+# Regius
 
 <img
     style="display: block; 
            margin-left: auto;
            margin-right: auto;
-           width: 50%;"
+           width: 40%;"
     src="dist/regius-app/public/images/regius.png" 
     alt="Regius Logo">
 </img>
+
+Regius is a CLI application for building web pages, inspired by Laravel but built with Go. It offers tools for database migrations and code generation, providing an agile and organized development experience.
 
 ## 🌍 Repository
 
@@ -17,20 +17,59 @@ Visit the official repository at [Regius on GitHub](https://github.com/hbarral/r
 
 ## 📋 Features
 
-- `new <app_name>`: Creates a new web application.
-- `help`: Show the help commands.
-- `version`: Print application version.
-- `migration`: Runs all "up" migrations that have not been run previously.
-- `migration down`: Reverses the most recent migration.
-- `migration reset`: Runs all "down" migrations in reverse order, and then all "up" migrations.
-- `make migration <name> <format>`: Creates two new migrations (up and down) in the migrations folder; format can be `fizz` or `sql`.
-- `make auth`: Creates and runs migrations for authentication tables, and creates models and middleware.
-- `make handler <name>`: Creates a stub handler in the handlers directory.
-- `make model <name>`: Creates a new model in the data directory.
-- `make session`: Creates a table in the database as session store.
-- `make mail <name>`: Creates two starter mail templates in the mail directory.
-- `down`: Put the server in maintenance mode.
-- `up`: Bring the server back from maintenance mode.
+### Basic Commands
+
+- `regius new <app_name>`: Creates a new web application.
+- `regius version`: Print application version.
+- `regius help`: Show help for any command.
+- `regius up`: Bring the server back from maintenance mode.
+- `regius down`: Put the server in maintenance mode.
+
+### Migration Commands
+
+- `regius migrate`: Run all pending migrations (defaults to "up").
+- `regius migrate up`: Run all pending migrations.
+- `regius migrate down [steps|all]`: Reverse migrations (use "all" for all migrations).
+- `regius migrate reset`: Reset and re-run all migrations.
+
+### Code Generation Commands
+
+- `regius make migration <name> --format=<fizz|sql>`: Create migration files (default: fizz).
+- `regius make auth`: Create authentication system (tables, models, middleware, handlers, views).
+- `regius make handler <name>`: Create a handler stub.
+- `regius make model <name>`: Create a new model with proper pluralization.
+- `regius make session`: Create session table in database.
+- `regius make key`: Generate 32-character encryption key.
+- `regius make mail <name>`: Create mail templates.
+
+### CLI Features
+
+- **Automatic help**: `--help` flag on all commands and subcommands
+- **Flag support**: Use `--format=fizz` instead of positional arguments
+- **Shell completion**: Generate autocompletion scripts for bash, zsh, fish, and PowerShell
+- **Better validation**: Improved argument validation and error messages
+- **Command aliases**: Future support for command shortcuts
+
+### Examples
+
+```bash
+# Create migration with fizz format (default)
+regius make migration create_users --format=fizz
+
+# Create migration with sql format
+regius make migration create_users --format=sql
+
+# Reverse last 2 migrations
+regius migrate down 2
+
+# Reverse all migrations
+regius migrate down all
+
+# Get help for any command
+regius make migration --help
+regius migrate --help
+```
+
 - **Rate Limiting Middleware**: Protect your application from abuse and DDoS attacks with flexible rate limiting.
 
   - Two algorithms: **Token Bucket** (steady request patterns) and **Sliding Window** (accurate for burst traffic)
@@ -89,9 +128,9 @@ Visit the official repository at [Regius on GitHub](https://github.com/hbarral/r
 
 Download the suitable binary for your operating system from the links below:
 
-- [Linux](https://gitlab.com/hbarral/regius/-/jobs/artifacts/main/download?job=build_linux)
-- [Windows](https://gitlab.com/hbarral/regius/-/jobs/artifacts/main/download?job=build_windows)
-- [Mac](https://gitlab.com/hbarral/regius/-/jobs/artifacts/main/download?job=build_mac)
+- [Linux](https://github.com/hbarral/regius/releases/download/v1.5.0/regius_Linux_x86_64.tar.gz)
+- [Windows](https://github.com/hbarral/regius/releases/download/v1.5.0/regius_Windows_x86_64.zip)
+- [Mac](https://github.com/hbarral/regius/releases/download/v1.5.0/regius_Darwin_x86_64.tar.gz)
 
 <details>
   <summary>Build from Source</summary>
@@ -341,13 +380,13 @@ For more details about usage and commands, refer to the CLI help:
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please follow the GitLab flow for contributions:
+Contributions are welcome! Please follow the GitHub flow for contributions:
 
 1. Fork the project.
 2. Create a new branch (`git checkout -b feature-new-feature`).
 3. Make your changes and commit (`git commit -am 'Add new feature'`).
 4. Push to the branch (`git push origin feature-new-feature`).
-5. Open a Merge Request.
+5. Open a Pull Request.
 
 ## 📄 License
 
@@ -355,4 +394,4 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ---
 
-_Made with ❤️ by the Regius team._
+_Made with 🩵 by Héctor Barral._
