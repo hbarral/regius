@@ -120,6 +120,18 @@ func updateSource() {
 	}
 }
 
+func exitGracefully(err error, msg ...string) {
+	if err != nil {
+		exitWithError(err)
+	}
+
+	if len(msg) > 0 {
+		exitWithSuccess(msg[0])
+	}
+
+	exitWithSuccess("Finished!")
+}
+
 func checkForDB() {
 	if reg.DB.DataType == "" {
 		exitGracefully(errors.New("you must set DATABASE_TYPE in .env"))
