@@ -64,7 +64,7 @@ func (h *Handlers) PostSignIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Form.Get("remember") == "remember" {
-		randomString := h.randomString(12)
+		randomString := h.App.RandomString(12)
 		hasher := sha256.New()
 
 		_, err := hasher.Write([]byte(randomString))
@@ -386,7 +386,7 @@ func (h *Handlers) SocialCallback(w http.ResponseWriter, r *http.Request) {
 		}
 
 		newUser.Email = gothUser.Email
-		newUser.Password = h.randomString(20)
+		newUser.Password = h.App.RandomString(20)
 		newUser.CreatedAt = time.Now()
 		newUser.UpdatedAt = time.Now()
 

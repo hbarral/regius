@@ -10,19 +10,18 @@ import (
 )
 
 const (
-	randomString = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_+"
+	randomString = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+"
 )
 
 func (r *Regius) RandomString(n int) string {
-	a, b := make([]rune, n), []rune(randomString)
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
 
-	for i := range a {
-		p, _ := rand.Prime(rand.Reader, len(b))
-		x, y := p.Uint64(), uint64(len(b))
-		a[i] = b[x%y]
+	for i := range b {
+		b[i] = randomString[b[i]%byte(len(randomString))]
 	}
 
-	return string(a)
+	return string(b)
 }
 
 func (c *Regius) CreateDirIfNotExist(path string) error {
