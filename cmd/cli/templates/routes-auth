@@ -1,0 +1,27 @@
+package main
+
+import (
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+)
+
+func (a *application) AuthRoutes() http.Handler {
+	r := chi.NewRouter()
+
+	r.Get("/signup", a.Handlers.SignUp)
+	r.Post("/signup", a.Handlers.PostSignUp)
+
+	r.Get("/signin", a.Handlers.SignIn)
+	r.Post("/signin", a.Handlers.PostSignIn)
+
+	r.Post("/signout", a.Handlers.SignOut)
+
+	r.Get("/forgot-password", a.Handlers.Forgot)
+	r.Post("/forgot-password", a.Handlers.PostForgot)
+
+	r.Get("/reset-password", a.Handlers.ResetPasswordForm)
+	r.Post("/reset-password", a.Handlers.PostResetPassword)
+
+	return r
+}

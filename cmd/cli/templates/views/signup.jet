@@ -1,13 +1,13 @@
 {{extends "./layouts/base.jet"}}
 
 {{block browserTitle()}}
-Sign in
+Sign up
 {{end}}
 
 {{block css()}} {{end}}
 
 {{block pageContent()}}
-<h2 class="mt-5 text-center">Sign in</h2>
+<h2 class="mt-5 text-center">Sign up</h2>
 
 
 <hr>
@@ -21,23 +21,35 @@ Sign in
     <div class="col text-center">
         <a href="/auth/github?provider=github" class="btn btn-outline-secondary">
             <i class="bi bi-github"></i>
-            Sign in with GitHub
+            Sign up with GitHub
         </a>
 
         <br>
 
         <a href="/auth/google?provider=google" class="btn btn-outline-secondary mt-3">
             <i class="bi bi-google"></i>
-            Sign in with Google
+            Sign up with Google
         </a>
     </div>
     <div class="col">
-        <form method="post" action="/users/signin"
-              name="signin-form" id="signin-form"
+        <form method="post" action="/auth/signup"
+              name="signup-form" id="signup-form"
               class="d-block needs-validation"
               autocomplete="off" novalidate="">
 
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+            <div class="mb-3">
+                <label for="first_name" class="form-label">First Name</label>
+                <input type="text" class="form-control" id="first_name" name="first_name"
+                       required="" autocomplete="first_name">
+            </div>
+
+            <div class="mb-3">
+                <label for="last_name" class="form-label">Last Name</label>
+                <input type="text" class="form-control" id="last_name" name="last_name"
+                       required="" autocomplete="last_name">
+            </div>
 
             <div class="mb-3">
                 <label for="email" class="form-label">Email</label>
@@ -51,16 +63,17 @@ Sign in
                        required="" autocomplete="password-new">
             </div>
 
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" value="remember" name="remember" id="remember">
-                <label class="form-check-label" for="remember">Remember me</label>
+            <div class="mb-3">
+                <label for="verify_password" class="form-label">Verify Password</label>
+                <input type="password" class="form-control" id="verify_password" name="verify_password"
+                       required="" autocomplete="password-new">
             </div>
 
             <hr>
 
-            <a href="javascript:void(0)" class="btn btn-primary" onclick="val()">Sign in</a>
+            <a href="javascript:void(0)" class="btn btn-primary" onclick="val()">Sign up</a>
             <p class="mt-2">
-                <small><a href="/users/forgot-password">Forgot password?</a></small>
+                <small><a href="/auth/signin">Already have an account? Sign in</a></small>
             </p>
 
         </form>
@@ -74,7 +87,7 @@ Sign in
 {{block js()}}
 <script>
     function val() {
-        let form = document.getElementById("signin-form");
+        let form = document.getElementById("signup-form");
         if (form.checkValidity() === false) {
             this.event.preventDefault();
             this.event.stopPropagation();

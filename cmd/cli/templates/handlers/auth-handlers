@@ -358,7 +358,7 @@ func (h *Handlers) SocialCallback(w http.ResponseWriter, r *http.Request) {
 	gothUser, err := gothic.CompleteUserAuth(w, r)
 	if err != nil {
 		h.App.Session.Put(r.Context(), "error", err.Error())
-		http.Redirect(w, r, "/users/signin", http.StatusSeeOther)
+		http.Redirect(w, r, "/auth/signin", http.StatusSeeOther)
 		return
 	}
 
