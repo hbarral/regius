@@ -6,6 +6,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 func init() {
@@ -35,13 +37,13 @@ func doMakeHandler(name string) error {
 		return errors.New(fileName + " already exists!")
 	}
 
-	data, err := templateFS.ReadFile("templates/handler.go")
+	data, err := templateFS.ReadFile("templates/handlers/handler")
 	if err != nil {
 		return err
 	}
 
 	handler := string(data)
-	handler = strings.ReplaceAll(handler, "$HANDLER_NAME", strings.Title(name))
+	handler = strings.ReplaceAll(handler, "$HANDLER_NAME", cases.Title(language.English, cases.NoLower).String(name))
 
 	return copyDataToFile([]byte(handler), fileName)
 }
