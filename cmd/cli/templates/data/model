@@ -22,7 +22,12 @@ func (t *$MODEL_NAME) GetAll(condition up.Cond) ([]*$MODEL_NAME, error) {
     collection := upper.Collection(t.Table())
     var all []*$MODEL_NAME
 
-    res := collection.Find(condition)
+    var res up.Result
+    if condition == nil {
+      res = collection.Find()
+    } else {
+      res = collection.Find(condition)
+    }
     err := res.All(&all)
     if err != nil {
         return nil, err
