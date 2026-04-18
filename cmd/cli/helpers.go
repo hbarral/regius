@@ -137,7 +137,11 @@ func checkForDB() {
 		exitGracefully(errors.New("you must set DATABASE_TYPE in .env"))
 	}
 
-	if !fileExists(reg.RootPath + "/config/database.yml") {
-		exitGracefully(errors.New("config/database.yml not found"))
+	if os.Getenv("DATABASE_HOST") == "" {
+		exitGracefully(errors.New("DATABASE_HOST must be set"))
+	}
+
+	if os.Getenv("DATABASE_NAME") == "" {
+		exitGracefully(errors.New("DATABASE_NAME must be set"))
 	}
 }
