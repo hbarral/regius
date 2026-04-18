@@ -32,7 +32,7 @@ Forgot Password
 <form method="post"
       name="forgot-form" id="forgot-form"
       class="d-block needs-validation"
-      action="/users/forgot-password"
+      action="/auth/forgot-password"
       autocomplete="off" novalidate=""
       onkeydown="return event.key != 'Enter';"
 >
@@ -51,7 +51,7 @@ Forgot Password
 </form>
 
 <div class="text-center">
-    <a class="btn btn-outline-secondary" href="/users/login">Back...</a>
+    <a class="btn btn-outline-secondary" href="/auth/signin">Back...</a>
 </div>
 
 

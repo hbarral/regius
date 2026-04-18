@@ -1,3 +1,10 @@
+## Build CLI
+build: create_dirs
+	@echo "Building CLI for $(UNAME_S)"
+	@go build -o "$(BINARY_PATH)" ./cmd/cli
+	@echo "Build complete!"
+	@echo $(PATH_INSTRUCTIONS)
+
 ## test: run all tests
 test:
 	@go test -v ./...
@@ -36,12 +43,4 @@ create_dirs:
 	@echo "Binary will be installed to: $(BINARY_PATH)"
 	@echo $(PATH_INSTRUCTIONS)
 
-## Build CLI
-build_cli: create_dirs
-	@echo "Building CLI for $(UNAME_S)"
-	@go build -o "$(BINARY_PATH)" ./cmd/cli
-	@echo "Build complete!"
-	@echo $(PATH_INSTRUCTIONS)
-
-build:
-	@go build -o ./dist/regius ./cmd/cli
+.PHONY: build test cover coverage

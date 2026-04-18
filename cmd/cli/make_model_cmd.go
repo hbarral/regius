@@ -32,7 +32,7 @@ func doMakeModel(name string) error {
 		return errors.New("you must give the model a name")
 	}
 
-	data, err := templateFS.ReadFile("templates/model.go")
+	data, err := templateFS.ReadFile("templates/data/model")
 	if err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package regius
 
 import (
 	"log"
+	"os"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gobuffalo/pop"
@@ -72,12 +73,29 @@ func (r *Regius) MigrateForce(dsn string) error {
 }
 
 func (r *Regius) PopConnect() (*pop.Connection, error) {
-	tx, err := pop.Connect("development")
+	sslMode := os.Getenv("DATABASE_SSL_MODE")
+	cd := &pop.ConnectionDetails{
+		Dialect:  r.DB.DataType,
+		Host:     os.Getenv("DATABASE_HOST"),
+		Port:     os.Getenv("DATABASE_PORT"),
+		Database: os.Getenv("DATABASE_NAME"),
+		User:     os.Getenv("DATABASE_USER"),
+		Password: os.Getenv("DATABASE_PASS"),
+	}
+	if sslMode != "" {
+		cd.Options = map[string]string{"sslmode": sslMode}
+	}
+
+	conn, err := pop.NewConnection(cd)
 	if err != nil {
 		return nil, err
 	}
 
-	return tx, nil
+	if err := conn.Open(); err != nil {
+		return nil, err
+	}
+
+	return conn, nil
 }
 
 func (r *Regius) CreatePopMigration(up, down []byte, migrationName, migrationType string) error {

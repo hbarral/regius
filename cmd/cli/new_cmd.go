@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
 	"fmt"
 	"log"
 	"os"
@@ -12,6 +11,12 @@ import (
 	"github.com/fatih/color"
 	"github.com/go-git/go-git/v5"
 	"github.com/spf13/cobra"
+)
+
+const (
+	GOOSLinux   = "linux"
+	GOOSDarwin  = "darwin"
+	GOOSWindows = "windows"
 )
 
 var appURL string
@@ -29,16 +34,6 @@ and setting up the initial configuration.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		doNew(args[0])
 	},
-}
-
-func randomString(n int) string {
-	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	bytes := make([]byte, n)
-	rand.Read(bytes)
-	for i, b := range bytes {
-		bytes[i] = letters[b%byte(len(letters))]
-	}
-	return string(bytes)
 }
 
 func doNew(appName string) {
@@ -75,28 +70,75 @@ func doNew(appName string) {
 
 	env := string(data)
 	env = strings.ReplaceAll(env, "${APP_NAME}", appName)
-	env = strings.ReplaceAll(env, "${KEY}", randomString(32))
+	env = strings.ReplaceAll(env, "${KEY}", reg.RandomString(32))
 
 	err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/.env", appName))
 	if err != nil {
 		exitGracefully(err)
 	}
 
-	if runtime.GOOS == "windows" {
-		source, err := templateFS.ReadFile("templates/windows/Makefile")
+	switch runtime.GOOS {
+	case GOOSLinux:
+		color.Yellow("\tCreating Makefile for linux...")
+
+		data, err := templateFS.ReadFile("templates/Makefile.linux")
 		if err != nil {
 			exitGracefully(err)
 		}
-		err = copyDataToFile(source, fmt.Sprintf("./%s/Makefile.windows", appName))
+
+		env := string(data)
+		env = strings.ReplaceAll(env, "${NAME}", appName)
+		env = strings.ReplaceAll(env, "${BINARY_APP_NAME}", appName)
+
+		err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/Makefile", appName))
 		if err != nil {
 			exitGracefully(err)
 		}
-	} else {
-		source, err := templateFS.ReadFile("templates/unix/Makefile")
+	case GOOSDarwin:
+		color.Yellow("\tCreating Makefile for MacOS...")
+
+		data, err := templateFS.ReadFile("templates/Makefile.mac")
 		if err != nil {
 			exitGracefully(err)
 		}
-		err = copyDataToFile(source, fmt.Sprintf("./%s/Makefile", appName))
+
+		env := string(data)
+		env = strings.ReplaceAll(env, "${NAME}", appName)
+		env = strings.ReplaceAll(env, "${BINARY_APP_NAME}", appName)
+
+		err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/Makefile", appName))
+		if err != nil {
+			exitGracefully(err)
+		}
+	case GOOSWindows:
+		color.Yellow("\tCreating Makefile for Windows...")
+
+		data, err := templateFS.ReadFile("templates/Makefile.windows")
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		env := string(data)
+		env = strings.ReplaceAll(env, "${NAME}", appName)
+		env = strings.ReplaceAll(env, "${BINARY_APP_NAME}", appName+".exe")
+
+		err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/Makefile", appName))
+		if err != nil {
+			exitGracefully(err)
+		}
+	default:
+		color.Yellow("\tCreating Makefile for linux...")
+
+		data, err := templateFS.ReadFile("templates/Makefile.linux")
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		env := string(data)
+		env = strings.ReplaceAll(env, "${NAME}", appName)
+		env = strings.ReplaceAll(env, "${BINARY_APP_NAME}", appName)
+
+		err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/Makefile", appName))
 		if err != nil {
 			exitGracefully(err)
 		}
@@ -105,13 +147,13 @@ func doNew(appName string) {
 	color.Yellow("\tCreating go.mod file...")
 	_ = os.Remove(fmt.Sprintf("./%s/go.mod", appName))
 
-	data, err = templateFS.ReadFile("templates/go.mod")
+	data, err = templateFS.ReadFile("templates/go_mod")
 	if err != nil {
 		exitGracefully(err)
 	}
 
 	mod := string(data)
-	mod = strings.ReplaceAll(mod, "${APP_NAME}", appURL)
+	mod = strings.ReplaceAll(mod, "${APP_NAME}", appName)
 
 	err = copyDataToFile([]byte(mod), fmt.Sprintf("./%s/go.mod", appName))
 	if err != nil {
@@ -121,15 +163,21 @@ func doNew(appName string) {
 	color.Yellow("\tUpdating source files...")
 	os.Chdir("./" + appName)
 	updateSource()
-	os.Chdir("..")
 
 	color.Yellow("\tRunning go mod tidy...")
-	cmd := exec.Command("go", "mod", "tidy")
+
+	cmd := exec.Command("go", "get", "gitlab.com/hbarral/regius")
 	err = cmd.Start()
 	if err != nil {
 		exitGracefully(err)
 	}
 
-	color.Green("Done!")
-	color.Yellow("Go into the " + appName + " directory and check the .env file.")
+	cmd = exec.Command("go", "mod", "tidy")
+	err = cmd.Start()
+	if err != nil {
+		exitGracefully(err)
+	}
+
+	color.Green("\tDone building " + appURL)
+	color.Green("\tGo build something real!")
 }

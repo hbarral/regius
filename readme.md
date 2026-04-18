@@ -311,21 +311,20 @@ MYSQL_ROOT_PASSWORD=
 
 ### Database Configuration
 
-After creating a new application, a `config/database.yml` file is generated. This file contains database configurations for different environments and is consumed by the migration generator. Below is an example:
+After creating a new application, a `.env` file is generated with the following database variables:
 
-```yaml
-# config/database.yml
-development:
-  dialect:
-  database:
-  user:
-  password:
-  host:
-  port:
-  pool: 5
+```
+# database configuration
+DATABASE_TYPE=postgres
+DATABASE_HOST=127.0.0.1
+DATABASE_PORT=5432
+DATABASE_USER=postgres
+DATABASE_PASS=postgres
+DATABASE_NAME=myapp
+DATABASE_SSL_MODE=disable
 ```
 
-Fill in this file with your database connection details for the development environment, and similarly for production or other environments, if needed.
+Fill in these values with your database connection details. Migrations use these environment variables directly - no additional configuration file required.
 
 ## 🎯 Usage
 
