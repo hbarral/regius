@@ -79,6 +79,7 @@ type config struct {
 	database    databaseConfig
 	redis       redisConfig
 	uploads     uploadConfig
+	cors        CORSConfig
 }
 
 type uploadConfig struct {
@@ -160,13 +161,27 @@ func (r *Regius) New(rootPath string) error {
 	r.Version = version
 	r.RootPath = rootPath
 	r.Mail = r.createMailer()
-	r.Routes = r.routes().(*chi.Mux)
 
 	exploded := strings.Split(os.Getenv("ALLOWED_FILETYPES"), ",")
 	var allowedTypes []string
 	for _, at := range exploded {
 		allowedTypes = append(allowedTypes, strings.TrimSpace(at))
 	}
+
+	corsEnabled := true
+	if os.Getenv("CORS_ENABLED") != "" {
+		corsEnabled, _ = strconv.ParseBool(os.Getenv("CORS_ENABLED"))
+	}
+	corsMaxAge, _ := strconv.Atoi(os.Getenv("CORS_MAX_AGE"))
+	if corsMaxAge == 0 {
+		corsMaxAge = 300
+	}
+	corsCredentials := true
+	if os.Getenv("CORS_ALLOW_CREDENTIALS") != "" {
+		corsCredentials, _ = strconv.ParseBool(os.Getenv("CORS_ALLOW_CREDENTIALS"))
+	}
+	corsDebug, _ := strconv.ParseBool(os.Getenv("CORS_DEBUG"))
+	corsPassthrough, _ := strconv.ParseBool(os.Getenv("CORS_OPTIONS_PASSTHROUGH"))
 
 	r.config = config{
 		port:     os.Getenv("PORT"),
@@ -191,7 +206,20 @@ func (r *Regius) New(rootPath string) error {
 		uploads: uploadConfig{
 			allowedTypes: allowedTypes,
 		},
+		cors: CORSConfig{
+			Enabled:            corsEnabled,
+			AllowedOrigins:     parseStringSliceEnv("CORS_ALLOWED_ORIGINS", "*"),
+			AllowedMethods:     parseStringSliceEnv("CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS,PATCH,HEAD"),
+			AllowedHeaders:     parseStringSliceEnv("CORS_ALLOWED_HEADERS", "Accept,Authorization,Content-Type,X-CSRF-Token"),
+			ExposedHeaders:     parseStringSliceEnv("CORS_EXPOSED_HEADERS", ""),
+			MaxAge:             corsMaxAge,
+			AllowCredentials:   corsCredentials,
+			OptionsPassthrough: corsPassthrough,
+			Debug:              corsDebug,
+		},
 	}
+
+	r.Routes = r.routes().(*chi.Mux)
 
 	secure := true
 	if strings.ToLower(os.Getenv("SECURE")) == "false" {
@@ -349,6 +377,25 @@ func (r *Regius) createBadgerConn() *badger.DB {
 	}
 
 	return db
+}
+
+func parseStringSliceEnv(key, defaultValue string) []string {
+	val := os.Getenv(key)
+	if val == "" {
+		val = defaultValue
+	}
+	if val == "" {
+		return []string{}
+	}
+	parts := strings.Split(val, ",")
+	var result []string
+	for _, p := range parts {
+		s := strings.TrimSpace(p)
+		if s != "" {
+			result = append(result, s)
+		}
+	}
+	return result
 }
 
 func (r *Regius) BuildDSN() string {

@@ -122,6 +122,51 @@ regius migrate --help
   - Testing guide: `regius-app/test-tools/README.md`
   - Quick start: `regius-app/test-tools/QUICKSTART.md`
 
+- **CORS Middleware**: Handle Cross-Origin Resource Sharing out of the box with flexible configuration.
+
+  - Opt-out by default: CORS is enabled automatically with sensible defaults
+  - Configurable origins: Allow specific domains or use wildcards
+  - Configurable methods and headers: Control which HTTP methods and headers are permitted
+  - Preflight support: Automatic handling of OPTIONS requests
+  - Credentials support: Allow cookies and authorization headers in cross-origin requests
+  - Apply globally or to specific route groups
+
+  **Usage Example in Your App:**
+
+  ```go
+  // CORS is applied globally by default when CORS_ENABLED=true (or unset)
+  // No additional code is required
+
+  // To apply CORS only to API routes, disable global CORS in .env:
+  // CORS_ENABLED=false
+  // Then manually apply in your routes file:
+  r.Group(func(mux chi.Router) {
+      mux.Use(a.CORS(regius.CORSConfig{
+          Enabled:        true,
+          AllowedOrigins: []string{"https://app.example.com"},
+          AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
+          AllowCredentials: true,
+      }))
+      // API routes here
+  })
+  ```
+
+  **Configuration Options:**
+
+  ```go
+  config := regius.CORSConfig{
+      Enabled:            true,                                              // Enable/disable CORS
+      AllowedOrigins:     []string{"*"},                                     // Allowed origins (use "*" for any)
+      AllowedMethods:     []string{"GET","POST","PUT","DELETE","OPTIONS"},   // Allowed HTTP methods
+      AllowedHeaders:     []string{"Accept","Authorization","Content-Type"}, // Allowed request headers
+      ExposedHeaders:     []string{},                                        // Headers exposed to the client
+      MaxAge:             300,                                               // Preflight cache duration in seconds
+      AllowCredentials:   true,                                              // Allow cookies/auth headers
+      OptionsPassthrough: false,                                             // Let OPTIONS requests pass through
+      Debug:              false,                                             // Enable debug logging
+  }
+  ```
+
 ## 🚀 Getting Started
 
 ### Download Binaries
@@ -285,6 +330,15 @@ KEY=DPFtfVnxbtnXXRzVnRzrLxDzXXRh+Xft
 ALLOWED_FILETYPES="image/png,image/jpeg,image/gif,application/pdf"
 # 5MB
 MAX_FILESIZE=5242880
+
+# CORS configuration (enabled by default)
+CORS_ENABLED=true
+CORS_ALLOWED_ORIGINS="*"
+CORS_ALLOWED_METHODS="GET,POST,PUT,DELETE,OPTIONS,PATCH,HEAD"
+CORS_ALLOWED_HEADERS="Accept,Authorization,Content-Type,X-CSRF-Token"
+CORS_EXPOSED_HEADERS=""
+CORS_ALLOW_CREDENTIALS=true
+CORS_MAX_AGE=300
 
 # github oauth
 GITHUB_KEY=
