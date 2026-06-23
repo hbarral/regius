@@ -72,17 +72,18 @@ type Server struct {
 }
 
 type config struct {
-	port            string
-	renderer        string
-	cookie          cookieConfig
-	sessionType     string
-	database        databaseConfig
-	redis           redisConfig
-	uploads         uploadConfig
-	cors            CORSConfig
-	securityHeaders SecurityHeadersConfig
-	apiKeyAuth      APIKeyAuthConfig
-	requestID       RequestIDConfig
+	port             string
+	renderer         string
+	cookie           cookieConfig
+	sessionType      string
+	database         databaseConfig
+	redis            redisConfig
+	uploads          uploadConfig
+	cors             CORSConfig
+	securityHeaders  SecurityHeadersConfig
+	apiKeyAuth       APIKeyAuthConfig
+	requestID        RequestIDConfig
+	requestSanitizer RequestSanitizerConfig
 }
 
 type uploadConfig struct {
@@ -207,6 +208,19 @@ func (r *Regius) New(rootPath string) error {
 		requestIDEnabled, _ = strconv.ParseBool(os.Getenv("REQUEST_ID_ENABLED"))
 	}
 
+	requestSanitizerEnabled := false
+	if os.Getenv("REQUEST_SANITIZATION_ENABLED") != "" {
+		requestSanitizerEnabled, _ = strconv.ParseBool(os.Getenv("REQUEST_SANITIZATION_ENABLED"))
+	}
+	requestSanitizerQuery := true
+	if v := os.Getenv("REQUEST_SANITIZATION_QUERY"); v != "" {
+		requestSanitizerQuery, _ = strconv.ParseBool(v)
+	}
+	requestSanitizerForm := true
+	if v := os.Getenv("REQUEST_SANITIZATION_FORM"); v != "" {
+		requestSanitizerForm, _ = strconv.ParseBool(v)
+	}
+
 	r.config = config{
 		port:     os.Getenv("PORT"),
 		renderer: os.Getenv("RENDERER"),
@@ -268,6 +282,14 @@ func (r *Regius) New(rootPath string) error {
 			Header:         os.Getenv("REQUEST_ID_HEADER"),
 			ResponseHeader: os.Getenv("REQUEST_ID_RESPONSE_HEADER"),
 			Format:         os.Getenv("REQUEST_ID_FORMAT"),
+		},
+		requestSanitizer: RequestSanitizerConfig{
+			Enabled: requestSanitizerEnabled,
+			Policy:  os.Getenv("REQUEST_SANITIZATION_POLICY"),
+			Query:   BoolPtr(requestSanitizerQuery),
+			Form:    BoolPtr(requestSanitizerForm),
+			Headers: parseStringSliceEnv("REQUEST_SANITIZATION_HEADERS", "Referer,User-Agent"),
+			Exempt:  os.Getenv("REQUEST_SANITIZATION_EXEMPT"),
 		},
 	}
 

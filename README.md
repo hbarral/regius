@@ -345,6 +345,69 @@ regius migrate --help
   REQUEST_ID_HEADER=X-Request-ID
   REQUEST_ID_RESPONSE_HEADER=X-Request-ID
   REQUEST_ID_FORMAT=uuid                   # uuid | xid | short | default
+```
+
+- **Request Sanitization Middleware**: Neutralize XSS at the request boundary by sanitizing query params, form-encoded values, and selected request headers with [bluemonday](https://github.com/microcosm-cc/bluemonday) before downstream handlers ever see them.
+
+  - Defense-in-depth: enabled by default in scaffolded apps (`REQUEST_SANITIZATION_ENABLED=true`)
+  - Two policies via env: **strict** (default — strips all HTML, returns safe text) and **ugc** (allows a safe HTML subset like `<b>`, `<a>` for comment-style fields)
+  - Sanitizes URL query params, form-encoded POST values (including multipart text fields), and a configurable allowlist of request headers (default `Referer`, `User-Agent`)
+  - JSON-safe: `application/json` request bodies are **never** parsed or consumed, so API handlers keep full access to `r.Body`
+  - Path exemption: routes matching `REQUEST_SANITIZATION_EXEMPT` (default `/api/.*`) bypass sanitization entirely, mirroring the CSRF (`NoSurf`) exemption
+  - Standalone helpers for targeted use: `r.Sanitize(s)` / `r.Sanitizer()` (app-configured policy) and package-level `regius.Sanitize(s)` (strict)
+  - Non-destructive: clean values are left byte-for-byte intact; only values containing HTML are rewritten
+  - Don't sanitize structural headers (`Authorization`, `Cookie`, `X-CSRF-Token`, `Content-*`, `X-Forwarded-*`, `X-Request-ID`) — doing so breaks routing, auth, and tracing. The default allowlist avoids these.
+
+  **Usage Example in Your App:**
+
+  ```go
+  // Request sanitization is applied globally when REQUEST_SANITIZATION_ENABLED=true.
+  // No additional code is required.
+
+  // Targeted sanitization in a handler (e.g. before storing user input):
+  func (a *App) StoreComment(w http.ResponseWriter, r *http.Request) {
+      raw := r.FormValue("comment")
+      safe := a.Sanitize(raw) // uses the app's configured policy
+      // store safe...
+  }
+
+  // Or build the middleware manually for a route group:
+  r.Group(func(mux chi.Router) {
+      mux.Use(a.RequestSanitizer(regius.RequestSanitizerConfig{
+          Enabled: true,
+          Policy:  regius.SanitizePolicyUGC, // allow safe HTML subset
+          Headers: []string{"Referer"},
+      }))
+      // routes here...
+  })
+  ```
+
+  **Configuration Options:**
+
+  ```go
+  config := regius.RequestSanitizerConfig{
+      Enabled: true,                          // Master toggle
+      Policy:  regius.SanitizePolicyStrict,   // "strict" (default) | "ugc"
+      Query:   regius.BoolPtr(true),          // Sanitize URL query params (default true)
+      Form:    regius.BoolPtr(true),          // Sanitize form-encoded values (default true)
+      Headers: []string{"Referer", "User-Agent"}, // Header allowlist (default none)
+      Exempt:  "/api/.*",                     // Regex of paths to skip (default "/api/.*")
+      Custom:  nil,                           // Optional *bluemonday.Policy override
+  }
+
+  // BoolPtr is a tiny helper to set *bool fields (nil defaults to true):
+  regius.BoolPtr(false) // explicitly disable a scope
+  ```
+
+  **Environment Variables:**
+
+  ```env
+  REQUEST_SANITIZATION_ENABLED=true
+  REQUEST_SANITIZATION_POLICY=strict         # strict | ugc
+  REQUEST_SANITIZATION_QUERY=true
+  REQUEST_SANITIZATION_FORM=true
+  REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
+  REQUEST_SANITIZATION_EXEMPT=/api/.*
   ```
 
 ## 🚀 Getting Started
@@ -535,6 +598,14 @@ REQUEST_ID_ENABLED=true
 REQUEST_ID_HEADER=X-Request-ID
 REQUEST_ID_RESPONSE_HEADER=X-Request-ID
 REQUEST_ID_FORMAT=uuid
+
+# request sanitization for XSS prevention (on by default)
+REQUEST_SANITIZATION_ENABLED=true
+REQUEST_SANITIZATION_POLICY=strict
+REQUEST_SANITIZATION_QUERY=true
+REQUEST_SANITIZATION_FORM=true
+REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
+REQUEST_SANITIZATION_EXEMPT=/api/.*
 
 # github oauth
 GITHUB_KEY=

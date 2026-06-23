@@ -43,6 +43,17 @@ REQUEST_ID_HEADER=X-Request-ID
 REQUEST_ID_RESPONSE_HEADER=X-Request-ID
 REQUEST_ID_FORMAT=uuid
 
+# request sanitization for XSS prevention (defense-in-depth, on by default).
+# Sanitizes query params, form-encoded values, and selected request headers
+# using bluemonday. Strict strips all HTML; ugc allows a safe subset.
+# JSON request bodies and /api/* routes are exempt by default.
+REQUEST_SANITIZATION_ENABLED=true
+REQUEST_SANITIZATION_POLICY=strict
+REQUEST_SANITIZATION_QUERY=true
+REQUEST_SANITIZATION_FORM=true
+REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
+REQUEST_SANITIZATION_EXEMPT=/api/.*
+
 # database configuration
 DATABASE_TYPE=
 DATABASE_HOST=
