@@ -72,14 +72,15 @@ type Server struct {
 }
 
 type config struct {
-	port        string
-	renderer    string
-	cookie      cookieConfig
-	sessionType string
-	database    databaseConfig
-	redis       redisConfig
-	uploads     uploadConfig
-	cors        CORSConfig
+	port            string
+	renderer        string
+	cookie          cookieConfig
+	sessionType     string
+	database        databaseConfig
+	redis           redisConfig
+	uploads         uploadConfig
+	cors            CORSConfig
+	securityHeaders SecurityHeadersConfig
 }
 
 type uploadConfig struct {
@@ -183,6 +184,17 @@ func (r *Regius) New(rootPath string) error {
 	corsDebug, _ := strconv.ParseBool(os.Getenv("CORS_DEBUG"))
 	corsPassthrough, _ := strconv.ParseBool(os.Getenv("CORS_OPTIONS_PASSTHROUGH"))
 
+	securityHeadersEnabled := false
+	if os.Getenv("SECURITY_HEADERS_ENABLED") != "" {
+		securityHeadersEnabled, _ = strconv.ParseBool(os.Getenv("SECURITY_HEADERS_ENABLED"))
+	}
+	hstsMaxAge, _ := strconv.Atoi(os.Getenv("HSTS_MAX_AGE"))
+	hstsIncludeSubDomains := true
+	if os.Getenv("HSTS_INCLUDE_SUBDOMAINS") != "" {
+		hstsIncludeSubDomains, _ = strconv.ParseBool(os.Getenv("HSTS_INCLUDE_SUBDOMAINS"))
+	}
+	hstsPreload, _ := strconv.ParseBool(os.Getenv("HSTS_PRELOAD"))
+
 	r.config = config{
 		port:     os.Getenv("PORT"),
 		renderer: os.Getenv("RENDERER"),
@@ -216,6 +228,19 @@ func (r *Regius) New(rootPath string) error {
 			AllowCredentials:   corsCredentials,
 			OptionsPassthrough: corsPassthrough,
 			Debug:              corsDebug,
+		},
+		securityHeaders: SecurityHeadersConfig{
+			Enabled:                       securityHeadersEnabled,
+			ContentSecurityPolicy:         os.Getenv("CONTENT_SECURITY_POLICY"),
+			HSTSMaxAge:                    hstsMaxAge,
+			HSTSIncludeSubDomains:         hstsIncludeSubDomains,
+			HSTSPreload:                   hstsPreload,
+			ReferrerPolicy:                os.Getenv("REFERRER_POLICY"),
+			XFrameOptions:                 os.Getenv("X_FRAME_OPTIONS"),
+			XPermittedCrossDomainPolicies: os.Getenv("X_PERMITTED_CROSS_DOMAIN_POLICIES"),
+			CrossOriginOpenerPolicy:       os.Getenv("CROSS_ORIGIN_OPENER_POLICY"),
+			CrossOriginResourcePolicy:     os.Getenv("CROSS_ORIGIN_RESOURCE_POLICY"),
+			XDNSPrefetchControl:           os.Getenv("X_DNS_PREFETCH_CONTROL"),
 		},
 	}
 

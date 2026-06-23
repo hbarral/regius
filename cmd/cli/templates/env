@@ -15,6 +15,16 @@ SERVER_NAME=localhost
 # use https?
 SECURE=false
 
+# security headers (helmet equivalent). Enabled by default.
+# HSTS (Strict-Transport-Security) is only emitted when SECURE=true.
+SECURITY_HEADERS_ENABLED=true
+CONTENT_SECURITY_POLICY=default-src 'self'
+HSTS_MAX_AGE=31536000
+HSTS_INCLUDE_SUBDOMAINS=true
+HSTS_PRELOAD=false
+REFERRER_POLICY=strict-origin-when-cross-origin
+X_FRAME_OPTIONS=SAMEORIGIN
+
 # database configuration
 DATABASE_TYPE=
 DATABASE_HOST=

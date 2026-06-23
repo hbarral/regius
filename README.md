@@ -167,6 +167,55 @@ regius migrate --help
   }
   ```
 
+- **Security Headers Middleware**: Set a bundle of HTTP security response headers out of the box — an Express "helmet" equivalent — to harden every response against XSS, clickjacking, MIME-sniffing, and SSL-downgrade attacks.
+
+  - Opt-in by default: disabled unless `SECURITY_HEADERS_ENABLED=true`
+  - Helmet-style safe defaults applied automatically: Content-Security-Policy (`default-src 'self'`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, Cross-Origin-Opener/Resource-Policy, and more
+  - HSTS auto-gated: `Strict-Transport-Security` is only emitted when `SECURE=true`, so it never locks you out of local dev over `http://localhost`
+  - Per-header overrides via environment variables (CSP, HSTS max-age, Referrer-Policy, etc.)
+  - Non-blocking: headers are set before the downstream handler, so a route can still override any header via `w.Header().Set(...)`
+
+  **Usage Example in Your App:**
+
+  ```go
+  // Security headers are applied globally when SECURITY_HEADERS_ENABLED=true.
+  // No additional code is required.
+
+  // To override a header for a specific route, set it in the handler:
+  func (a *App) WidgetShow(w http.ResponseWriter, r *http.Request) {
+      w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src https://cdn.example.com")
+      // ...
+  }
+
+  // Or build the middleware manually for a route group:
+  r.Group(func(mux chi.Router) {
+      mux.Use(a.SecurityHeaders(regius.SecurityHeadersConfig{
+          Enabled:                true,
+          ContentSecurityPolicy:  "default-src 'self'; script-src 'self'",
+          HSTSIncludeSubDomains:  true,
+      }))
+      // routes here
+  })
+  ```
+
+  **Configuration Options:**
+
+  ```go
+  config := regius.SecurityHeadersConfig{
+      Enabled:                       true,                          // Master toggle
+      ContentSecurityPolicy:         "default-src 'self'",          // Empty -> default
+      HSTSMaxAge:                    31536000,                       // 0 -> 1 year default
+      HSTSIncludeSubDomains:         true,                           // Add includeSubDomains
+      HSTSPreload:                   false,                          // Add preload
+      ReferrerPolicy:                "strict-origin-when-cross-origin",
+      XFrameOptions:                 "SAMEORIGIN",
+      XPermittedCrossDomainPolicies: "none",
+      CrossOriginOpenerPolicy:       "same-origin",
+      CrossOriginResourcePolicy:     "same-origin",
+      XDNSPrefetchControl:           "off",
+  }
+  ```
+
 ## 🚀 Getting Started
 
 ### Download Binaries
@@ -339,6 +388,16 @@ CORS_ALLOWED_HEADERS="Accept,Authorization,Content-Type,X-CSRF-Token"
 CORS_EXPOSED_HEADERS=""
 CORS_ALLOW_CREDENTIALS=true
 CORS_MAX_AGE=300
+
+# security headers (helmet equivalent, disabled by default).
+# HSTS is only emitted when SECURE=true.
+SECURITY_HEADERS_ENABLED=false
+CONTENT_SECURITY_POLICY=default-src 'self'
+HSTS_MAX_AGE=31536000
+HSTS_INCLUDE_SUBDOMAINS=true
+HSTS_PRELOAD=false
+REFERRER_POLICY=strict-origin-when-cross-origin
+X_FRAME_OPTIONS=SAMEORIGIN
 
 # github oauth
 GITHUB_KEY=

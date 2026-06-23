@@ -18,6 +18,7 @@ func (r *Regius) routes() http.Handler {
 		mux.Use(r.CORS(r.config.cors))
 	}
 
+	mux.Use(r.SecurityHeaders(r.config.securityHeaders))
 	if r.Debug {
 		mux.Use(middleware.Logger)
 	}
