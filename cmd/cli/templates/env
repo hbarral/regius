@@ -35,6 +35,14 @@ API_KEY_ALT_HEADER=X-API-Key
 API_KEY_QUERY_PARAM=
 API_KEY_REALM=api
 
+# request id tracing (enabled by default). Stamps every request with a
+# correlation id: reuses an incoming id from the request header when present
+# (cross-service correlation), otherwise generates one. Echoed on the response.
+REQUEST_ID_ENABLED=true
+REQUEST_ID_HEADER=X-Request-ID
+REQUEST_ID_RESPONSE_HEADER=X-Request-ID
+REQUEST_ID_FORMAT=uuid
+
 # database configuration
 DATABASE_TYPE=
 DATABASE_HOST=

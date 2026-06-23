@@ -290,6 +290,63 @@ regius migrate --help
   API_KEY_REALM=api
   ```
 
+- **Request ID Tracing Middleware**: Stamp every request with a unique correlation ID for log correlation, distributed tracing, and client-side debugging.
+
+  - Enabled by default: a request ID is generated for every request
+  - Incoming ID reuse: reads an incoming ID from the request header (e.g. from a proxy/gateway) and reuses it verbatim, so a single user action can be correlated across services
+  - Echoed on the response: the ID is written to a response header so clients can map a response back to server logs / support tickets
+  - Configurable ID format: `uuid` (default), `xid` (sortable/short), `short` (12-char base62), or `default` (chi-style `host/random-counter`)
+  - Pluggable generator: supply a custom `Generator` func for custom schemes (e.g. ULID, tenant-prefixed IDs)
+  - Context propagation: the ID is stored in the request context under chi's `RequestIDKey`, so chi's `middleware.GetReqID` and request logger keep working — retrieve it in a handler with `regius.RequestIDFromContext(ctx)`
+  - Hardening: incoming IDs are trimmed and capped (128 chars) to prevent log injection / header abuse
+
+  **Usage Example in Your App:**
+
+  ```go
+  // Request ID tracing is applied globally by default.
+  // No additional code is required.
+
+  // Retrieve the request ID in a handler:
+  func (a *App) SomeHandler(w http.ResponseWriter, r *http.Request) {
+      id, ok := regius.RequestIDFromContext(r.Context())
+      if ok {
+          a.InfoLog.Printf("handling request %s", id)
+      }
+      // ...
+  }
+
+  // Or build the middleware manually for a route group:
+  r.Group(func(mux chi.Router) {
+      mux.Use(a.RequestID(regius.RequestIDConfig{
+          Enabled:        true,
+          Format:         regius.RequestIDFormatXID,
+          ResponseHeader: "X-Correlation-ID",
+      }))
+      // routes here
+  })
+  ```
+
+  **Configuration Options:**
+
+  ```go
+  config := regius.RequestIDConfig{
+      Enabled:        true,                 // Master toggle (default true)
+      Header:         "X-Request-ID",       // Request header to read incoming ID from
+      ResponseHeader: "X-Request-ID",       // Response header to echo the ID on ("" = don't echo)
+      Format:         regius.RequestIDFormatUUID, // "uuid" | "xid" | "short" | "default"
+      Generator:      nil,                  // Optional override of Format
+  }
+  ```
+
+  **Environment Variables:**
+
+  ```env
+  REQUEST_ID_ENABLED=true
+  REQUEST_ID_HEADER=X-Request-ID
+  REQUEST_ID_RESPONSE_HEADER=X-Request-ID
+  REQUEST_ID_FORMAT=uuid                   # uuid | xid | short | default
+  ```
+
 ## 🚀 Getting Started
 
 ### Download Binaries
@@ -472,6 +529,12 @@ HSTS_INCLUDE_SUBDOMAINS=true
 HSTS_PRELOAD=false
 REFERRER_POLICY=strict-origin-when-cross-origin
 X_FRAME_OPTIONS=SAMEORIGIN
+
+# request id tracing (enabled by default)
+REQUEST_ID_ENABLED=true
+REQUEST_ID_HEADER=X-Request-ID
+REQUEST_ID_RESPONSE_HEADER=X-Request-ID
+REQUEST_ID_FORMAT=uuid
 
 # github oauth
 GITHUB_KEY=

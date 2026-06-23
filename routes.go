@@ -11,7 +11,7 @@ import (
 
 func (r *Regius) routes() http.Handler {
 	mux := chi.NewRouter()
-	mux.Use(middleware.RequestID)
+	mux.Use(r.RequestID(r.config.requestID))
 	mux.Use(middleware.RealIP)
 
 	if r.config.cors.Enabled {

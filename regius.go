@@ -82,6 +82,7 @@ type config struct {
 	cors            CORSConfig
 	securityHeaders SecurityHeadersConfig
 	apiKeyAuth      APIKeyAuthConfig
+	requestID       RequestIDConfig
 }
 
 type uploadConfig struct {
@@ -201,6 +202,11 @@ func (r *Regius) New(rootPath string) error {
 		apiKeyAuthEnabled, _ = strconv.ParseBool(os.Getenv("API_KEY_AUTH_ENABLED"))
 	}
 
+	requestIDEnabled := true
+	if os.Getenv("REQUEST_ID_ENABLED") != "" {
+		requestIDEnabled, _ = strconv.ParseBool(os.Getenv("REQUEST_ID_ENABLED"))
+	}
+
 	r.config = config{
 		port:     os.Getenv("PORT"),
 		renderer: os.Getenv("RENDERER"),
@@ -256,6 +262,12 @@ func (r *Regius) New(rootPath string) error {
 			AltHeader:  os.Getenv("API_KEY_ALT_HEADER"),
 			QueryParam: os.Getenv("API_KEY_QUERY_PARAM"),
 			Realm:      os.Getenv("API_KEY_REALM"),
+		},
+		requestID: RequestIDConfig{
+			Enabled:        requestIDEnabled,
+			Header:         os.Getenv("REQUEST_ID_HEADER"),
+			ResponseHeader: os.Getenv("REQUEST_ID_RESPONSE_HEADER"),
+			Format:         os.Getenv("REQUEST_ID_FORMAT"),
 		},
 	}
 
