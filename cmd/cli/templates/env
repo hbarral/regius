@@ -25,6 +25,16 @@ HSTS_PRELOAD=false
 REFERRER_POLICY=strict-origin-when-cross-origin
 X_FRAME_OPTIONS=SAMEORIGIN
 
+# api key authentication (opt-in). Protects API routes (e.g. /api/*).
+# Add valid keys as a comma-separated list. Query param is off by default.
+API_KEY_AUTH_ENABLED=false
+API_KEYS=
+API_KEY_HEADER=Authorization
+API_KEY_SCHEME=Bearer
+API_KEY_ALT_HEADER=X-API-Key
+API_KEY_QUERY_PARAM=
+API_KEY_REALM=api
+
 # database configuration
 DATABASE_TYPE=
 DATABASE_HOST=

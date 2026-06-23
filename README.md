@@ -216,6 +216,80 @@ regius migrate --help
   }
   ```
 
+- **API Key Authentication Middleware**: Authenticate API requests with API keys, complementing the existing session/cookie auth used by web routes.
+
+  - Opt-in via `API_KEY_AUTH_ENABLED`; apply to API route groups only (not global) so cookie-authed web routes are unaffected
+  - Multiple key sources (in order): `Authorization: Bearer <key>` (or configured scheme), `X-API-Key` header, and an opt-in query param (`API_KEY_QUERY_PARAM`, disabled by default since keys in URLs leak via logs/referrers)
+  - Flexible validation backends (by precedence): a pluggable `Validator` func (e.g. DB-backed keys), a cache-backed `APIKeyStore` (with revocation), or a static list of `Keys` compared in constant time (`crypto/subtle`)
+  - `CacheAPIKeyStore` adapts the framework cache (Redis/Badger); entries are keyed by the SHA-256 of the raw key, so raw keys are never persisted
+  - On success, the `APIKeyIdentity` is stored in the request context — retrieve it with `regius.APIKeyFromContext(ctx)`
+  - On failure: `401` with `WWW-Authenticate`, `Cache-Control: no-store`, and a JSON body. The raw key is never logged
+
+  **Usage Example in Your App:**
+
+  ```go
+  // Apply to your API route group (routes.go). API key auth is NOT global.
+  r.Group(func(mux chi.Router) {
+      mux.Use(a.APIKeyAuth(regius.APIKeyAuthConfig{
+          Enabled: true,
+          Keys:    []string{"client-1-secret", "client-2-secret"},
+      }))
+      // API routes here...
+  })
+
+  // Or use env-driven config (set API_KEY_AUTH_ENABLED=true and API_KEYS in .env):
+  mux.Use(a.APIKeyAuth(a.APIKeyAuthCfg()))
+
+  // DB-backed keys via a custom validator:
+  mux.Use(a.APIKeyAuth(regius.APIKeyAuthConfig{
+      Enabled: true,
+      Validator: func(key string) (regius.APIKeyIdentity, bool) {
+          // look up key in DB; return identity if valid
+          return regius.APIKeyIdentity{ID: "user-42"}, true
+      },
+  }))
+
+  // Retrieve the authenticated caller in a handler:
+  func (a *App) SomeAPIHandler(w http.ResponseWriter, r *http.Request) {
+      id, ok := regius.APIKeyFromContext(r.Context())
+      if !ok { /* unauthorized */ }
+      // use id.ID, id.Metadata...
+  }
+  ```
+
+  **Configuration Options:**
+
+  ```go
+  config := regius.APIKeyAuthConfig{
+      Enabled:    true,                 // Master toggle
+      Keys:       []string{"secret"},   // Static valid keys (constant-time compare)
+      Validator:  nil,                  // Pluggable func(key) (identity, ok); takes precedence
+      Store:      nil,                  // APIKeyStore (e.g. CacheAPIKeyStore) for lookup/revocation
+      Header:     "Authorization",      // Primary header (default "Authorization")
+      Scheme:     "Bearer",             // Scheme prefix for Header (default "Bearer")
+      AltHeader:  "X-API-Key",          // Secondary header, no prefix (default "X-API-Key")
+      QueryParam: "",                   // Opt-in query param name (default "" = off)
+      Realm:      "api",                // Used in WWW-Authenticate (default "api")
+  }
+
+  // Cache-backed store (keys hashed with SHA-256, never stored raw):
+  store := regius.NewCacheAPIKeyStore(a.Cache, "apikey:")
+  _ = store.Set("client-secret", regius.APIKeyIdentity{ID: "client-1"}, 0)
+  _ = store.Revoke("client-secret") // invalidate later
+  ```
+
+  **Environment Variables:**
+
+  ```env
+  API_KEY_AUTH_ENABLED=false
+  API_KEYS=                          # comma-separated list of valid keys
+  API_KEY_HEADER=Authorization
+  API_KEY_SCHEME=Bearer
+  API_KEY_ALT_HEADER=X-API-Key
+  API_KEY_QUERY_PARAM=               # empty = disabled
+  API_KEY_REALM=api
+  ```
+
 ## 🚀 Getting Started
 
 ### Download Binaries

@@ -61,3 +61,4 @@ func (r *Regius) CheckForMaintenanceMode(next http.Handler) http.Handler {
 }
 
 // Rate limiter is available as r.RateLimiter(config) - see ratelimiter.go for details
+// API key auth is available as r.APIKeyAuth(config) - see apikeyauth.go for details

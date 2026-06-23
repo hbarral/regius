@@ -81,6 +81,7 @@ type config struct {
 	uploads         uploadConfig
 	cors            CORSConfig
 	securityHeaders SecurityHeadersConfig
+	apiKeyAuth      APIKeyAuthConfig
 }
 
 type uploadConfig struct {
@@ -195,6 +196,11 @@ func (r *Regius) New(rootPath string) error {
 	}
 	hstsPreload, _ := strconv.ParseBool(os.Getenv("HSTS_PRELOAD"))
 
+	apiKeyAuthEnabled := false
+	if os.Getenv("API_KEY_AUTH_ENABLED") != "" {
+		apiKeyAuthEnabled, _ = strconv.ParseBool(os.Getenv("API_KEY_AUTH_ENABLED"))
+	}
+
 	r.config = config{
 		port:     os.Getenv("PORT"),
 		renderer: os.Getenv("RENDERER"),
@@ -241,6 +247,15 @@ func (r *Regius) New(rootPath string) error {
 			CrossOriginOpenerPolicy:       os.Getenv("CROSS_ORIGIN_OPENER_POLICY"),
 			CrossOriginResourcePolicy:     os.Getenv("CROSS_ORIGIN_RESOURCE_POLICY"),
 			XDNSPrefetchControl:           os.Getenv("X_DNS_PREFETCH_CONTROL"),
+		},
+		apiKeyAuth: APIKeyAuthConfig{
+			Enabled:    apiKeyAuthEnabled,
+			Keys:       parseStringSliceEnv("API_KEYS", ""),
+			Header:     os.Getenv("API_KEY_HEADER"),
+			Scheme:     os.Getenv("API_KEY_SCHEME"),
+			AltHeader:  os.Getenv("API_KEY_ALT_HEADER"),
+			QueryParam: os.Getenv("API_KEY_QUERY_PARAM"),
+			Realm:      os.Getenv("API_KEY_REALM"),
 		},
 	}
 
