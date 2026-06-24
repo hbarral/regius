@@ -569,6 +569,19 @@ RENDERER=jet
 # encryption key (32 characters long)
 KEY=DPFtfVnxbtnXXRzVnRzrLxDzXXRh+Xft
 
+# password hashing (algorithm: bcrypt | scrypt | argon2)
+HASH_ALGORITHM=bcrypt
+# bcrypt cost (4-31, default 12)
+HASH_COST=12
+# scrypt parameters
+HASH_SCRYPT_N=32768
+HASH_SCRYPT_R=8
+HASH_SCRYPT_P=1
+# argon2id parameters
+HASH_ARGON2_MEMORY=65536
+HASH_ARGON2_ITERATIONS=3
+HASH_ARGON2_PARALLELISM=2
+
 # types of files allowed to upload
 ALLOWED_FILETYPES="image/png,image/jpeg,image/gif,application/pdf"
 # 5MB
@@ -646,6 +659,27 @@ DATABASE_SSL_MODE=disable
 ```
 
 Fill in these values with your database connection details. Migrations use these environment variables directly - no additional configuration file required.
+
+### Password Hashing
+
+Regius provides a centralized password hashing utility accessible via `App.Hash`, supporting `bcrypt` (default), `scrypt`, and `argon2id`. The algorithm and its parameters are configured through environment variables:
+
+```
+HASH_ALGORITHM=bcrypt
+HASH_COST=12
+```
+
+Use it anywhere you have access to the `*Regius` application instance:
+
+```go
+// Hash a password before storing it
+hashed, err := h.App.Hash.Generate(plainPassword)
+
+// Verify a password against a stored hash
+ok, err := h.App.Hash.Compare(storedHash, plainPassword)
+```
+
+The `make auth` scaffolding uses `App.Hash` directly, so the generated handlers and user model stay hash-agnostic. Defaults preserve the previous behavior (bcrypt at cost 12), so existing password hashes continue to verify.
 
 ## 🎯 Usage
 

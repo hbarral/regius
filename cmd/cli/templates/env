@@ -131,6 +131,19 @@ RENDERER=jet
 # encryption key (32 characthers long)
 KEY=${KEY}
 
+# password hashing (algorithm: bcrypt | scrypt | argon2)
+HASH_ALGORITHM=bcrypt
+# bcrypt cost (4-31, default 12)
+HASH_COST=12
+# scrypt parameters
+HASH_SCRYPT_N=32768
+HASH_SCRYPT_R=8
+HASH_SCRYPT_P=1
+# argon2id parameters
+HASH_ARGON2_MEMORY=65536
+HASH_ARGON2_ITERATIONS=3
+HASH_ARGON2_PARALLELISM=2
+
 # types of files allowed to upload
 ALLOWED_FILETYPES="image/png,image/jpeg,image/gif,application/pdf"
 # 5MB

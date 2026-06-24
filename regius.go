@@ -23,6 +23,7 @@ import (
 	"github.com/hbarral/regius/filesystems/s3filesystem"
 	"github.com/hbarral/regius/filesystems/sftpfilesystem"
 	"github.com/hbarral/regius/filesystems/webdavfilesystem"
+	"github.com/hbarral/regius/hash"
 	"github.com/hbarral/regius/mailer"
 	"github.com/hbarral/regius/render"
 	"github.com/hbarral/regius/session"
@@ -54,6 +55,7 @@ type Regius struct {
 	DB            Database
 	EncryptionKey string
 	Cache         cache.Cache
+	Hash          hash.Hasher
 	Scheduler     *cron.Cron
 	Mail          mailer.Mail
 	Server        Server
@@ -84,6 +86,7 @@ type config struct {
 	apiKeyAuth       APIKeyAuthConfig
 	requestID        RequestIDConfig
 	requestSanitizer RequestSanitizerConfig
+	hash             hashConfig
 }
 
 type uploadConfig struct {
@@ -291,6 +294,7 @@ func (r *Regius) New(rootPath string) error {
 			Headers: parseStringSliceEnv("REQUEST_SANITIZATION_HEADERS", "Referer,User-Agent"),
 			Exempt:  os.Getenv("REQUEST_SANITIZATION_EXEMPT"),
 		},
+		hash: r.createHashConfig(),
 	}
 
 	r.Routes = r.routes().(*chi.Mux)
@@ -323,6 +327,7 @@ func (r *Regius) New(rootPath string) error {
 
 	r.Session = sess.InitSession()
 	r.EncryptionKey = os.Getenv("KEY")
+	r.Hash = r.createHasher()
 
 	if r.Debug {
 		views := jet.NewSet(
@@ -385,6 +390,41 @@ func (r *Regius) createRenderer() {
 	}
 
 	r.Render = &myrenderer
+}
+
+func (r *Regius) createHashConfig() hashConfig {
+	cost, _ := strconv.Atoi(os.Getenv("HASH_COST"))
+	scryptN, _ := strconv.Atoi(os.Getenv("HASH_SCRYPT_N"))
+	scryptR, _ := strconv.Atoi(os.Getenv("HASH_SCRYPT_R"))
+	scryptP, _ := strconv.Atoi(os.Getenv("HASH_SCRYPT_P"))
+
+	argon2Memory, _ := strconv.ParseUint(os.Getenv("HASH_ARGON2_MEMORY"), 10, 32)
+	argon2Iterations, _ := strconv.ParseUint(os.Getenv("HASH_ARGON2_ITERATIONS"), 10, 32)
+	argon2Parallelism, _ := strconv.ParseUint(os.Getenv("HASH_ARGON2_PARALLELISM"), 10, 8)
+
+	return hashConfig{
+		algorithm:         os.Getenv("HASH_ALGORITHM"),
+		cost:              cost,
+		scryptN:           scryptN,
+		scryptR:           scryptR,
+		scryptP:           scryptP,
+		argon2Memory:      uint32(argon2Memory),
+		argon2Iterations:  uint32(argon2Iterations),
+		argon2Parallelism: uint8(argon2Parallelism),
+	}
+}
+
+func (r *Regius) createHasher() hash.Hasher {
+	return hash.New(hash.Config{
+		Algorithm:         r.config.hash.algorithm,
+		Cost:              r.config.hash.cost,
+		ScryptN:           r.config.hash.scryptN,
+		ScryptR:           r.config.hash.scryptR,
+		ScryptP:           r.config.hash.scryptP,
+		Argon2Memory:      r.config.hash.argon2Memory,
+		Argon2Iterations:  r.config.hash.argon2Iterations,
+		Argon2Parallelism: r.config.hash.argon2Parallelism,
+	})
 }
 
 func (r *Regius) createMailer() mailer.Mail {

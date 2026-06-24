@@ -1,6 +1,8 @@
 package regius
 
-import "database/sql"
+import (
+	"database/sql"
+)
 
 type initPath struct {
 	rootPath    string
@@ -33,4 +35,15 @@ type redisConfig struct {
 	host     string
 	password string
 	prefix   string
+}
+
+type hashConfig struct {
+	algorithm         string
+	cost              int
+	scryptN           int
+	scryptR           int
+	scryptP           int
+	argon2Memory      uint32
+	argon2Iterations  uint32
+	argon2Parallelism uint8
 }
