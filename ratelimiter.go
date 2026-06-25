@@ -3,6 +3,7 @@ package regius
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -31,11 +32,12 @@ type RateLimiterConfig struct {
 }
 
 type rateLimiter struct {
-	config     RateLimiterConfig
-	storage    rateLimiterStorage
-	inMemory   map[string]interface{}
-	inMemoryMu sync.RWMutex
-	middleware func(http.Handler) http.Handler
+	config        RateLimiterConfig
+	storage       rateLimiterStorage
+	inMemory      map[string]interface{}
+	inMemoryMu    sync.RWMutex
+	middleware    func(http.Handler) http.Handler
+	whitelistNets []*net.IPNet
 }
 
 type tokenBucket struct {
@@ -229,40 +231,11 @@ func (sw *slidingWindow) allow() bool {
 }
 
 func (r *rateLimiter) isWhitelisted(ip string) bool {
-	for _, whitelistedIP := range r.config.Whitelist {
-		if ip == whitelistedIP {
-			return true
-		}
-	}
-	return false
+	return ipInNetworks(ip, r.whitelistNets)
 }
 
 func (r *rateLimiter) getClientIP(req *http.Request) string {
-	if r.config.TrustProxy {
-		forwarded := req.Header.Get("X-Forwarded-For")
-		if forwarded != "" {
-			if forwarded[0] == '[' {
-				if idx := len(forwarded); idx > 0 {
-					forwarded = forwarded[1 : idx-1]
-				}
-			}
-			return forwarded
-		}
-
-		realIP := req.Header.Get("X-Real-IP")
-		if realIP != "" {
-			return realIP
-		}
-	}
-
-	ip := req.RemoteAddr
-	for i := len(ip) - 1; i >= 0; i-- {
-		if ip[i] == ':' {
-			return ip[:i]
-		}
-	}
-
-	return ip
+	return clientIPAddress(req, r.config.TrustProxy)
 }
 
 func (r *rateLimiter) checkLimit(identifier string) (bool, error) {
@@ -396,9 +369,10 @@ func (r *rateLimiter) Middleware(next http.Handler) http.Handler {
 
 func (r *Regius) RateLimiter(config RateLimiterConfig) func(next http.Handler) http.Handler {
 	limiter := &rateLimiter{
-		config:     config,
-		inMemory:   make(map[string]interface{}),
-		middleware: nil,
+		config:        config,
+		inMemory:      make(map[string]interface{}),
+		middleware:    nil,
+		whitelistNets: parseIPNetworks(config.Whitelist, r.ErrorLog),
 	}
 
 	if config.Storage == "redis" && myRedisCache != nil {

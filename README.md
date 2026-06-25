@@ -75,8 +75,8 @@ regius migrate --help
   - Two algorithms: **Token Bucket** (steady request patterns) and **Sliding Window** (accurate for burst traffic)
   - Multiple storage backends: **In-memory** (fastest), **Redis** (distributed), and **Badger** (embedded distributed)
   - Configurable limits: Requests per time window (e.g., 100 requests per minute)
-  - IP whitelisting: Exclude specific IPs from rate limiting
-  - Proxy support: Trust X-Forwarded-For and X-Real-IP headers
+  - IP whitelisting: Exclude specific IPs or CIDR ranges (e.g. `10.0.0.0/8`, `::1/128`) from rate limiting — IPv4 and IPv6 supported
+  - Proxy support: Trust X-Forwarded-For (first IP) and X-Real-IP headers
   - Standard HTTP headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Window, Retry-After
   - Per-path rate limiting: Each route path gets its own rate limit
   - Apply globally or to specific routes (API, auth, etc.)
@@ -104,7 +104,7 @@ regius migrate --help
       Window:     time.Minute,           // Time duration (time.Second, time.Minute, time.Hour)
       Storage:    "",                     // "" for in-memory, "redis" or "badger"
       TrustProxy: true,                   // Trust proxy headers
-      Whitelist:  []string{"127.0.0.1", "::1"},  // IPs to exclude
+      Whitelist:  []string{"127.0.0.1", "::1", "10.0.0.0/8"},  // IPs/CIDRs to exclude
   }
   ```
 

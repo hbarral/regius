@@ -183,27 +183,6 @@ func parseIPNetwork(s string) (*net.IPNet, error) {
 	return nil, fmt.Errorf("not a valid IP address or CIDR range")
 }
 
-func clientIPAddress(req *http.Request, trustProxy bool) string {
-	if trustProxy {
-		if xff := req.Header.Get("X-Forwarded-For"); xff != "" {
-			// X-Forwarded-For may be a comma-separated list; the first entry
-			// is the original client.
-			if idx := strings.IndexByte(xff, ','); idx >= 0 {
-				xff = xff[:idx]
-			}
-			return strings.TrimSpace(xff)
-		}
-		if xri := req.Header.Get("X-Real-IP"); xri != "" {
-			return strings.TrimSpace(xri)
-		}
-	}
-	host, _, err := net.SplitHostPort(req.RemoteAddr)
-	if err != nil {
-		return req.RemoteAddr
-	}
-	return host
-}
-
 func ipFilterBlock(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
