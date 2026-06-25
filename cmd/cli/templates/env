@@ -54,6 +54,16 @@ REQUEST_SANITIZATION_FORM=true
 REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
 REQUEST_SANITIZATION_EXEMPT=/api/.*
 
+# ip whitelist/blacklist (opt-in). Allow/deny lists of IPs or CIDR ranges
+# (e.g. 10.0.0.0/8, 192.168.1.5, ::1/128). Deny always wins over allow.
+# When allow is set, only listed networks may access the app.
+IP_FILTER_ENABLED=false
+IP_FILTER_ALLOW=
+IP_FILTER_DENY=
+IP_FILTER_TRUST_PROXY=false
+IP_FILTER_STATUS_CODE=403
+IP_FILTER_MESSAGE=
+
 # database configuration
 DATABASE_TYPE=
 DATABASE_HOST=

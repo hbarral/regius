@@ -410,6 +410,76 @@ regius migrate --help
   REQUEST_SANITIZATION_EXEMPT=/api/.*
   ```
 
+- **IP Whitelist/Blacklist Middleware**: Allow or deny requests based on the client IP, using static lists and optional runtime (cache/DB-backed) decisions for fail2ban-style blocking.
+
+  - Opt-in via `IP_FILTER_ENABLED`; applied globally (after RealIP) so denied requests short-circuit before heavier middleware runs
+  - Allow/deny lists of IPs **or CIDR ranges** (e.g. `10.0.0.0/8`, `192.168.1.5`, `::1/128`); bare IPs are treated as `/32` (IPv4) or `/128` (IPv6). IPv4 and IPv6 both supported
+  - **Deny-wins** semantics: a matching `Deny` entry always blocks; when `Allow` is non-empty, any IP not in `Allow` is blocked. With neither list set, all IPs are allowed
+  - Invalid entries are logged and skipped (non-fatal) — one bad CIDR won't take down the filter
+  - `TrustProxy` (default off) reads the client IP from `X-Forwarded-For` (first entry) or `X-Real-IP` instead of `RemoteAddr`. Only enable behind a trusted reverse proxy, otherwise the header can be spoofed to bypass the filter
+  - Optional pluggable `IPChecker` interface for dynamic, DB/cache-backed decisions: `DecisionAllow`/`DecisionDeny` override the static lists, `DecisionNone` defers to them. Checker errors fail open (the static baseline still applies)
+  - `CacheIPChecker` adapts the framework cache (Redis/Badger) for runtime block/unblock without restart; entries namespaced under `ipfilter:`
+  - Blocked requests respond with a configurable status (default 403) + a JSON body and `Cache-Control: no-store`
+
+  **Usage Example in Your App:**
+
+  ```go
+  // IP filtering is applied globally when IP_FILTER_ENABLED=true.
+  // No additional code is required.
+
+  // Or build the middleware manually for a route group (e.g. restrict admin):
+  r.Group(func(mux chi.Router) {
+      mux.Use(a.IPFilter(regius.IPFilterConfig{
+          Enabled: true,
+          Allow:   []string{"10.0.0.0/8", "192.168.1.0/24"},
+          Deny:    []string{"10.0.0.99"},
+      }))
+      // admin routes here...
+  })
+
+  // Runtime (fail2ban-style) blocking via a cache-backed checker:
+  checker := regius.NewCacheIPChecker(a.Cache, "ipfilter:")
+  _ = checker.Block("203.0.113.50", 3600) // block for 1 hour
+  _ = checker.Unblock("203.0.113.50")     // unblock later
+
+  mux.Use(a.IPFilter(regius.IPFilterConfig{
+      Enabled: true,
+      Deny:    []string{"198.51.100.0/24"}, // static baseline
+      Checker: checker,                      // dynamic layer on top
+  }))
+  ```
+
+  **Configuration Options:**
+
+  ```go
+  config := regius.IPFilterConfig{
+      Enabled:    true,                       // Master toggle
+      Allow:      []string{"10.0.0.0/8"},     // Only these networks pass (deny-wins)
+      Deny:       []string{"10.0.0.99"},      // Always blocked
+      TrustProxy: false,                      // Read X-Forwarded-For/X-Real-IP (default false)
+      StatusCode: 403,                        // Block response status (default 403)
+      Message:    "ip address not allowed",   // Block response message
+      Checker:    nil,                        // Optional IPChecker (e.g. CacheIPChecker)
+  }
+
+  // Cache-backed checker for runtime decisions (TTL in seconds; 0 = no expiry):
+  checker := regius.NewCacheIPChecker(a.Cache, "ipfilter:")
+  _ = checker.Block(ip, 3600)            // DecisionDeny
+  _ = checker.Allow(ip, 0)               // DecisionAllow
+  _ = checker.Unblock(ip)                // remove decision -> defer to static lists
+  ```
+
+  **Environment Variables:**
+
+  ```env
+  IP_FILTER_ENABLED=false
+  IP_FILTER_ALLOW=                          # comma-separated IPs/CIDRs to permit
+  IP_FILTER_DENY=                           # comma-separated IPs/CIDRs to block (deny-wins)
+  IP_FILTER_TRUST_PROXY=false               # read X-Forwarded-For/X-Real-IP
+  IP_FILTER_STATUS_CODE=403
+  IP_FILTER_MESSAGE=
+  ```
+
 ## 🚀 Getting Started
 
 ### Download Binaries
@@ -619,6 +689,14 @@ REQUEST_SANITIZATION_QUERY=true
 REQUEST_SANITIZATION_FORM=true
 REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
 REQUEST_SANITIZATION_EXEMPT=/api/.*
+
+# ip whitelist/blacklist (opt-in). Deny always wins over allow.
+IP_FILTER_ENABLED=false
+IP_FILTER_ALLOW=
+IP_FILTER_DENY=
+IP_FILTER_TRUST_PROXY=false
+IP_FILTER_STATUS_CODE=403
+IP_FILTER_MESSAGE=
 
 # github oauth
 GITHUB_KEY=

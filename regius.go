@@ -86,6 +86,7 @@ type config struct {
 	apiKeyAuth       APIKeyAuthConfig
 	requestID        RequestIDConfig
 	requestSanitizer RequestSanitizerConfig
+	ipFilter         IPFilterConfig
 	hash             hashConfig
 }
 
@@ -224,6 +225,13 @@ func (r *Regius) New(rootPath string) error {
 		requestSanitizerForm, _ = strconv.ParseBool(v)
 	}
 
+	ipFilterEnabled := false
+	if os.Getenv("IP_FILTER_ENABLED") != "" {
+		ipFilterEnabled, _ = strconv.ParseBool(os.Getenv("IP_FILTER_ENABLED"))
+	}
+	ipFilterTrustProxy, _ := strconv.ParseBool(os.Getenv("IP_FILTER_TRUST_PROXY"))
+	ipFilterStatusCode, _ := strconv.Atoi(os.Getenv("IP_FILTER_STATUS_CODE"))
+
 	r.config = config{
 		port:     os.Getenv("PORT"),
 		renderer: os.Getenv("RENDERER"),
@@ -293,6 +301,14 @@ func (r *Regius) New(rootPath string) error {
 			Form:    BoolPtr(requestSanitizerForm),
 			Headers: parseStringSliceEnv("REQUEST_SANITIZATION_HEADERS", "Referer,User-Agent"),
 			Exempt:  os.Getenv("REQUEST_SANITIZATION_EXEMPT"),
+		},
+		ipFilter: IPFilterConfig{
+			Enabled:    ipFilterEnabled,
+			Allow:      parseStringSliceEnv("IP_FILTER_ALLOW", ""),
+			Deny:       parseStringSliceEnv("IP_FILTER_DENY", ""),
+			TrustProxy: ipFilterTrustProxy,
+			StatusCode: ipFilterStatusCode,
+			Message:    os.Getenv("IP_FILTER_MESSAGE"),
 		},
 		hash: r.createHashConfig(),
 	}
