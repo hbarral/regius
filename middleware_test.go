@@ -3,10 +3,13 @@ package regius
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMaxRequestSize_UnderLimit(t *testing.T) {
@@ -95,4 +98,136 @@ func TestClientIPAddress(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// withMaintenanceMode sets the package-global and restores it on cleanup.
+func withMaintenanceMode(t *testing.T, on bool) {
+	t.Helper()
+	original := maintenanceMode
+	maintenanceMode = on
+	t.Cleanup(func() { maintenanceMode = original })
+}
+
+func TestCheckForMaintenanceMode_Off(t *testing.T) {
+	withMaintenanceMode(t, false)
+
+	r := &Regius{RootPath: t.TempDir()}
+	called := false
+	handler := r.CheckForMaintenanceMode(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.True(t, called)
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestCheckForMaintenanceMode_On_ServesMaintenancePage(t *testing.T) {
+	withMaintenanceMode(t, true)
+
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "public"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "public", "maintenance.html"), []byte("<h1>Maintenance</h1>"), 0644))
+
+	r := &Regius{RootPath: root}
+	called := false
+	handler := r.CheckForMaintenanceMode(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		called = true
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.False(t, called, "downstream must not run in maintenance mode")
+	assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
+	assert.Equal(t, "300", rr.Header().Get("Retry-After"))
+	assert.Contains(t, rr.Header().Get("Cache-Control"), "no-store")
+	assert.Contains(t, rr.Body.String(), "Maintenance")
+}
+
+func TestCheckForMaintenanceMode_ExemptsMaintenanceAsset(t *testing.T) {
+	withMaintenanceMode(t, true)
+
+	r := &Regius{RootPath: t.TempDir()}
+	called := false
+	handler := r.CheckForMaintenanceMode(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/public/maintenance.html", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.True(t, called, "the maintenance asset path must bypass the block")
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestNoSurf_ReturnsHandler(t *testing.T) {
+	r := &Regius{}
+	r.config.cookie = cookieConfig{secure: "false", domain: ""}
+
+	handler := r.NoSurf(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	assert.NotNil(t, handler)
+}
+
+func TestNoSurf_GetRequestAllowed(t *testing.T) {
+	r := &Regius{}
+	r.config.cookie = cookieConfig{secure: "false", domain: ""}
+
+	called := false
+	handler := r.NoSurf(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.True(t, called)
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestNoSurf_PostWithoutTokenForbidden(t *testing.T) {
+	r := &Regius{}
+	r.config.cookie = cookieConfig{secure: "false", domain: ""}
+
+	called := false
+	handler := r.NoSurf(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/submit", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.False(t, called, "POST without CSRF token must be rejected")
+	assert.Equal(t, http.StatusBadRequest, rr.Code, "nosurf default FailureCode is 400")
+}
+
+func TestNoSurf_ExemptAPIPath(t *testing.T) {
+	r := &Regius{}
+	r.config.cookie = cookieConfig{secure: "false", domain: ""}
+
+	called := false
+	handler := r.NoSurf(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/users", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.True(t, called, "exempted /api/.* paths must bypass CSRF")
+	assert.Equal(t, http.StatusOK, rr.Code)
 }
