@@ -15,6 +15,55 @@ SERVER_NAME=localhost
 # use https?
 SECURE=false
 
+# security headers (helmet equivalent). Enabled by default.
+# HSTS (Strict-Transport-Security) is only emitted when SECURE=true.
+SECURITY_HEADERS_ENABLED=true
+CONTENT_SECURITY_POLICY=default-src 'self'
+HSTS_MAX_AGE=31536000
+HSTS_INCLUDE_SUBDOMAINS=true
+HSTS_PRELOAD=false
+REFERRER_POLICY=strict-origin-when-cross-origin
+X_FRAME_OPTIONS=SAMEORIGIN
+
+# api key authentication (opt-in). Protects API routes (e.g. /api/*).
+# Add valid keys as a comma-separated list. Query param is off by default.
+API_KEY_AUTH_ENABLED=false
+API_KEYS=
+API_KEY_HEADER=Authorization
+API_KEY_SCHEME=Bearer
+API_KEY_ALT_HEADER=X-API-Key
+API_KEY_QUERY_PARAM=
+API_KEY_REALM=api
+
+# request id tracing (enabled by default). Stamps every request with a
+# correlation id: reuses an incoming id from the request header when present
+# (cross-service correlation), otherwise generates one. Echoed on the response.
+REQUEST_ID_ENABLED=true
+REQUEST_ID_HEADER=X-Request-ID
+REQUEST_ID_RESPONSE_HEADER=X-Request-ID
+REQUEST_ID_FORMAT=uuid
+
+# request sanitization for XSS prevention (defense-in-depth, on by default).
+# Sanitizes query params, form-encoded values, and selected request headers
+# using bluemonday. Strict strips all HTML; ugc allows a safe subset.
+# JSON request bodies and /api/* routes are exempt by default.
+REQUEST_SANITIZATION_ENABLED=true
+REQUEST_SANITIZATION_POLICY=strict
+REQUEST_SANITIZATION_QUERY=true
+REQUEST_SANITIZATION_FORM=true
+REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
+REQUEST_SANITIZATION_EXEMPT=/api/.*
+
+# ip whitelist/blacklist (opt-in). Allow/deny lists of IPs or CIDR ranges
+# (e.g. 10.0.0.0/8, 192.168.1.5, ::1/128). Deny always wins over allow.
+# When allow is set, only listed networks may access the app.
+IP_FILTER_ENABLED=false
+IP_FILTER_ALLOW=
+IP_FILTER_DENY=
+IP_FILTER_TRUST_PROXY=false
+IP_FILTER_STATUS_CODE=403
+IP_FILTER_MESSAGE=
+
 # database configuration
 DATABASE_TYPE=
 DATABASE_HOST=
@@ -91,6 +140,19 @@ RENDERER=jet
 
 # encryption key (32 characthers long)
 KEY=${KEY}
+
+# password hashing (algorithm: bcrypt | scrypt | argon2)
+HASH_ALGORITHM=bcrypt
+# bcrypt cost (4-31, default 12)
+HASH_COST=12
+# scrypt parameters
+HASH_SCRYPT_N=32768
+HASH_SCRYPT_R=8
+HASH_SCRYPT_P=1
+# argon2id parameters
+HASH_ARGON2_MEMORY=65536
+HASH_ARGON2_ITERATIONS=3
+HASH_ARGON2_PARALLELISM=2
 
 # types of files allowed to upload
 ALLOWED_FILETYPES="image/png,image/jpeg,image/gif,application/pdf"

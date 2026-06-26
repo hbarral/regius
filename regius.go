@@ -23,6 +23,7 @@ import (
 	"github.com/hbarral/regius/filesystems/s3filesystem"
 	"github.com/hbarral/regius/filesystems/sftpfilesystem"
 	"github.com/hbarral/regius/filesystems/webdavfilesystem"
+	"github.com/hbarral/regius/hash"
 	"github.com/hbarral/regius/mailer"
 	"github.com/hbarral/regius/render"
 	"github.com/hbarral/regius/session"
@@ -54,6 +55,7 @@ type Regius struct {
 	DB            Database
 	EncryptionKey string
 	Cache         cache.Cache
+	Hash          hash.Hasher
 	Scheduler     *cron.Cron
 	Mail          mailer.Mail
 	Server        Server
@@ -72,13 +74,20 @@ type Server struct {
 }
 
 type config struct {
-	port        string
-	renderer    string
-	cookie      cookieConfig
-	sessionType string
-	database    databaseConfig
-	redis       redisConfig
-	uploads     uploadConfig
+	port             string
+	renderer         string
+	cookie           cookieConfig
+	sessionType      string
+	database         databaseConfig
+	redis            redisConfig
+	uploads          uploadConfig
+	cors             CORSConfig
+	securityHeaders  SecurityHeadersConfig
+	apiKeyAuth       APIKeyAuthConfig
+	requestID        RequestIDConfig
+	requestSanitizer RequestSanitizerConfig
+	ipFilter         IPFilterConfig
+	hash             hashConfig
 }
 
 type uploadConfig struct {
@@ -160,13 +169,68 @@ func (r *Regius) New(rootPath string) error {
 	r.Version = version
 	r.RootPath = rootPath
 	r.Mail = r.createMailer()
-	r.Routes = r.routes().(*chi.Mux)
 
 	exploded := strings.Split(os.Getenv("ALLOWED_FILETYPES"), ",")
 	var allowedTypes []string
 	for _, at := range exploded {
 		allowedTypes = append(allowedTypes, strings.TrimSpace(at))
 	}
+
+	corsEnabled := true
+	if os.Getenv("CORS_ENABLED") != "" {
+		corsEnabled, _ = strconv.ParseBool(os.Getenv("CORS_ENABLED"))
+	}
+	corsMaxAge, _ := strconv.Atoi(os.Getenv("CORS_MAX_AGE"))
+	if corsMaxAge == 0 {
+		corsMaxAge = 300
+	}
+	corsCredentials := true
+	if os.Getenv("CORS_ALLOW_CREDENTIALS") != "" {
+		corsCredentials, _ = strconv.ParseBool(os.Getenv("CORS_ALLOW_CREDENTIALS"))
+	}
+	corsDebug, _ := strconv.ParseBool(os.Getenv("CORS_DEBUG"))
+	corsPassthrough, _ := strconv.ParseBool(os.Getenv("CORS_OPTIONS_PASSTHROUGH"))
+
+	securityHeadersEnabled := false
+	if os.Getenv("SECURITY_HEADERS_ENABLED") != "" {
+		securityHeadersEnabled, _ = strconv.ParseBool(os.Getenv("SECURITY_HEADERS_ENABLED"))
+	}
+	hstsMaxAge, _ := strconv.Atoi(os.Getenv("HSTS_MAX_AGE"))
+	hstsIncludeSubDomains := true
+	if os.Getenv("HSTS_INCLUDE_SUBDOMAINS") != "" {
+		hstsIncludeSubDomains, _ = strconv.ParseBool(os.Getenv("HSTS_INCLUDE_SUBDOMAINS"))
+	}
+	hstsPreload, _ := strconv.ParseBool(os.Getenv("HSTS_PRELOAD"))
+
+	apiKeyAuthEnabled := false
+	if os.Getenv("API_KEY_AUTH_ENABLED") != "" {
+		apiKeyAuthEnabled, _ = strconv.ParseBool(os.Getenv("API_KEY_AUTH_ENABLED"))
+	}
+
+	requestIDEnabled := true
+	if os.Getenv("REQUEST_ID_ENABLED") != "" {
+		requestIDEnabled, _ = strconv.ParseBool(os.Getenv("REQUEST_ID_ENABLED"))
+	}
+
+	requestSanitizerEnabled := false
+	if os.Getenv("REQUEST_SANITIZATION_ENABLED") != "" {
+		requestSanitizerEnabled, _ = strconv.ParseBool(os.Getenv("REQUEST_SANITIZATION_ENABLED"))
+	}
+	requestSanitizerQuery := true
+	if v := os.Getenv("REQUEST_SANITIZATION_QUERY"); v != "" {
+		requestSanitizerQuery, _ = strconv.ParseBool(v)
+	}
+	requestSanitizerForm := true
+	if v := os.Getenv("REQUEST_SANITIZATION_FORM"); v != "" {
+		requestSanitizerForm, _ = strconv.ParseBool(v)
+	}
+
+	ipFilterEnabled := false
+	if os.Getenv("IP_FILTER_ENABLED") != "" {
+		ipFilterEnabled, _ = strconv.ParseBool(os.Getenv("IP_FILTER_ENABLED"))
+	}
+	ipFilterTrustProxy, _ := strconv.ParseBool(os.Getenv("IP_FILTER_TRUST_PROXY"))
+	ipFilterStatusCode, _ := strconv.Atoi(os.Getenv("IP_FILTER_STATUS_CODE"))
 
 	r.config = config{
 		port:     os.Getenv("PORT"),
@@ -191,7 +255,65 @@ func (r *Regius) New(rootPath string) error {
 		uploads: uploadConfig{
 			allowedTypes: allowedTypes,
 		},
+		cors: CORSConfig{
+			Enabled:            corsEnabled,
+			AllowedOrigins:     parseStringSliceEnv("CORS_ALLOWED_ORIGINS", "*"),
+			AllowedMethods:     parseStringSliceEnv("CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS,PATCH,HEAD"),
+			AllowedHeaders:     parseStringSliceEnv("CORS_ALLOWED_HEADERS", "Accept,Authorization,Content-Type,X-CSRF-Token"),
+			ExposedHeaders:     parseStringSliceEnv("CORS_EXPOSED_HEADERS", ""),
+			MaxAge:             corsMaxAge,
+			AllowCredentials:   corsCredentials,
+			OptionsPassthrough: corsPassthrough,
+			Debug:              corsDebug,
+		},
+		securityHeaders: SecurityHeadersConfig{
+			Enabled:                       securityHeadersEnabled,
+			ContentSecurityPolicy:         os.Getenv("CONTENT_SECURITY_POLICY"),
+			HSTSMaxAge:                    hstsMaxAge,
+			HSTSIncludeSubDomains:         hstsIncludeSubDomains,
+			HSTSPreload:                   hstsPreload,
+			ReferrerPolicy:                os.Getenv("REFERRER_POLICY"),
+			XFrameOptions:                 os.Getenv("X_FRAME_OPTIONS"),
+			XPermittedCrossDomainPolicies: os.Getenv("X_PERMITTED_CROSS_DOMAIN_POLICIES"),
+			CrossOriginOpenerPolicy:       os.Getenv("CROSS_ORIGIN_OPENER_POLICY"),
+			CrossOriginResourcePolicy:     os.Getenv("CROSS_ORIGIN_RESOURCE_POLICY"),
+			XDNSPrefetchControl:           os.Getenv("X_DNS_PREFETCH_CONTROL"),
+		},
+		apiKeyAuth: APIKeyAuthConfig{
+			Enabled:    apiKeyAuthEnabled,
+			Keys:       parseStringSliceEnv("API_KEYS", ""),
+			Header:     os.Getenv("API_KEY_HEADER"),
+			Scheme:     os.Getenv("API_KEY_SCHEME"),
+			AltHeader:  os.Getenv("API_KEY_ALT_HEADER"),
+			QueryParam: os.Getenv("API_KEY_QUERY_PARAM"),
+			Realm:      os.Getenv("API_KEY_REALM"),
+		},
+		requestID: RequestIDConfig{
+			Enabled:        requestIDEnabled,
+			Header:         os.Getenv("REQUEST_ID_HEADER"),
+			ResponseHeader: os.Getenv("REQUEST_ID_RESPONSE_HEADER"),
+			Format:         os.Getenv("REQUEST_ID_FORMAT"),
+		},
+		requestSanitizer: RequestSanitizerConfig{
+			Enabled: requestSanitizerEnabled,
+			Policy:  os.Getenv("REQUEST_SANITIZATION_POLICY"),
+			Query:   BoolPtr(requestSanitizerQuery),
+			Form:    BoolPtr(requestSanitizerForm),
+			Headers: parseStringSliceEnv("REQUEST_SANITIZATION_HEADERS", "Referer,User-Agent"),
+			Exempt:  os.Getenv("REQUEST_SANITIZATION_EXEMPT"),
+		},
+		ipFilter: IPFilterConfig{
+			Enabled:    ipFilterEnabled,
+			Allow:      parseStringSliceEnv("IP_FILTER_ALLOW", ""),
+			Deny:       parseStringSliceEnv("IP_FILTER_DENY", ""),
+			TrustProxy: ipFilterTrustProxy,
+			StatusCode: ipFilterStatusCode,
+			Message:    os.Getenv("IP_FILTER_MESSAGE"),
+		},
+		hash: r.createHashConfig(),
 	}
+
+	r.Routes = r.routes().(*chi.Mux)
 
 	secure := true
 	if strings.ToLower(os.Getenv("SECURE")) == "false" {
@@ -221,6 +343,7 @@ func (r *Regius) New(rootPath string) error {
 
 	r.Session = sess.InitSession()
 	r.EncryptionKey = os.Getenv("KEY")
+	r.Hash = r.createHasher()
 
 	if r.Debug {
 		views := jet.NewSet(
@@ -283,6 +406,41 @@ func (r *Regius) createRenderer() {
 	}
 
 	r.Render = &myrenderer
+}
+
+func (r *Regius) createHashConfig() hashConfig {
+	cost, _ := strconv.Atoi(os.Getenv("HASH_COST"))
+	scryptN, _ := strconv.Atoi(os.Getenv("HASH_SCRYPT_N"))
+	scryptR, _ := strconv.Atoi(os.Getenv("HASH_SCRYPT_R"))
+	scryptP, _ := strconv.Atoi(os.Getenv("HASH_SCRYPT_P"))
+
+	argon2Memory, _ := strconv.ParseUint(os.Getenv("HASH_ARGON2_MEMORY"), 10, 32)
+	argon2Iterations, _ := strconv.ParseUint(os.Getenv("HASH_ARGON2_ITERATIONS"), 10, 32)
+	argon2Parallelism, _ := strconv.ParseUint(os.Getenv("HASH_ARGON2_PARALLELISM"), 10, 8)
+
+	return hashConfig{
+		algorithm:         os.Getenv("HASH_ALGORITHM"),
+		cost:              cost,
+		scryptN:           scryptN,
+		scryptR:           scryptR,
+		scryptP:           scryptP,
+		argon2Memory:      uint32(argon2Memory),
+		argon2Iterations:  uint32(argon2Iterations),
+		argon2Parallelism: uint8(argon2Parallelism),
+	}
+}
+
+func (r *Regius) createHasher() hash.Hasher {
+	return hash.New(hash.Config{
+		Algorithm:         r.config.hash.algorithm,
+		Cost:              r.config.hash.cost,
+		ScryptN:           r.config.hash.scryptN,
+		ScryptR:           r.config.hash.scryptR,
+		ScryptP:           r.config.hash.scryptP,
+		Argon2Memory:      r.config.hash.argon2Memory,
+		Argon2Iterations:  r.config.hash.argon2Iterations,
+		Argon2Parallelism: r.config.hash.argon2Parallelism,
+	})
 }
 
 func (r *Regius) createMailer() mailer.Mail {
@@ -349,6 +507,25 @@ func (r *Regius) createBadgerConn() *badger.DB {
 	}
 
 	return db
+}
+
+func parseStringSliceEnv(key, defaultValue string) []string {
+	val := os.Getenv(key)
+	if val == "" {
+		val = defaultValue
+	}
+	if val == "" {
+		return []string{}
+	}
+	parts := strings.Split(val, ",")
+	var result []string
+	for _, p := range parts {
+		s := strings.TrimSpace(p)
+		if s != "" {
+			result = append(result, s)
+		}
+	}
+	return result
 }
 
 func (r *Regius) BuildDSN() string {

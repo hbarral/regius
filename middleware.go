@@ -2,6 +2,7 @@ package regius
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -61,3 +62,30 @@ func (r *Regius) CheckForMaintenanceMode(next http.Handler) http.Handler {
 }
 
 // Rate limiter is available as r.RateLimiter(config) - see ratelimiter.go for details
+// API key auth is available as r.APIKeyAuth(config) - see apikeyauth.go for details
+
+// clientIPAddress extracts the client IP from the request. When trustProxy is
+// true, it reads the first IP from the X-Forwarded-For header (or X-Real-IP)
+// — only enable this behind a trusted reverse proxy. Otherwise it uses
+// net.SplitHostPort on RemoteAddr, which correctly handles IPv6 addresses of
+// the form [::1]:1234 (returning ::1, not the bracketed form).
+func clientIPAddress(req *http.Request, trustProxy bool) string {
+	if trustProxy {
+		if xff := req.Header.Get("X-Forwarded-For"); xff != "" {
+			// X-Forwarded-For may be a comma-separated list; the first entry
+			// is the original client.
+			if idx := strings.IndexByte(xff, ','); idx >= 0 {
+				xff = xff[:idx]
+			}
+			return strings.TrimSpace(xff)
+		}
+		if xri := req.Header.Get("X-Real-IP"); xri != "" {
+			return strings.TrimSpace(xri)
+		}
+	}
+	host, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		return req.RemoteAddr
+	}
+	return host
+}

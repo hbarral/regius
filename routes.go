@@ -11,9 +11,15 @@ import (
 
 func (r *Regius) routes() http.Handler {
 	mux := chi.NewRouter()
-	mux.Use(middleware.RequestID)
+	mux.Use(r.RequestID(r.config.requestID))
 	mux.Use(middleware.RealIP)
+	mux.Use(r.IPFilter(r.config.ipFilter))
 
+	if r.config.cors.Enabled {
+		mux.Use(r.CORS(r.config.cors))
+	}
+
+	mux.Use(r.SecurityHeaders(r.config.securityHeaders))
 	if r.Debug {
 		mux.Use(middleware.Logger)
 	}
@@ -23,6 +29,7 @@ func (r *Regius) routes() http.Handler {
 	mux.Use(r.NoSurf)
 	maxSize, _ := strconv.ParseInt(os.Getenv("MAX_FILESIZE"), 10, 64)
 	mux.Use(r.MaxRequestSize(maxSize))
+	mux.Use(r.RequestSanitizer(r.config.requestSanitizer))
 	mux.Use(r.CheckForMaintenanceMode)
 
 	return mux
