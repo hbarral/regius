@@ -118,7 +118,7 @@ func (r *Regius) New(rootPath string) error {
 
 	err = r.checkDotEnv(rootPath)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	err = godotenv.Load(rootPath + "/.env")
@@ -131,8 +131,7 @@ func (r *Regius) New(rootPath string) error {
 	if os.Getenv("DATABASE_TYPE") != "" {
 		db, err := r.OpenDB(os.Getenv("DATABASE_TYPE"), r.BuildDSN())
 		if err != nil {
-			errorLog.Println(err)
-			os.Exit(1)
+			return fmt.Errorf("failed to connect to database: %w", err)
 		}
 
 		r.DB = Database{

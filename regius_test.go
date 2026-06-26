@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -132,8 +133,7 @@ func TestBuildDSN_EmptyType(t *testing.T) {
 
 func TestBuildDSN_UnsupportedType(t *testing.T) {
 	// TODO: bug — BuildDSN only supports postgres; mysql falls through to the
-	// empty default case. Pinned here so the gap is visible. See
-	// things_to_improve.md "Migration: BuildDSN only supports PostgreSQL".
+	// empty default case. Pinned here so the gap is visible.
 	t.Setenv("DATABASE_TYPE", "mysql")
 	r := &Regius{}
 	assert.Empty(t, r.BuildDSN())
@@ -350,4 +350,113 @@ func TestCheckDotEnv_NonexistentDir_ReturnsError(t *testing.T) {
 
 	_, statErr := os.Stat(filepath.Join(missing, ".env"))
 	assert.Error(t, statErr, "no .env should have been created")
+}
+
+// TestNew_MinimalSuccess boots a Regius instance with no external services
+// (no database, no cache, cookie session). It verifies the bootstrap wires the
+// core fields without panicking.
+//
+// Note: New() starts a goroutine r.Mail.ListenForMail() which blocks on the
+// Jobs channel forever; this is an intentional, benign leak for the test.
+func TestNew_MinimalSuccess(t *testing.T) {
+	// Ensure no external services are required.
+	t.Setenv("DATABASE_TYPE", "")
+	t.Setenv("CACHE", "")
+	t.Setenv("SESSION_TYPE", "")
+
+	root := t.TempDir()
+	r := &Regius{}
+
+	err := r.New(root)
+
+	require.NoError(t, err)
+	assert.Equal(t, root, r.RootPath)
+	assert.NotEmpty(t, r.Version)
+	assert.NotNil(t, r.Routes)
+	assert.NotNil(t, r.Session)
+	assert.NotNil(t, r.Render)
+	assert.NotNil(t, r.Mail.Jobs)
+}
+
+// TestNew_DatabaseFailure_ReturnsError verifies the refactor: a DB connection
+// failure now returns an error instead of calling os.Exit(1).
+func TestNew_DatabaseFailure_ReturnsError(t *testing.T) {
+	t.Setenv("DATABASE_TYPE", "postgres")
+	// Port 1 -> connection refused immediately, no live DB needed.
+	t.Setenv("DATABASE_HOST", "localhost")
+	t.Setenv("DATABASE_PORT", "1")
+	t.Setenv("DATABASE_USER", "")
+	t.Setenv("DATABASE_NAME", "")
+	t.Setenv("DATABASE_SSL_MODE", "disable")
+	t.Setenv("DATABASE_PASS", "")
+
+	root := t.TempDir()
+	r := &Regius{}
+
+	err := r.New(root)
+
+	require.Error(t, err, "New must return an error instead of os.Exit on DB failure")
+	assert.Contains(t, err.Error(), "database")
+}
+
+func TestCreateRedisPool_Miniredis(t *testing.T) {
+	s, err := miniredis.Run()
+	require.NoError(t, err)
+	defer s.Close()
+
+	r := &Regius{}
+	r.config.redis.host = s.Addr()
+
+	pool := r.createRedisPool()
+	require.NotNil(t, pool)
+	defer pool.Close()
+
+	conn := pool.Get()
+	defer conn.Close()
+
+	_, err = conn.Do("PING")
+	assert.NoError(t, err)
+}
+
+func TestCreateClientRedisCache_Miniredis(t *testing.T) {
+	s, err := miniredis.Run()
+	require.NoError(t, err)
+	defer s.Close()
+
+	r := &Regius{}
+	r.config.redis.host = s.Addr()
+	r.config.redis.prefix = "regius:"
+
+	c := r.createClientRedisCache()
+	require.NotNil(t, c)
+	defer c.Conn.Close()
+
+	conn := c.Conn.Get()
+	defer conn.Close()
+
+	_, err = conn.Do("PING")
+	assert.NoError(t, err)
+}
+
+func TestCreateBadgerConn(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "tmp"), 0755))
+
+	r := &Regius{RootPath: root}
+	db := r.createBadgerConn()
+
+	require.NotNil(t, db)
+	defer db.Close()
+}
+
+func TestCreateClientBadgerCache(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "tmp"), 0755))
+
+	r := &Regius{RootPath: root}
+	c := r.createClientBadgerCache()
+
+	require.NotNil(t, c)
+	require.NotNil(t, c.Conn)
+	defer c.Conn.Close()
 }
