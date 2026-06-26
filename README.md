@@ -5,7 +5,7 @@
            margin-left: auto;
            margin-right: auto;
            width: 40%;"
-    src="dist/regius-app/public/images/regius.png" 
+    src="regius.png" 
     alt="Regius Logo">
 </img>
 
