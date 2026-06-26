@@ -1,13 +1,8 @@
 # Regius
 
-<img
-    style="display: block; 
-           margin-left: auto;
-           margin-right: auto;
-           width: 40%;"
-    src="regius.png" 
-    alt="Regius Logo">
-</img>
+<p align="center">
+  <img src="regius.png" alt="Regius Logo" width="40%">
+</p>
 
 Regius is a CLI application for building web pages, inspired by Laravel but built with Go. It offers tools for database migrations and code generation, providing an agile and organized development experience.
 
