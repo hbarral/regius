@@ -486,9 +486,9 @@ regius migrate --help
 
 Download the suitable binary for your operating system from the links below:
 
-- [Linux](https://github.com/hbarral/regius/releases/download/v1.5.0/regius_Linux_x86_64.tar.gz)
-- [Windows](https://github.com/hbarral/regius/releases/download/v1.5.0/regius_Windows_x86_64.zip)
-- [Mac](https://github.com/hbarral/regius/releases/download/v1.5.0/regius_Darwin_x86_64.tar.gz)
+- [Linux](https://github.com/hbarral/regius/releases/download/v1.7.0/regius_Linux_x86_64.tar.gz)
+- [Windows](https://github.com/hbarral/regius/releases/download/v1.7.0/regius_Windows_x86_64.zip)
+- [Mac](https://github.com/hbarral/regius/releases/download/v1.7.0/regius_Darwin_x86_64.tar.gz)
 
 <details>
   <summary>Build from Source</summary>
