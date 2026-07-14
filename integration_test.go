@@ -5,8 +5,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -114,4 +117,160 @@ func TestIntegration_MaintenanceMode(t *testing.T) {
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 	assert.Equal(t, "300", resp.Header.Get("Retry-After"))
+}
+
+func TestIntegration_IPFilter_Allow(t *testing.T) {
+	r := newTestApp(t, map[string]string{
+		"IP_FILTER_ENABLED": "true",
+		"IP_FILTER_ALLOW":   "127.0.0.1/32",
+	})
+	r.Routes.Get("/", func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	ts := httptest.NewServer(r.Routes)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestIntegration_IPFilter_Deny(t *testing.T) {
+	r := newTestApp(t, map[string]string{
+		"IP_FILTER_ENABLED": "true",
+		"IP_FILTER_DENY":    "127.0.0.1/32",
+	})
+	r.Routes.Get("/", func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	ts := httptest.NewServer(r.Routes)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+}
+
+func TestIntegration_RequestSanitizer(t *testing.T) {
+	r := newTestApp(t, map[string]string{
+		"REQUEST_SANITIZATION_ENABLED": "true",
+	})
+
+	var sanitized string
+	r.Routes.Get("/", func(w http.ResponseWriter, req *http.Request) {
+		sanitized = req.URL.Query().Get("input")
+		w.WriteHeader(http.StatusOK)
+	})
+
+	ts := httptest.NewServer(r.Routes)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/?input=<script>alert(1)</script>hello")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "hello", sanitized)
+}
+
+func TestIntegration_CORS(t *testing.T) {
+	r := newTestApp(t, map[string]string{
+		"CORS_ENABLED": "true",
+	})
+	r.Routes.Get("/", func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	ts := httptest.NewServer(r.Routes)
+	defer ts.Close()
+
+	req, err := http.NewRequest(http.MethodOptions, ts.URL+"/", nil)
+	require.NoError(t, err)
+	req.Header.Set("Origin", "http://example.com")
+	req.Header.Set("Access-Control-Request-Method", "GET")
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "*", resp.Header.Get("Access-Control-Allow-Origin"))
+	assert.NotEmpty(t, resp.Header.Get("Access-Control-Allow-Methods"))
+}
+
+func TestIntegration_RateLimiter(t *testing.T) {
+	r := newTestApp(t, nil)
+	r.Routes.With(r.RateLimiter(RateLimiterConfig{
+		Enabled:   true,
+		Algorithm: RateLimiterAlgorithmTokenBucket,
+		Requests:  1,
+		Window:    time.Minute,
+		Storage:   "memory",
+	})).Get("/api", func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	ts := httptest.NewServer(r.Routes)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "1", resp.Header.Get("X-RateLimit-Limit"))
+	resp.Body.Close()
+
+	resp, err = http.Get(ts.URL + "/api")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+	assert.Equal(t, "1", resp.Header.Get("X-RateLimit-Limit"))
+	assert.NotEmpty(t, resp.Header.Get("Retry-After"))
+}
+
+func TestIntegration_APIKeyAuth(t *testing.T) {
+	r := newTestApp(t, map[string]string{
+		"API_KEY_AUTH_ENABLED": "true",
+		"API_KEYS":             "secret-key",
+	})
+
+	r.Routes.Route("/api", func(api chi.Router) {
+		api.Use(r.APIKeyAuth(r.APIKeyAuthCfg()))
+		api.Get("/", func(w http.ResponseWriter, req *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+	})
+
+	ts := httptest.NewServer(r.Routes)
+	defer ts.Close()
+
+	// Missing key.
+	resp, err := http.Get(ts.URL + "/api/")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	assert.True(t, strings.Contains(resp.Header.Get("WWW-Authenticate"), "Bearer"))
+	resp.Body.Close()
+
+	// Invalid key.
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/api/", nil)
+	require.NoError(t, err)
+	req.Header.Set("X-API-Key", "wrong-key")
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	resp.Body.Close()
+
+	// Valid key via X-API-Key.
+	req, err = http.NewRequest(http.MethodGet, ts.URL+"/api/", nil)
+	require.NoError(t, err)
+	req.Header.Set("X-API-Key", "secret-key")
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
