@@ -84,3 +84,28 @@ func TestExpired_NegativeMinutes(t *testing.T) {
 
 	assert.True(t, s.Expired(token, -1))
 }
+
+func BenchmarkGenerateTokenFromString(b *testing.B) {
+	s := &Signer{Secret: []byte("super-secret-key")}
+	for i := 0; i < b.N; i++ {
+		_ = s.GenerateTokenFromString("https://example.com/path?foo=bar")
+	}
+}
+
+func BenchmarkVerifyToken(b *testing.B) {
+	s := &Signer{Secret: []byte("super-secret-key")}
+	token := s.GenerateTokenFromString("https://example.com/path?foo=bar")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = s.VerifyToken(token)
+	}
+}
+
+func BenchmarkExpired(b *testing.B) {
+	s := &Signer{Secret: []byte("super-secret-key")}
+	token := s.GenerateTokenFromString("https://example.com/path?foo=bar")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = s.Expired(token, 60)
+	}
+}
