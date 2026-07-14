@@ -35,12 +35,13 @@ func newTestApp(t *testing.T, envOverrides map[string]string) *Regius {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "public", "maintenance.html"), []byte("<html>maintenance</html>"), 0644))
 
 	baseEnv := map[string]string{
-		"APP_NAME":    "TestApp",
-		"APP_URL":     "http://localhost:4000",
-		"DEBUG":       "true",
-		"PORT":        "4000",
-		"SERVER_NAME": "localhost",
-		"SECURE":      "false",
+		"APP_NAME":     "TestApp",
+		"APP_URL":      "http://localhost:4000",
+		"DEBUG":        "true",
+		"PORT":         "4000",
+		"SERVER_NAME":  "localhost",
+		"SECURE":       "false",
+		"MAX_FILESIZE": "10485760",
 	}
 	for k, v := range baseEnv {
 		t.Setenv(k, v)
