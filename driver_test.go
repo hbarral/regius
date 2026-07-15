@@ -1,3 +1,4 @@
+package regius
 
 import (
 	"path/filepath"
@@ -187,6 +188,68 @@ func TestBuildDSN_Unsupported(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported database type")
+}
+
+func TestBuildReadDSN_NoConfig(t *testing.T) {
+	t.Setenv("DATABASE_TYPE", "postgres")
+	t.Setenv("DATABASE_HOST", "mainhost")
+
+	r := &Regius{}
+	dsn, err := r.BuildReadDSN()
+
+	require.NoError(t, err)
+	assert.Empty(t, dsn)
+}
+
+func TestBuildReadDSN_FromHost(t *testing.T) {
+	t.Setenv("DATABASE_TYPE", "postgres")
+	t.Setenv("DATABASE_HOST", "mainhost")
+	t.Setenv("DATABASE_PORT", "5432")
+	t.Setenv("DATABASE_USER", "mainuser")
+	t.Setenv("DATABASE_NAME", "maindb")
+	t.Setenv("DATABASE_SSL_MODE", "disable")
+	t.Setenv("DATABASE_READ_HOST", "readhost")
+
+	r := &Regius{}
+	dsn, err := r.BuildReadDSN()
+
+	require.NoError(t, err)
+	assert.Contains(t, dsn, "host=readhost")
+	assert.Contains(t, dsn, "port=5432")
+	assert.Contains(t, dsn, "user=mainuser")
+	assert.Contains(t, dsn, "dbname=maindb")
+	assert.Contains(t, dsn, "sslmode=disable")
+}
+
+func TestBuildReadDSN_Overrides(t *testing.T) {
+	t.Setenv("DATABASE_TYPE", "mysql")
+	t.Setenv("DATABASE_HOST", "mainhost")
+	t.Setenv("DATABASE_PORT", "3306")
+	t.Setenv("DATABASE_USER", "mainuser")
+	t.Setenv("DATABASE_PASS", "mainpass")
+	t.Setenv("DATABASE_NAME", "maindb")
+	t.Setenv("DATABASE_READ_HOST", "readhost")
+	t.Setenv("DATABASE_READ_PORT", "3307")
+	t.Setenv("DATABASE_READ_USER", "readuser")
+	t.Setenv("DATABASE_READ_PASS", "readpass")
+	t.Setenv("DATABASE_READ_NAME", "readdb")
+
+	r := &Regius{}
+	dsn, err := r.BuildReadDSN()
+
+	require.NoError(t, err)
+	assert.Equal(t, "readuser:readpass@tcp(readhost:3307)/readdb?parseTime=true&multiStatements=true&loc=UTC", dsn)
+}
+
+func TestBuildReadDSN_ExplicitDSN(t *testing.T) {
+	t.Setenv("DATABASE_TYPE", "postgres")
+	t.Setenv("DATABASE_READ_DSN", "postgres://readuser:readpass@readhost/appdb?sslmode=disable")
+
+	r := &Regius{}
+	dsn, err := r.BuildReadDSN()
+
+	require.NoError(t, err)
+	assert.Equal(t, "postgres://readuser:readpass@readhost/appdb?sslmode=disable", dsn)
 }
 
 func TestOpenDB_UnknownDriver(t *testing.T) {

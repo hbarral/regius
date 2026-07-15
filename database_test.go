@@ -160,3 +160,87 @@ func TestRegius_Transaction(t *testing.T) {
 	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM test WHERE name = ?", "via-regius").Scan(&count))
 	assert.Equal(t, 1, count)
 }
+
+func TestDatabase_Reader_Writer_Default(t *testing.T) {
+	db := openSQLiteDB(t)
+	d := &Database{Pool: db, WritePool: db, ReadPool: db}
+
+	assert.Equal(t, db, d.Reader())
+	assert.Equal(t, db, d.Writer())
+}
+
+func TestDatabase_Reader_Writer_Split(t *testing.T) {
+	writeDB := openSQLiteDB(t)
+	readDB := openSQLiteDB(t)
+	d := &Database{Pool: writeDB, WritePool: writeDB, ReadPool: readDB}
+
+	assert.Equal(t, readDB, d.Reader())
+	assert.Equal(t, writeDB, d.Writer())
+}
+
+func TestDatabase_Reader_FallsBackToPool(t *testing.T) {
+	db := openSQLiteDB(t)
+	d := &Database{Pool: db, WritePool: db}
+
+	assert.Equal(t, db, d.Reader())
+}
+
+func TestDatabase_Writer_FallsBackToPool(t *testing.T) {
+	db := openSQLiteDB(t)
+	d := &Database{Pool: db, ReadPool: db}
+
+	assert.Equal(t, db, d.Writer())
+}
+
+func TestDatabase_Transaction_UsesWriter(t *testing.T) {
+	writeDB := openSQLiteDB(t)
+	readDB := openSQLiteDB(t)
+
+	_, err := writeDB.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+
+	d := &Database{Pool: writeDB, WritePool: writeDB, ReadPool: readDB}
+
+	err = d.Transaction(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec("INSERT INTO test (name) VALUES (?)", "writer")
+		return err
+	})
+	require.NoError(t, err)
+
+	var count int
+	require.NoError(t, writeDB.QueryRow("SELECT COUNT(*) FROM test WHERE name = ?", "writer").Scan(&count))
+	assert.Equal(t, 1, count)
+}
+
+func TestDatabase_ConfigurePool_ReadPool(t *testing.T) {
+	t.Setenv("DATABASE_MAX_OPEN_CONNS", "10")
+
+	mainDB := openSQLiteDB(t)
+	readDB := openSQLiteDB(t)
+	d := &Database{Pool: mainDB, WritePool: mainDB, ReadPool: readDB}
+
+	require.NoError(t, d.ConfigurePool())
+
+	assert.Equal(t, 10, readDB.Stats().MaxOpenConnections)
+}
+
+func TestDatabase_HealthCheck_ReadPool(t *testing.T) {
+	mainDB := openSQLiteDB(t)
+	readDB := openSQLiteDB(t)
+	d := &Database{Pool: mainDB, WritePool: mainDB, ReadPool: readDB}
+
+	assert.NoError(t, d.HealthCheck(context.Background()))
+}
+
+func TestDatabase_HealthCheck_ReadPoolFails(t *testing.T) {
+	mainDB := openSQLiteDB(t)
+	readDB, err := sql.Open("sqlite3", "file::memory:?cache=shared")
+	require.NoError(t, err)
+	require.NoError(t, readDB.Close())
+
+	d := &Database{Pool: mainDB, WritePool: mainDB, ReadPool: readDB}
+
+	err = d.HealthCheck(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "read replica")
+}

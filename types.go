@@ -23,8 +23,10 @@ type databaseConfig struct {
 }
 
 type Database struct {
-	DataType string
-	Pool     *sql.DB
+	DataType  string
+	Pool      *sql.DB
+	ReadPool  *sql.DB
+	WritePool *sql.DB
 }
 
 type Encryption struct {

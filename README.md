@@ -62,6 +62,7 @@ Regius includes a unified database layer that works out of the box with PostgreS
 - **Connection pool tuning**: Configure max open, max idle, and connection lifetime via environment variables.
 - **Health checks**: `Database.HealthCheck(ctx)` verifies the database is reachable and responds to a ping.
 - **Transaction helper**: `Regius.Transaction(ctx, func(*sql.Tx) error)` runs a block inside a transaction and handles commit/rollback automatically.
+- **Read/write splitting**: Configure a read replica via `DATABASE_READ_*` environment variables (or `DATABASE_READ_DSN`) and use `app.DB.Reader()` and `app.DB.Writer()` to route queries. Disabled by default.
 - **Query logging**: Enable `DATABASE_QUERY_LOGGING=true` to log every SQL statement with timing and error details through a transparent database/sql driver wrapper.
 
 **Configuration Options:**
@@ -92,6 +93,12 @@ if err := app.DB.HealthCheck(r.Context()); err != nil {
     http.Error(w, "database unavailable", http.StatusServiceUnavailable)
     return
 }
+
+// Route reads to the read replica (or main pool when not configured)
+rows, err := app.DB.Reader().QueryContext(r.Context(), "SELECT id, email FROM users")
+
+// Route writes to the write pool
+_, err = app.DB.Writer().ExecContext(r.Context(), "UPDATE users SET last_login = ? WHERE id = ?", now, id)
 
 // Run code in a transaction
 err := app.Transaction(r.Context(), func(tx *sql.Tx) error {

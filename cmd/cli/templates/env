@@ -79,6 +79,15 @@ DATABASE_SSL_MODE=
 # DATABASE_CONN_MAX_LIFETIME=15m
 # DATABASE_QUERY_LOGGING=true
 
+# read replica configuration (optional). When unset, reads use the main pool.
+# DATABASE_READ_DSN=postgres://reader:secret@read-host/appdb?sslmode=disable
+# DATABASE_READ_HOST=
+# DATABASE_READ_PORT=
+# DATABASE_READ_USER=
+# DATABASE_READ_PASS=
+# DATABASE_READ_NAME=
+# DATABASE_READ_SSL_MODE=
+
 # minio settings
 MINIO_ENDPOINT=
 MINIO_KEY=
