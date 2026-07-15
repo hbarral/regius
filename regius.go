@@ -3,7 +3,10 @@ package regius
 import (
 	"fmt"
 	"log"
+	"net"
+	"net/rpc"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -116,7 +119,7 @@ func (r *Regius) New(rootPath string) error {
 
 	err = r.checkDotEnv(rootPath)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	err = godotenv.Load(rootPath + "/.env")
@@ -127,7 +130,13 @@ func (r *Regius) New(rootPath string) error {
 	infoLog, errorLog := r.startLoggers()
 
 	if os.Getenv("DATABASE_TYPE") != "" {
-		db, err := r.OpenDB(os.Getenv("DATABASE_TYPE"), r.BuildDSN())
+		dsn, err := r.BuildDSN()
+		if err != nil {
+			return fmt.Errorf("failed to build database DSN: %w", err)
+		}
+		r.config.database.dsn = dsn
+
+		db, err := r.OpenDB(os.Getenv("DATABASE_TYPE"), dsn)
 		if err != nil {
 			return fmt.Errorf("failed to connect to database: %w", err)
 		}
@@ -242,7 +251,7 @@ func (r *Regius) New(rootPath string) error {
 		sessionType: os.Getenv("SESSION_TYPE"),
 		database: databaseConfig{
 			database: os.Getenv("DATABASE_TYPE"),
-			dsn:      r.BuildDSN(),
+			dsn:      "",
 		},
 		redis: redisConfig{
 			host:     os.Getenv("REDIS_HOST"),
@@ -538,12 +547,36 @@ func (r *Regius) BuildDSN() string {
 			os.Getenv("DATABASE_NAME"),
 			os.Getenv("DATABASE_SSL_MODE"),
 		)
-
-		if os.Getenv("DATABASE_PASS") != "" {
-			dsn = fmt.Sprintf("%s password=%s", dsn, os.Getenv("DATABASE_PASS"))
+		if pass := os.Getenv("DATABASE_PASS"); pass != "" {
+			dsn = fmt.Sprintf("%s password=%s", dsn, pass)
 		}
-	default:
+		return dsn, nil
 
+	case "mysql", "mariadb":
+		return fmt.Sprintf(
+			"%s:%s@tcp(%s:%s)/%s?parseTime=true&multiStatements=true&loc=UTC",
+			os.Getenv("DATABASE_USER"),
+			os.Getenv("DATABASE_PASS"),
+			os.Getenv("DATABASE_HOST"),
+			os.Getenv("DATABASE_PORT"),
+			os.Getenv("DATABASE_NAME"),
+		), nil
+
+	case "sqlite", "sqlite3":
+		name := os.Getenv("DATABASE_NAME")
+		if name == "" {
+			name = "regius"
+		}
+		if name == ":memory:" {
+			return "file::memory:?cache=shared", nil
+		}
+		if !filepath.IsAbs(name) {
+			name = filepath.Join(r.RootPath, "data", name+".db")
+		}
+		return fmt.Sprintf("file:%s?_foreign_keys=on", name), nil
+
+	default:
+		return "", fmt.Errorf("unsupported database type: %s", os.Getenv("DATABASE_TYPE"))
 	}
 
 	return dsn
@@ -614,4 +647,49 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 	}
 
 	return fileSystems
+}
+
+type RPCServer struct {
+	Host string
+	Port string
+}
+
+func (r *RPCServer) MaintenanceMode(inMaintenanceMode bool, resp *string) error {
+	if inMaintenanceMode {
+		maintenanceMode = true
+		*resp = "Server in maintenance mode"
+	} else {
+		maintenanceMode = false
+		*resp = "Server live!"
+	}
+	return nil
+}
+
+func (r *Regius) listenRPC() {
+	if os.Getenv("RPC_PORT") != "" {
+		port := os.Getenv("RPC_PORT")
+		r.InfoLog.Println("Starting RPC server on port " + port)
+		err := rpc.Register(new(RPCServer))
+		if err != nil {
+			r.ErrorLog.Println(err)
+			return
+		}
+
+		listen, err := net.Listen("tcp", "127.0.0.1:"+port)
+		if err != nil {
+			r.ErrorLog.Println(err)
+			return
+		}
+
+		for {
+			rpcConn, err := listen.Accept()
+			if err != nil {
+				r.ErrorLog.Println(err)
+				continue
+			}
+
+			go rpc.ServeConn(rpcConn)
+		}
+
+	}
 }
