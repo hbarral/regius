@@ -128,6 +128,7 @@ func (r *Regius) New(rootPath string) error {
 	}
 
 	infoLog, errorLog := r.startLoggers()
+	setQueryLogLogger(infoLog)
 
 	if os.Getenv("DATABASE_TYPE") != "" {
 		dsn, err := r.BuildDSN()

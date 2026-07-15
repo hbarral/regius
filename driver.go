@@ -3,6 +3,7 @@ package regius
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -31,6 +32,11 @@ func (r *Regius) OpenDB(dbType, dsn string) (*sql.DB, error) {
 	driver, err := normalizeDBType(dbType)
 	if err != nil {
 		return nil, err
+	}
+
+	if strings.ToLower(os.Getenv("DATABASE_QUERY_LOGGING")) == "true" {
+		registerLoggingDrivers()
+		driver = loggingDriverName(driver)
 	}
 
 	db, err := sql.Open(driver, dsn)
