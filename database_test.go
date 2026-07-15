@@ -91,3 +91,72 @@ func TestDatabase_HealthCheck_ClosedPool(t *testing.T) {
 	err = d.HealthCheck(context.Background())
 	assert.Error(t, err)
 }
+
+func TestDatabase_Transaction_Commit(t *testing.T) {
+	d := &Database{Pool: openSQLiteDB(t)}
+
+	_, err := d.Pool.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+
+	err = d.Transaction(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec("INSERT INTO test (name) VALUES (?)", "committed")
+		return err
+	})
+
+	require.NoError(t, err)
+
+	var count int
+	require.NoError(t, d.Pool.QueryRow("SELECT COUNT(*) FROM test WHERE name = ?", "committed").Scan(&count))
+	assert.Equal(t, 1, count)
+}
+
+func TestDatabase_Transaction_Rollback(t *testing.T) {
+	d := &Database{Pool: openSQLiteDB(t)}
+
+	_, err := d.Pool.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+
+	err = d.Transaction(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec("INSERT INTO test (name) VALUES (?)", "rolled-back")
+		if err != nil {
+			return err
+		}
+		return assert.AnError
+	})
+
+	require.Error(t, err)
+
+	var count int
+	require.NoError(t, d.Pool.QueryRow("SELECT COUNT(*) FROM test WHERE name = ?", "rolled-back").Scan(&count))
+	assert.Equal(t, 0, count)
+}
+
+func TestDatabase_Transaction_NilPool(t *testing.T) {
+	d := &Database{}
+
+	err := d.Transaction(context.Background(), func(tx *sql.Tx) error {
+		return nil
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pool is nil")
+}
+
+func TestRegius_Transaction(t *testing.T) {
+	db := openSQLiteDB(t)
+	_, err := db.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+
+	r := &Regius{DB: Database{Pool: db}}
+
+	err = r.Transaction(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec("INSERT INTO test (name) VALUES (?)", "via-regius")
+		return err
+	})
+
+	require.NoError(t, err)
+
+	var count int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM test WHERE name = ?", "via-regius").Scan(&count))
+	assert.Equal(t, 1, count)
+}

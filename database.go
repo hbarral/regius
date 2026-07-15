@@ -2,6 +2,7 @@ package regius
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"strconv"
@@ -51,4 +52,37 @@ func (d *Database) HealthCheck(ctx context.Context) error {
 		return fmt.Errorf("database pool is nil")
 	}
 	return d.Pool.PingContext(ctx)
+}
+
+// Transaction runs the given function inside a database transaction.
+// If the function returns an error, the transaction is rolled back.
+// Otherwise, the transaction is committed.
+func (d *Database) Transaction(ctx context.Context, fn func(*sql.Tx) error) error {
+	if d.Pool == nil {
+		return fmt.Errorf("database pool is nil")
+	}
+
+	tx, err := d.Pool.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	if err := fn(tx); err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return fmt.Errorf("transaction rollback failed: %w (original error: %v)", rbErr, err)
+		}
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// Transaction runs the given function inside a database transaction using the
+// framework's configured database pool.
+func (r *Regius) Transaction(ctx context.Context, fn func(*sql.Tx) error) error {
+	return r.DB.Transaction(ctx, fn)
 }
