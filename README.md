@@ -26,7 +26,7 @@ Visit the official repository at [Regius on GitHub](https://github.com/hbarral/r
 - `regius migrate up`: Run all pending migrations.
 - `regius migrate down [steps|all]`: Reverse migrations (use "all" for all migrations).
 - `regius migrate reset`: Reset and re-run all migrations.
-- `regius migrate version`: Show the current migration version (uses `golang-migrate`; SQLite falls back to the pop migration table).
+- `regius migrate version`: Show the current migration version (uses `golang-migrate`).
 
 ### Seeding
 
@@ -37,7 +37,7 @@ Seed files are plain `.sql` files executed in a single transaction, and each is 
 
 ### Code Generation Commands
 
-- `regius make migration <name> --format=<fizz|sql>`: Create migration files (default: fizz).
+- `regius make migration <name>`: Create SQL migration files.
 - `regius make auth`: Create authentication system (tables, models, middleware, handlers, views).
 - `regius make handler <name>`: Create a handler stub.
 - `regius make model <name>`: Create a new model with proper pluralization.
@@ -49,7 +49,7 @@ Seed files are plain `.sql` files executed in a single transaction, and each is 
 ### CLI Features
 
 - **Automatic help**: `--help` flag on all commands and subcommands
-- **Flag support**: Use `--format=fizz` instead of positional arguments
+- **Flag support**: Use `--format=sql` for migration format
 - **Shell completion**: Generate autocompletion scripts for bash, zsh, fish, and PowerShell
 - **Better validation**: Improved argument validation and error messages
 - **Command aliases**: Future support for command shortcuts
@@ -124,9 +124,6 @@ _ = app.AutoMigrate(&User{}, &Post{})
 ### Examples
 
 ```bash
-# Create migration with fizz format (default)
-regius make migration create_users --format=fizz
-
 # Create migration with sql format
 regius make migration create_users --format=sql
 
@@ -864,7 +861,7 @@ Each command has different options and parameters. Here are some basic usage exa
 - Create a migration:
 
   ```bash
-  ./regius make migration create_users_table fizz
+  ./regius make migration create_users_table
   ```
 
 - Create a seed file and run it:

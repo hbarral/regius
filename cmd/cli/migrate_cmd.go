@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strconv"
-	"strings"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -24,7 +22,6 @@ var migrateCmd = &cobra.Command{
 	Short: "Manage database migrations",
 	Long:  `Run database migrations to update your database schema.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Default to "up" if no subcommand specified
 		if err := doMigrate("up", ""); err != nil {
 			exitGracefully(err)
 		}
@@ -77,28 +74,9 @@ var migrateResetCmd = &cobra.Command{
 var migrateVersionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show current migration version",
-	Long:  `Display the current database migration version using golang-migrate, falling back to pop's schema_migration table for SQLite.`,
+	Long:  `Display the current database migration version using golang-migrate.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		checkForDB()
-
-		// SQLite is handled via pop because golang-migrate's SQLite driver is
-		// not vendored in this version of the framework.
-		dbType := strings.ToLower(os.Getenv("DATABASE_TYPE"))
-		if dbType == "sqlite" || dbType == "sqlite3" {
-			tx, err := reg.PopConnect()
-			if err != nil {
-				exitGracefully(err)
-			}
-			defer tx.Close()
-
-			version, err := reg.PopMigrateVersion(tx)
-			if err != nil {
-				exitGracefully(err)
-			}
-
-			color.Yellow("Current migration version: %s (pop)", version)
-			return
-		}
 
 		dsn, err := migrationDSN()
 		if err != nil {
@@ -122,31 +100,28 @@ var migrateVersionCmd = &cobra.Command{
 func doMigrate(caseToCheck string, steps string) error {
 	checkForDB()
 
-	tx, err := reg.PopConnect()
+	dsn, err := migrationDSN()
 	if err != nil {
 		return err
 	}
-	defer tx.Close()
 
 	switch caseToCheck {
 	case "up":
-		err := reg.RunPopMigrations(tx)
-		if err != nil {
+		if err := reg.RunMigrations(dsn); err != nil {
 			return err
 		}
 	case "down":
 		if steps == "all" {
-			return reg.PopMigrateDown(tx, -1)
+			return reg.MigrateDown(dsn, -1)
 		}
 
 		stepsInt, err := strconv.Atoi(steps)
 		if err != nil {
 			return fmt.Errorf("the number of steps must be a valid integer: %w", err)
 		}
-		return reg.PopMigrateDown(tx, stepsInt)
+		return reg.MigrateDown(dsn, stepsInt)
 	case "reset":
-		err := reg.PopMigrateReset(tx)
-		if err != nil {
+		if err := reg.MigrateReset(dsn); err != nil {
 			return err
 		}
 	default:

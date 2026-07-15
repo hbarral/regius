@@ -701,22 +701,6 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 	return fileSystems
 }
 
-type RPCServer struct {
-	Host string
-	Port string
-}
-
-func (r *RPCServer) MaintenanceMode(inMaintenanceMode bool, resp *string) error {
-	if inMaintenanceMode {
-		maintenanceMode = true
-		*resp = "Server in maintenance mode"
-	} else {
-		maintenanceMode = false
-		*resp = "Server live!"
-	}
-	return nil
-}
-
 func (r *Regius) listenRPC() {
 	if os.Getenv("RPC_PORT") != "" {
 		port := os.Getenv("RPC_PORT")
