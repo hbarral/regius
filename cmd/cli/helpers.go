@@ -32,6 +32,24 @@ func getDSN() (string, error) {
 	return reg.BuildDSN()
 }
 
+// migrationDSN returns a DSN suitable for golang-migrate.
+// MySQL/MariaDB and SQLite require a protocol prefix that the raw driver DSN omits.
+func migrationDSN() (string, error) {
+	dsn, err := reg.BuildDSN()
+	if err != nil {
+		return "", err
+	}
+
+	switch strings.ToLower(os.Getenv("DATABASE_TYPE")) {
+	case "mysql", "mariadb":
+		return "mysql://" + dsn, nil
+	case "sqlite", "sqlite3":
+		return "sqlite3://" + dsn, nil
+	default:
+		return dsn, nil
+	}
+}
+
 func showHelp() {
 	color.Yellow(`Available commands:
 
@@ -41,7 +59,10 @@ func showHelp() {
   migrate                         - runs all up mirgrations that have not been run previously
   migrate down                    - reverses the most recent migration
   migrate reset                   - runs all down mirgrations in reverse order, and then all up migrations
+  migrate version                 - shows the current migration version
+  db:seed                         - runs pending SQL seed files from the seeds/ directory
   make migration <name> <format>  - creates two new up and down migrations in the migrations folder; format can be fizz or sql
+  make seed <name>                - creates a new SQL seed file in the seeds/ directory
   make auth                       - creates and runs migrations for authentication tables, and creates models and middleware
   make handler <name>             - creates a stub handler in the handlers directory
   make model <name>               - creates a new model in the data directory

@@ -26,6 +26,14 @@ Visit the official repository at [Regius on GitHub](https://github.com/hbarral/r
 - `regius migrate up`: Run all pending migrations.
 - `regius migrate down [steps|all]`: Reverse migrations (use "all" for all migrations).
 - `regius migrate reset`: Reset and re-run all migrations.
+- `regius migrate version`: Show the current migration version (uses `golang-migrate`; SQLite falls back to the pop migration table).
+
+### Seeding
+
+- `regius make seed <name>`: Create a new SQL seed file in `seeds/`.
+- `regius db:seed`: Run all pending seed files in `seeds/` (filename order), tracking executed seeds in the `regius_seeds` table.
+
+Seed files are plain `.sql` files executed in a single transaction, and each is only applied once.
 
 ### Code Generation Commands
 
@@ -44,6 +52,53 @@ Visit the official repository at [Regius on GitHub](https://github.com/hbarral/r
 - **Shell completion**: Generate autocompletion scripts for bash, zsh, fish, and PowerShell
 - **Better validation**: Improved argument validation and error messages
 - **Command aliases**: Future support for command shortcuts
+
+### Database Features
+
+Regius includes a unified database layer that works out of the box with PostgreSQL, MySQL/MariaDB, and SQLite.
+
+- **Driver alias normalization**: `postgres`/`postgresql`, `mysql`/`mariadb`, and `sqlite`/`sqlite3` are all accepted as `DATABASE_TYPE`.
+- **Multi-database DSN builder**: `BuildDSN()` produces the correct DSN for each driver without manual string concatenation.
+- **Connection pool tuning**: Configure max open, max idle, and connection lifetime via environment variables.
+- **Health checks**: `Database.HealthCheck(ctx)` verifies the database is reachable and responds to a ping.
+- **Transaction helper**: `Regius.Transaction(ctx, func(*sql.Tx) error)` runs a block inside a transaction and handles commit/rollback automatically.
+- **Query logging**: Enable `DATABASE_QUERY_LOGGING=true` to log every SQL statement with timing and error details through a transparent database/sql driver wrapper.
+
+**Configuration Options:**
+
+```env
+DATABASE_TYPE=postgres
+DATABASE_HOST=127.0.0.1
+DATABASE_PORT=5432
+DATABASE_USER=postgres
+DATABASE_PASS=postgres
+DATABASE_NAME=myapp
+DATABASE_SSL_MODE=disable
+
+# Optional pool tuning
+DATABASE_MAX_OPEN_CONNS=25
+DATABASE_MAX_IDLE_CONNS=25
+DATABASE_CONN_MAX_LIFETIME=15m
+
+# Optional query logging (for development)
+DATABASE_QUERY_LOGGING=true
+```
+
+**Usage Example in Your App:**
+
+```go
+// Run a health check
+if err := app.DB.HealthCheck(r.Context()); err != nil {
+    http.Error(w, "database unavailable", http.StatusServiceUnavailable)
+    return
+}
+
+// Run code in a transaction
+err := app.Transaction(r.Context(), func(tx *sql.Tx) error {
+    _, err := tx.Exec("INSERT INTO users (email) VALUES (?)", email)
+    return err
+})
+```
 
 ### Examples
 
@@ -722,6 +777,7 @@ After creating a new application, a `.env` file is generated with the following 
 
 ```
 # database configuration
+# supported types: postgres, postgresql, mysql, mariadb, sqlite, sqlite3
 DATABASE_TYPE=postgres
 DATABASE_HOST=127.0.0.1
 DATABASE_PORT=5432
@@ -729,9 +785,17 @@ DATABASE_USER=postgres
 DATABASE_PASS=postgres
 DATABASE_NAME=myapp
 DATABASE_SSL_MODE=disable
+
+# Optional pool tuning
+DATABASE_MAX_OPEN_CONNS=25
+DATABASE_MAX_IDLE_CONNS=25
+DATABASE_CONN_MAX_LIFETIME=15m
+
+# Optional query logging
+DATABASE_QUERY_LOGGING=true
 ```
 
-Fill in these values with your database connection details. Migrations use these environment variables directly - no additional configuration file required.
+Fill in these values with your database connection details. Migrations, seeds, and health checks use these environment variables directly — no additional configuration file required.
 
 ### Password Hashing
 
@@ -780,6 +844,19 @@ Each command has different options and parameters. Here are some basic usage exa
 
   ```bash
   ./regius make migration create_users_table fizz
+  ```
+
+- Create a seed file and run it:
+
+  ```bash
+  ./regius make seed default_users
+  ./regius db:seed
+  ```
+
+- Check current migration version:
+
+  ```bash
+  ./regius migrate version
   ```
 
 - Create a model:

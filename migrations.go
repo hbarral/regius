@@ -72,6 +72,23 @@ func (r *Regius) MigrateForce(dsn string) error {
 	return nil
 }
 
+// MigrateVersion returns the current migration version and dirty flag using golang-migrate.
+func (r *Regius) MigrateVersion(dsn string) (uint, bool, error) {
+	m, err := migrate.New("file://"+r.RootPath+"/migrations", dsn)
+	if err != nil {
+		return 0, false, err
+	}
+
+	defer m.Close()
+
+	version, dirty, err := m.Version()
+	if err != nil {
+		return 0, false, err
+	}
+
+	return version, dirty, nil
+}
+
 func (r *Regius) PopConnect() (*pop.Connection, error) {
 	sslMode := os.Getenv("DATABASE_SSL_MODE")
 	cd := &pop.ConnectionDetails{
@@ -159,4 +176,19 @@ func (r *Regius) PopMigrateReset(tx *pop.Connection) error {
 	}
 
 	return nil
+}
+
+type schemaMigration struct {
+	Version string `db:"version"`
+}
+
+// PopMigrateVersion returns the most recently applied migration version from
+// pop's schema_migration table. It is used as a fallback for databases where
+// golang-migrate is not configured (e.g. SQLite).
+func (r *Regius) PopMigrateVersion(tx *pop.Connection) (string, error) {
+	var sm schemaMigration
+	if err := tx.RawQuery("SELECT version FROM schema_migration ORDER BY version DESC LIMIT 1").First(&sm); err != nil {
+		return "", err
+	}
+	return sm.Version, nil
 }

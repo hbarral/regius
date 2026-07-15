@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -14,6 +16,7 @@ func init() {
 	migrateCmd.AddCommand(migrateUpCmd)
 	migrateCmd.AddCommand(migrateDownCmd)
 	migrateCmd.AddCommand(migrateResetCmd)
+	migrateCmd.AddCommand(migrateVersionCmd)
 }
 
 var migrateCmd = &cobra.Command{
@@ -68,6 +71,51 @@ var migrateResetCmd = &cobra.Command{
 			exitGracefully(err)
 		}
 		color.Green("Migrations reset complete!")
+	},
+}
+
+var migrateVersionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Show current migration version",
+	Long:  `Display the current database migration version using golang-migrate, falling back to pop's schema_migration table for SQLite.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		checkForDB()
+
+		// SQLite is handled via pop because golang-migrate's SQLite driver is
+		// not vendored in this version of the framework.
+		dbType := strings.ToLower(os.Getenv("DATABASE_TYPE"))
+		if dbType == "sqlite" || dbType == "sqlite3" {
+			tx, err := reg.PopConnect()
+			if err != nil {
+				exitGracefully(err)
+			}
+			defer tx.Close()
+
+			version, err := reg.PopMigrateVersion(tx)
+			if err != nil {
+				exitGracefully(err)
+			}
+
+			color.Yellow("Current migration version: %s (pop)", version)
+			return
+		}
+
+		dsn, err := migrationDSN()
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		version, dirty, err := reg.MigrateVersion(dsn)
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		dirtyFlag := "clean"
+		if dirty {
+			dirtyFlag = "dirty"
+		}
+
+		color.Yellow("Current migration version: %d (%s)", version, dirtyFlag)
 	},
 }
 
