@@ -145,6 +145,10 @@ func (r *Regius) New(rootPath string) error {
 			DataType: os.Getenv("DATABASE_TYPE"),
 			Pool:     db,
 		}
+
+		if err := r.DB.ConfigurePool(); err != nil {
+			return fmt.Errorf("failed to configure database pool: %w", err)
+		}
 	}
 
 	if os.Getenv("CACHE") == "redis" || os.Getenv("SESSION_TYPE") == "redis" {
