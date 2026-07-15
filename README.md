@@ -41,6 +41,7 @@ Seed files are plain `.sql` files executed in a single transaction, and each is 
 - `regius make auth`: Create authentication system (tables, models, middleware, handlers, views).
 - `regius make handler <name>`: Create a handler stub.
 - `regius make model <name>`: Create a new model with proper pluralization.
+- `regius make gorm-model <name>`: Create a new GORM model with proper pluralization.
 - `regius make session`: Create session table in database.
 - `regius make key`: Generate 32-character encryption key.
 - `regius make mail <name>`: Create mail templates.
@@ -63,6 +64,7 @@ Regius includes a unified database layer that works out of the box with PostgreS
 - **Health checks**: `Database.HealthCheck(ctx)` verifies the database is reachable and responds to a ping.
 - **Transaction helper**: `Regius.Transaction(ctx, func(*sql.Tx) error)` runs a block inside a transaction and handles commit/rollback automatically.
 - **Read/write splitting**: Configure a read replica via `DATABASE_READ_*` environment variables (or `DATABASE_READ_DSN`) and use `app.DB.Reader()` and `app.DB.Writer()` to route queries. Disabled by default.
+- **GORM integration**: Access a configured `*gorm.DB` via `app.GORM()` or run `app.AutoMigrate(&models...)` for schema management. GORM reuses the framework's existing database pool.
 - **Query logging**: Enable `DATABASE_QUERY_LOGGING=true` to log every SQL statement with timing and error details through a transparent database/sql driver wrapper.
 
 **Configuration Options:**
@@ -105,6 +107,18 @@ err := app.Transaction(r.Context(), func(tx *sql.Tx) error {
     _, err := tx.Exec("INSERT INTO users (email) VALUES (?)", email)
     return err
 })
+
+// Use GORM for ORM-style queries
+gormDB, err := app.GORM()
+if err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+}
+var users []User
+gormDB.Find(&users)
+
+// Run GORM AutoMigrate
+_ = app.AutoMigrate(&User{}, &Post{})
 ```
 
 ### Examples
@@ -870,6 +884,12 @@ Each command has different options and parameters. Here are some basic usage exa
 
   ```bash
   ./regius make model User
+  ```
+
+- Create a GORM model:
+
+  ```bash
+  ./regius make gorm-model User
   ```
 
 - Put the server in maintenance mode:
