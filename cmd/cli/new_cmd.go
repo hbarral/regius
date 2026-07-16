@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/go-git/go-git/v5"
 	"github.com/spf13/cobra"
 )
 
@@ -28,8 +27,8 @@ func init() {
 var newCmd = &cobra.Command{
 	Use:   "new [application-name]",
 	Short: "Create a new Regius application",
-	Long: `Create a new Regius application by cloning the starter template
-and setting up the initial configuration.`,
+	Long: `Create a new Regius application from the embedded starter skeleton
+and set up the initial configuration.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		doNew(args[0])
@@ -47,17 +46,8 @@ func doNew(appName string) {
 
 	log.Println("App name is:", appName)
 
-	color.Green("\tCloning repository...")
-	_, err := git.PlainClone("./"+appName, false, &git.CloneOptions{
-		URL:      "https://github.com/hbarral/regius-app.git",
-		Progress: os.Stdout,
-		Depth:    1,
-	})
-	if err != nil {
-		exitGracefully(err)
-	}
-
-	err = os.RemoveAll(fmt.Sprintf("./%s/.git", appName))
+	color.Green("\tCreating application from embedded skeleton...")
+	err := writeSkeleton("./" + appName)
 	if err != nil {
 		exitGracefully(err)
 	}
@@ -166,14 +156,14 @@ func doNew(appName string) {
 
 	color.Yellow("\tRunning go mod tidy...")
 
-	cmd := exec.Command("go", "get", "gitlab.com/hbarral/regius")
-	err = cmd.Start()
+	cmd := exec.Command("go", "get", "github.com/hbarral/regius")
+	err = cmd.Run()
 	if err != nil {
 		exitGracefully(err)
 	}
 
 	cmd = exec.Command("go", "mod", "tidy")
-	err = cmd.Start()
+	err = cmd.Run()
 	if err != nil {
 		exitGracefully(err)
 	}

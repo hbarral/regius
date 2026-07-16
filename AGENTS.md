@@ -6,6 +6,10 @@ This file contains guidelines and commands for agentic coding assistants working
 
 Regius is a CLI application for building web pages in Go, inspired by Laravel. It provides tools for database migrations, code generation, and web application scaffolding.
 
+This is a **single repository (monorepo)**. The starter app template is embedded directly in the CLI as `cmd/cli/_skeleton/` (embedded via `//go:embed all:_skeleton` in `cmd/cli/copy-files.go`), so `regius new <name>` writes the skeleton from the embedded filesystem — it does **not** clone an external repository. The underscore prefix makes Go's build tool ignore the skeleton directory (so it is not compiled as part of `go build ./...`), while `all:` lets the embed include it. The skeleton source uses the internal module name `regius-app` for its imports (e.g. `regius-app/data`); `regius new` rewrites the literal `regius-app` to the chosen app name via `updateSource()` in `cmd/cli/helpers.go`.
+
+When changing the skeleton (`cmd/cli/_skeleton/`), verify end-to-end by building the CLI and running `regius new smoketest && (cd smoketest && go build ./...)`. The skeleton's own `go.mod`/`go.sum` are intentionally absent — it is not a standalone module; its correctness is validated by generating an app from it and building that app.
+
 ## Build/Lint/Test Commands
 
 ### Testing

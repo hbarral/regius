@@ -151,11 +151,11 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // In regius-app/routes.go - Apply to all routes
+```go
+  // In routes.go - Apply to all routes
   a.use(a.Middleware.RateLimit)
 
-  // In regius-app/routes-api.go - Apply to API routes
+  // In routes-api.go - Apply to API routes
   r.Use(a.Middleware.APIRateLimit)
 
   // Or apply to specific routes
@@ -177,18 +177,13 @@ regius migrate --help
   ```
 
   **Testing:**
-  The skeleton app includes comprehensive testing tools in `test-tools/` directory:
-
-  - `ratelimit-test.py` - Python-based tester with detailed output
-  - `ratelimit-test.sh` - Shell script using curl
-  - `ratelimit-tester.go` - Go-based high-performance tester
+  You can exercise the rate limiter with any HTTP load tool (e.g. `hey`, `wrk`, or a small `curl` loop) against a rate-limited route in your app.
 
   **Documentation:**
 
-  - Full documentation: `regius/RATE_LIMITER.md`
-  - Implementation details: `regius/RATE_LIMITER_IMPLEMENTATION.md`
-  - Testing guide: `regius-app/test-tools/README.md`
-  - Quick start: `regius-app/test-tools/QUICKSTART.md`
+  - Full documentation: `RATE_LIMITER.md`
+  - Implementation details: `RATE_LIMITER_IMPLEMENTATION.md`
+  - Testing guide and quick start: see the `test-tools/` directory in a generated app
 
 - **CORS Middleware**: Handle Cross-Origin Resource Sharing out of the box with flexible configuration.
 
