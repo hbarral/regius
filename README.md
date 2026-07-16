@@ -732,7 +732,7 @@ CORS_MAX_AGE=300
 # security headers (helmet equivalent, disabled by default).
 # HSTS is only emitted when SECURE=true.
 SECURITY_HEADERS_ENABLED=false
-CONTENT_SECURITY_POLICY=default-src 'self'
+CONTENT_SECURITY_POLICY=default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; frame-ancestors 'self'
 HSTS_MAX_AGE=31536000
 HSTS_INCLUDE_SUBDOMAINS=true
 HSTS_PRELOAD=false
