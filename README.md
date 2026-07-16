@@ -1,13 +1,8 @@
 # Regius
 
-<img
-    style="display: block; 
-           margin-left: auto;
-           margin-right: auto;
-           width: 40%;"
-    src="dist/regius-app/public/images/regius.png" 
-    alt="Regius Logo">
-</img>
+<p align="center">
+  <img src="regius.png" alt="Regius Logo" width="40%">
+</p>
 
 Regius is a CLI application for building web pages, inspired by Laravel but built with Go. It offers tools for database migrations and code generation, providing an agile and organized development experience.
 
@@ -31,13 +26,22 @@ Visit the official repository at [Regius on GitHub](https://github.com/hbarral/r
 - `regius migrate up`: Run all pending migrations.
 - `regius migrate down [steps|all]`: Reverse migrations (use "all" for all migrations).
 - `regius migrate reset`: Reset and re-run all migrations.
+- `regius migrate version`: Show the current migration version (uses `golang-migrate`).
+
+### Seeding
+
+- `regius make seed <name>`: Create a new SQL seed file in `seeds/`.
+- `regius db:seed`: Run all pending seed files in `seeds/` (filename order), tracking executed seeds in the `regius_seeds` table.
+
+Seed files are plain `.sql` files executed in a single transaction, and each is only applied once.
 
 ### Code Generation Commands
 
-- `regius make migration <name> --format=<fizz|sql>`: Create migration files (default: fizz).
+- `regius make migration <name>`: Create SQL migration files.
 - `regius make auth`: Create authentication system (tables, models, middleware, handlers, views).
 - `regius make handler <name>`: Create a handler stub.
 - `regius make model <name>`: Create a new model with proper pluralization.
+- `regius make gorm-model <name>`: Create a new GORM model with proper pluralization.
 - `regius make session`: Create session table in database.
 - `regius make key`: Generate 32-character encryption key.
 - `regius make mail <name>`: Create mail templates.
@@ -45,17 +49,81 @@ Visit the official repository at [Regius on GitHub](https://github.com/hbarral/r
 ### CLI Features
 
 - **Automatic help**: `--help` flag on all commands and subcommands
-- **Flag support**: Use `--format=fizz` instead of positional arguments
+- **Flag support**: Use `--format=sql` for migration format
 - **Shell completion**: Generate autocompletion scripts for bash, zsh, fish, and PowerShell
 - **Better validation**: Improved argument validation and error messages
 - **Command aliases**: Future support for command shortcuts
 
+### Database Features
+
+Regius includes a unified database layer that works out of the box with PostgreSQL, MySQL/MariaDB, and SQLite.
+
+- **Driver alias normalization**: `postgres`/`postgresql`, `mysql`/`mariadb`, and `sqlite`/`sqlite3` are all accepted as `DATABASE_TYPE`.
+- **Multi-database DSN builder**: `BuildDSN()` produces the correct DSN for each driver without manual string concatenation.
+- **Connection pool tuning**: Configure max open, max idle, and connection lifetime via environment variables.
+- **Health checks**: `Database.HealthCheck(ctx)` verifies the database is reachable and responds to a ping.
+- **Transaction helper**: `Regius.Transaction(ctx, func(*sql.Tx) error)` runs a block inside a transaction and handles commit/rollback automatically.
+- **Read/write splitting**: Configure a read replica via `DATABASE_READ_*` environment variables (or `DATABASE_READ_DSN`) and use `app.DB.Reader()` and `app.DB.Writer()` to route queries. Disabled by default.
+- **GORM integration**: Access a configured `*gorm.DB` via `app.GORM()` or run `app.AutoMigrate(&models...)` for schema management. GORM reuses the framework's existing database pool.
+- **Query logging**: Enable `DATABASE_QUERY_LOGGING=true` to log every SQL statement with timing and error details through a transparent database/sql driver wrapper.
+
+**Configuration Options:**
+
+```env
+DATABASE_TYPE=postgres
+DATABASE_HOST=127.0.0.1
+DATABASE_PORT=5432
+DATABASE_USER=postgres
+DATABASE_PASS=postgres
+DATABASE_NAME=myapp
+DATABASE_SSL_MODE=disable
+
+# Optional pool tuning
+DATABASE_MAX_OPEN_CONNS=25
+DATABASE_MAX_IDLE_CONNS=25
+DATABASE_CONN_MAX_LIFETIME=15m
+
+# Optional query logging (for development)
+DATABASE_QUERY_LOGGING=true
+```
+
+**Usage Example in Your App:**
+
+```go
+// Run a health check
+if err := app.DB.HealthCheck(r.Context()); err != nil {
+    http.Error(w, "database unavailable", http.StatusServiceUnavailable)
+    return
+}
+
+// Route reads to the read replica (or main pool when not configured)
+rows, err := app.DB.Reader().QueryContext(r.Context(), "SELECT id, email FROM users")
+
+// Route writes to the write pool
+_, err = app.DB.Writer().ExecContext(r.Context(), "UPDATE users SET last_login = ? WHERE id = ?", now, id)
+
+// Run code in a transaction
+err := app.Transaction(r.Context(), func(tx *sql.Tx) error {
+    _, err := tx.Exec("INSERT INTO users (email) VALUES (?)", email)
+    return err
+})
+
+// Use GORM for ORM-style queries
+gormDB, err := app.GORM()
+if err != nil {
+    http.Error(w, err.Error(), http.StatusInternalServerError)
+    return
+}
+var users []User
+gormDB.Find(&users)
+
+// Run GORM AutoMigrate
+_ = app.AutoMigrate(&User{}, &Post{})
+```
+
 ### Examples
 
 ```bash
-# Create migration with fizz format (default)
-regius make migration create_users --format=fizz
-
 # Create migration with sql format
 regius make migration create_users --format=sql
 
@@ -727,6 +795,7 @@ After creating a new application, a `.env` file is generated with the following 
 
 ```
 # database configuration
+# supported types: postgres, postgresql, mysql, mariadb, sqlite, sqlite3
 DATABASE_TYPE=postgres
 DATABASE_HOST=127.0.0.1
 DATABASE_PORT=5432
@@ -734,9 +803,17 @@ DATABASE_USER=postgres
 DATABASE_PASS=postgres
 DATABASE_NAME=myapp
 DATABASE_SSL_MODE=disable
+
+# Optional pool tuning
+DATABASE_MAX_OPEN_CONNS=25
+DATABASE_MAX_IDLE_CONNS=25
+DATABASE_CONN_MAX_LIFETIME=15m
+
+# Optional query logging
+DATABASE_QUERY_LOGGING=true
 ```
 
-Fill in these values with your database connection details. Migrations use these environment variables directly - no additional configuration file required.
+Fill in these values with your database connection details. Migrations, seeds, and health checks use these environment variables directly — no additional configuration file required.
 
 ### Password Hashing
 
@@ -784,13 +861,32 @@ Each command has different options and parameters. Here are some basic usage exa
 - Create a migration:
 
   ```bash
-  ./regius make migration create_users_table fizz
+  ./regius make migration create_users_table
+  ```
+
+- Create a seed file and run it:
+
+  ```bash
+  ./regius make seed default_users
+  ./regius db:seed
+  ```
+
+- Check current migration version:
+
+  ```bash
+  ./regius migrate version
   ```
 
 - Create a model:
 
   ```bash
   ./regius make model User
+  ```
+
+- Create a GORM model:
+
+  ```bash
+  ./regius make gorm-model User
   ```
 
 - Put the server in maintenance mode:

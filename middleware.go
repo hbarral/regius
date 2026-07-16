@@ -50,9 +50,9 @@ func (r *Regius) CheckForMaintenanceMode(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if maintenanceMode {
 			if !strings.Contains(req.URL.Path, "/public/maintenance.html") {
-				w.WriteHeader(http.StatusServiceUnavailable)
 				w.Header().Set("Retry-After", "300")
 				w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0")
+				w.WriteHeader(http.StatusServiceUnavailable)
 				http.ServeFile(w, req, fmt.Sprintf("%s/public/maintenance.html", r.RootPath))
 				return
 			}

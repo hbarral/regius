@@ -71,7 +71,7 @@ func (w *WebDAV) Put(fileName, folder string) error {
 	}
 	defer file.Close()
 
-	err = client.WriteStream(fmt.Sprintf("%s/%s", folder, path.Base(fileName)), file, 0664)
+	err = client.WriteStream(path.Join(folder, path.Base(fileName)), file, 0664)
 	if err != nil {
 		return err
 	}
@@ -82,8 +82,10 @@ func (w *WebDAV) Put(fileName, folder string) error {
 func (w *WebDAV) Delete(itemsToDelete []string) bool {
 	client := w.getCredentials()
 	for _, item := range itemsToDelete {
-		err := client.Remove(item)
-		if err != nil {
+		if _, err := client.Stat(item); err != nil {
+			return false
+		}
+		if err := client.Remove(item); err != nil {
 			return false
 		}
 	}

@@ -17,11 +17,10 @@ func doAuth() error {
 	log.Println("APP NAME IS:", appName)
 	dbType := reg.DB.DataType
 
-	tx, err := reg.PopConnect()
+	dsn, err := migrationDSN()
 	if err != nil {
 		exitGracefully(err)
 	}
-	defer tx.Close()
 
 	upBytes, err := templateFS.ReadFile(fmt.Sprintf("templates/migrations/auth_tables.%s.sql", dbType))
 	if err != nil {
@@ -31,17 +30,12 @@ func doAuth() error {
 	downBytes := []byte(
 		"DROP TABLE IF EXISTS users CASCADE; DROP TABLE IF EXISTS tokens CASCADE; DROP TABLE IF EXISTS remember_tokens;",
 	)
-	if err != nil {
+
+	if err := reg.CreateMigration(upBytes, downBytes, "auth", "sql"); err != nil {
 		exitGracefully(err)
 	}
 
-	err = reg.CreatePopMigration(upBytes, downBytes, "auth", "sql")
-	if err != nil {
-		exitGracefully(err)
-	}
-
-	err = reg.RunPopMigrations(tx)
-	if err != nil {
+	if err := reg.RunMigrations(dsn); err != nil {
 		exitGracefully(err)
 	}
 

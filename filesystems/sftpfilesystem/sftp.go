@@ -19,9 +19,27 @@ type SFTP struct {
 	Port string
 	User string
 	Pass string
+	// clientFactory, when non-nil, overrides the default SSH dial.
+	// It is used by tests to inject an in-process SFTP client.
+	clientFactory func() (*sftp.Client, error)
 }
 
 func (s *SFTP) getCredentials() (*sftp.Client, error) {
+	if s.clientFactory != nil {
+		client, err := s.clientFactory()
+		if err != nil {
+			return nil, err
+		}
+
+		cwd, err := client.Getwd()
+		if err != nil {
+			return nil, err
+		}
+		log.Println("Current working directory:", cwd)
+
+		return client, nil
+	}
+
 	addr := fmt.Sprintf("%s:%s", s.Host, s.Port)
 	config := &ssh.ClientConfig{
 		User: s.User,
@@ -50,6 +68,14 @@ func (s *SFTP) getCredentials() (*sftp.Client, error) {
 	return client, nil
 }
 
+func normalizePath(p string) string {
+	p = strings.TrimPrefix(p, "/")
+	if p == "" {
+		p = "."
+	}
+	return p
+}
+
 func (s *SFTP) Put(fileName, folder string) error {
 	client, err := s.getCredentials()
 	if err != nil {
@@ -57,19 +83,19 @@ func (s *SFTP) Put(fileName, folder string) error {
 	}
 	defer client.Close()
 
-	source_file, err := os.Open(fileName)
+	sourceFile, err := os.Open(fileName)
 	if err != nil {
 		return err
 	}
-	defer source_file.Close()
+	defer sourceFile.Close()
 
-	destination_file, err := client.Create(fmt.Sprintf("%s/%s", folder, path.Base(fileName)))
+	destinationFile, err := client.Create(path.Join(normalizePath(folder), path.Base(fileName)))
 	if err != nil {
 		return err
 	}
-	defer destination_file.Close()
+	defer destinationFile.Close()
 
-	if _, err := io.Copy(destination_file, source_file); err != nil {
+	if _, err := io.Copy(destinationFile, sourceFile); err != nil {
 		return err
 	}
 
@@ -84,7 +110,7 @@ func (s *SFTP) List(prefix string) ([]filesystems.Listing, error) {
 	}
 	defer client.Close()
 
-	files, err2 := client.ReadDir(prefix)
+	files, err2 := client.ReadDir(normalizePath(prefix))
 	if err2 != nil {
 		return listing, err2
 	}
@@ -115,7 +141,7 @@ func (s *SFTP) Delete(itemsToDelete []string) bool {
 	defer client.Close()
 
 	for _, x := range itemsToDelete {
-		deleteErr := client.Remove(x)
+		deleteErr := client.Remove(normalizePath(x))
 		if deleteErr != nil {
 			return false
 		}
@@ -133,25 +159,25 @@ func (s *SFTP) Get(destination string, items ...string) error {
 
 	for _, x := range items {
 		err := func() error {
-			source_file, err2 := client.Open(x)
+			sourceFile, err2 := client.Open(normalizePath(x))
 			if err2 != nil {
-				return err
+				return err2
 			}
-			defer source_file.Close()
+			defer sourceFile.Close()
 
-			destination_file, err := os.Create(fmt.Sprintf("%s/%s", destination, path.Base(x)))
+			destinationFile, err := os.Create(fmt.Sprintf("%s/%s", destination, path.Base(x)))
 			if err != nil {
 				return err
 			}
-			defer destination_file.Close()
+			defer destinationFile.Close()
 
-			bytes, err := io.Copy(destination_file, source_file)
+			bytes, err := io.Copy(destinationFile, sourceFile)
 			if err != nil {
 				return err
 			}
 			fmt.Println("Copied", bytes, "bytes")
 
-			err = destination_file.Sync()
+			err = destinationFile.Sync()
 			if err != nil {
 				return err
 			}

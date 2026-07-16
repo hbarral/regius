@@ -14,6 +14,7 @@ func init() {
 	migrateCmd.AddCommand(migrateUpCmd)
 	migrateCmd.AddCommand(migrateDownCmd)
 	migrateCmd.AddCommand(migrateResetCmd)
+	migrateCmd.AddCommand(migrateVersionCmd)
 }
 
 var migrateCmd = &cobra.Command{
@@ -21,7 +22,6 @@ var migrateCmd = &cobra.Command{
 	Short: "Manage database migrations",
 	Long:  `Run database migrations to update your database schema.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Default to "up" if no subcommand specified
 		if err := doMigrate("up", ""); err != nil {
 			exitGracefully(err)
 		}
@@ -71,34 +71,57 @@ var migrateResetCmd = &cobra.Command{
 	},
 }
 
+var migrateVersionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Show current migration version",
+	Long:  `Display the current database migration version using golang-migrate.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		checkForDB()
+
+		dsn, err := migrationDSN()
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		version, dirty, err := reg.MigrateVersion(dsn)
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		dirtyFlag := "clean"
+		if dirty {
+			dirtyFlag = "dirty"
+		}
+
+		color.Yellow("Current migration version: %d (%s)", version, dirtyFlag)
+	},
+}
+
 func doMigrate(caseToCheck string, steps string) error {
 	checkForDB()
 
-	tx, err := reg.PopConnect()
+	dsn, err := migrationDSN()
 	if err != nil {
 		return err
 	}
-	defer tx.Close()
 
 	switch caseToCheck {
 	case "up":
-		err := reg.RunPopMigrations(tx)
-		if err != nil {
+		if err := reg.RunMigrations(dsn); err != nil {
 			return err
 		}
 	case "down":
 		if steps == "all" {
-			return reg.PopMigrateDown(tx, -1)
+			return reg.MigrateDown(dsn, -1)
 		}
 
 		stepsInt, err := strconv.Atoi(steps)
 		if err != nil {
 			return fmt.Errorf("the number of steps must be a valid integer: %w", err)
 		}
-		return reg.PopMigrateDown(tx, stepsInt)
+		return reg.MigrateDown(dsn, stepsInt)
 	case "reset":
-		err := reg.PopMigrateReset(tx)
-		if err != nil {
+		if err := reg.MigrateReset(dsn); err != nil {
 			return err
 		}
 	default:
