@@ -13,6 +13,13 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
+type minioClient interface {
+	FPutObject(ctx context.Context, bucket, objectName, filePath string, opts minio.PutObjectOptions) (minio.UploadInfo, error)
+	ListObjects(ctx context.Context, bucket string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo
+	RemoveObject(ctx context.Context, bucket, objectName string, opts minio.RemoveObjectOptions) error
+	FGetObject(ctx context.Context, bucket, objectName, filePath string, opts minio.GetObjectOptions) error
+}
+
 type Minio struct {
 	Endpoint string
 	Key      string
@@ -20,31 +27,42 @@ type Minio struct {
 	UseSSL   bool
 	Region   string
 	Bucket   string
+	// clientFactory, when non-nil, overrides the default minio.New dial.
+	// It is used by tests to inject a fake minio client.
+	clientFactory func() (minioClient, error)
 }
 
-func (m *Minio) getCredentials() *minio.Client {
+func (m *Minio) getCredentials() (minioClient, error) {
+	if m.clientFactory != nil {
+		return m.clientFactory()
+	}
+
 	client, err := minio.New(m.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(m.Key, m.Secret, ""),
 		Secure: m.UseSSL,
 	})
 	if err != nil {
-		log.Println(err)
+		return nil, err
 	}
 
-	return client
+	return client, nil
 }
 
 func (m *Minio) Put(fileName, folder string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	client, err := m.getCredentials()
+	if err != nil {
+		return err
+	}
+
 	objectName := path.Base(fileName)
-	client := m.getCredentials()
 
 	uploadInfo, err := client.FPutObject(
 		ctx,
 		m.Bucket,
-		fmt.Sprintf("%s/%s", folder, objectName),
+		path.Join(folder, objectName),
 		fileName,
 		minio.PutObjectOptions{},
 	)
@@ -64,7 +82,10 @@ func (m *Minio) List(prefix string) ([]filesystems.Listing, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	client := m.getCredentials()
+	client, err := m.getCredentials()
+	if err != nil {
+		return listing, err
+	}
 
 	objectCh := client.ListObjects(ctx, m.Bucket, minio.ListObjectsOptions{
 		Prefix:    prefix,
@@ -98,7 +119,10 @@ func (m *Minio) Delete(itemsToDelete []string) bool {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	client := m.getCredentials()
+	client, err := m.getCredentials()
+	if err != nil {
+		return false
+	}
 
 	opts := minio.RemoveObjectOptions{
 		GovernanceBypass: true,
@@ -111,14 +135,17 @@ func (m *Minio) Delete(itemsToDelete []string) bool {
 			return false
 		}
 	}
-	return false
+	return true
 }
 
 func (m *Minio) Get(destination string, items ...string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	client := m.getCredentials()
+	client, err := m.getCredentials()
+	if err != nil {
+		return err
+	}
 
 	for _, item := range items {
 		err := client.FGetObject(

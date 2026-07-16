@@ -3,6 +3,7 @@ package s3filesystem
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -16,17 +17,93 @@ import (
 	"github.com/hbarral/regius/filesystems"
 )
 
+type s3Service interface {
+	ListObjects(input *s3.ListObjectsInput) (*s3.ListObjectsOutput, error)
+	DeleteObjects(input *s3.DeleteObjectsInput) (*s3.DeleteObjectsOutput, error)
+}
+
+type s3Downloader interface {
+	Download(w io.WriterAt, input *s3.GetObjectInput, options ...func(*s3manager.Downloader)) (int64, error)
+}
+
+type s3Uploader interface {
+	Upload(input *s3manager.UploadInput, options ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error)
+}
+
 type S3 struct {
 	Key      string
 	Secret   string
 	Region   string
 	Endpoint string
 	Bucket   string
+	// serviceFactory, when non-nil, overrides the default S3 service creation.
+	// Used by tests to inject a fake S3 service.
+	serviceFactory func() (s3Service, error)
+	// downloaderFactory, when non-nil, overrides the default S3 downloader creation.
+	// Used by tests to inject a fake downloader.
+	downloaderFactory func() (s3Downloader, error)
+	// uploaderFactory, when non-nil, overrides the default S3 uploader creation.
+	// Used by tests to inject a fake uploader.
+	uploaderFactory func() (s3Uploader, error)
 }
 
 func (s *S3) getCredentials() *credentials.Credentials {
 	client := credentials.NewStaticCredentials(s.Key, s.Secret, "")
 	return client
+}
+
+func (s *S3) getService() (s3Service, error) {
+	if s.serviceFactory != nil {
+		return s.serviceFactory()
+	}
+
+	client := s.getCredentials()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:    &s.Endpoint,
+		Region:      &s.Region,
+		Credentials: client,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return s3.New(sess), nil
+}
+
+func (s *S3) getDownloader() (s3Downloader, error) {
+	if s.downloaderFactory != nil {
+		return s.downloaderFactory()
+	}
+
+	client := s.getCredentials()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:    &s.Endpoint,
+		Region:      &s.Region,
+		Credentials: client,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return s3manager.NewDownloader(sess), nil
+}
+
+func (s *S3) getUploader() (s3Uploader, error) {
+	if s.uploaderFactory != nil {
+		return s.uploaderFactory()
+	}
+
+	client := s.getCredentials()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:    &s.Endpoint,
+		Region:      &s.Region,
+		Credentials: client,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return s3manager.NewUploader(sess), nil
 }
 
 func (s *S3) List(prefix string) ([]filesystems.Listing, error) {
@@ -36,15 +113,11 @@ func (s *S3) List(prefix string) ([]filesystems.Listing, error) {
 		prefix = ""
 	}
 
-	client := s.getCredentials()
+	service, err := s.getService()
+	if err != nil {
+		return nil, err
+	}
 
-	sess := session.Must(session.NewSession(&aws.Config{
-		Endpoint:    &s.Endpoint,
-		Region:      &s.Region,
-		Credentials: client,
-	}))
-
-	service := s3.New(sess)
 	input := &s3.ListObjectsInput{
 		Bucket: aws.String(s.Bucket),
 		Prefix: aws.String(prefix),
@@ -82,12 +155,10 @@ func (s *S3) List(prefix string) ([]filesystems.Listing, error) {
 }
 
 func (s *S3) Get(destination string, items ...string) error {
-	client := s.getCredentials()
-	sess := session.Must(session.NewSession(&aws.Config{
-		Endpoint:    &s.Endpoint,
-		Region:      &s.Region,
-		Credentials: client,
-	}))
+	downloader, err := s.getDownloader()
+	if err != nil {
+		return err
+	}
 
 	for _, item := range items {
 		err := func() error {
@@ -97,7 +168,6 @@ func (s *S3) Get(destination string, items ...string) error {
 			}
 			defer file.Close()
 
-			downloader := s3manager.NewDownloader(sess)
 			_, err = downloader.Download(file, &s3.GetObjectInput{
 				Bucket: aws.String(s.Bucket),
 				Key:    aws.String(item),
@@ -117,14 +187,11 @@ func (s *S3) Get(destination string, items ...string) error {
 }
 
 func (s *S3) Put(fileName, folder string) error {
-	client := s.getCredentials()
-	sess := session.Must(session.NewSession(&aws.Config{
-		Endpoint:    &s.Endpoint,
-		Region:      &s.Region,
-		Credentials: client,
-	}))
+	uploader, err := s.getUploader()
+	if err != nil {
+		return err
+	}
 
-	uploader := s3manager.NewUploader(sess)
 	file, err := os.Open(fileName)
 	if err != nil {
 		return err
@@ -149,7 +216,7 @@ func (s *S3) Put(fileName, folder string) error {
 
 	_, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(s.Bucket),
-		Key:    aws.String(fmt.Sprintf("%s/%s", folder, path.Base(fileName))),
+		Key:    aws.String(path.Join(folder, path.Base(fileName))),
 		Body:   fileBytes,
 		// ACL:         aws.String("public-read"),
 		ContentType: aws.String(fileType),
@@ -165,14 +232,10 @@ func (s *S3) Put(fileName, folder string) error {
 }
 
 func (s *S3) Delete(itemsToDelete []string) bool {
-	client := s.getCredentials()
-	sess := session.Must(session.NewSession(&aws.Config{
-		Endpoint:    &s.Endpoint,
-		Region:      &s.Region,
-		Credentials: client,
-	}))
-
-	service := s3.New(sess)
+	service, err := s.getService()
+	if err != nil {
+		return false
+	}
 
 	for _, item := range itemsToDelete {
 		input := &s3.DeleteObjectsInput{

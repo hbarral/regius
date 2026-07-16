@@ -1,6 +1,8 @@
 package regius
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -29,7 +31,20 @@ func (r *Regius) ListenAndServe() error {
 		defer badgerConn.Close()
 	}
 
-	go r.listenRPC()
+	rpcListener, err := NewRPCListener(os.Getenv("RPC_PORT"), r.InfoLog, r.ErrorLog)
+	if err != nil {
+		r.ErrorLog.Println(err)
+	}
+	if rpcListener != nil {
+		rpcCtx, rpcCancel := context.WithCancel(context.Background())
+		defer rpcCancel()
+		defer rpcListener.Stop()
+		go func() {
+			if err := rpcListener.Start(rpcCtx); err != nil && !errors.Is(err, context.Canceled) {
+				r.ErrorLog.Println(err)
+			}
+		}()
+	}
 
 	r.InfoLog.Printf("Listening on port %s", os.Getenv("PORT"))
 
