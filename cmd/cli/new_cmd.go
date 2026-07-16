@@ -156,16 +156,20 @@ func doNew(appName string) {
 
 	color.Yellow("\tRunning go mod tidy...")
 
-	cmd := exec.Command("go", "get", "github.com/hbarral/regius")
-	err = cmd.Run()
+	getCmd := exec.Command("go", "get", "github.com/hbarral/regius")
+	getCmd.Stdout = os.Stdout
+	getCmd.Stderr = os.Stderr
+	err = getCmd.Run()
 	if err != nil {
-		exitGracefully(err)
+		exitWithError(fmt.Errorf("go get failed: %w", err))
 	}
 
-	cmd = exec.Command("go", "mod", "tidy")
-	err = cmd.Run()
+	tidyCmd := exec.Command("go", "mod", "tidy")
+	tidyCmd.Stdout = os.Stdout
+	tidyCmd.Stderr = os.Stderr
+	err = tidyCmd.Run()
 	if err != nil {
-		exitGracefully(err)
+		exitWithError(fmt.Errorf("go mod tidy failed: %w", err))
 	}
 
 	color.Green("\tDone building " + appURL)
