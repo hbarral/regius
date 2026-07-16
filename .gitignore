@@ -6,6 +6,9 @@ coverage.out
 .idea/
 .vscode/
 vendor/
+# stray sqlite files from test runs
+test.db
+*.db
 # stray build outputs at repo root (real builds go to dist/ via -o)
 /regius
 /cli

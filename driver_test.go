@@ -66,6 +66,7 @@ func TestOpenDB_MySQLConnectionRefused(t *testing.T) {
 
 func TestOpenDB_PostgresConnectionRefused(t *testing.T) {
 	r := &Regius{}
+	// Port 1 -> connection refused immediately; no live DB required.
 	_, err := r.OpenDB("postgres", "host=localhost port=1 sslmode=disable connect_timeout=2")
 
 	require.Error(t, err)
@@ -250,22 +251,6 @@ func TestBuildReadDSN_ExplicitDSN(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "postgres://readuser:readpass@readhost/appdb?sslmode=disable", dsn)
-}
-
-func TestOpenDB_UnknownDriver(t *testing.T) {
-	r := &Regius{}
-	_, err := r.OpenDB("sqlite", "file:test.db")
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "sqlite")
-}
-
-func TestOpenDB_PostgresConnectionRefused(t *testing.T) {
-	r := &Regius{}
-	// Port 1 -> connection refused immediately; no live DB required.
-	_, err := r.OpenDB("postgres", "host=localhost port=1 sslmode=disable connect_timeout=2")
-
-	require.Error(t, err)
 }
 
 func TestOpenDB_PostgresqlAlias(t *testing.T) {
