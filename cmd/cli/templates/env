@@ -65,6 +65,7 @@ IP_FILTER_STATUS_CODE=403
 IP_FILTER_MESSAGE=
 
 # database configuration
+# supported types: postgres, postgresql, mysql, mariadb, sqlite, sqlite3
 DATABASE_TYPE=
 DATABASE_HOST=
 DATABASE_PORT=
@@ -73,6 +74,19 @@ DATABASE_PASS=
 DATABASE_NAME=
 # DATABASE_SSL_MODE (enable | disable)
 DATABASE_SSL_MODE=
+# DATABASE_MAX_OPEN_CONNS=25
+# DATABASE_MAX_IDLE_CONNS=25
+# DATABASE_CONN_MAX_LIFETIME=15m
+# DATABASE_QUERY_LOGGING=true
+
+# read replica configuration (optional). When unset, reads use the main pool.
+# DATABASE_READ_DSN=postgres://reader:secret@read-host/appdb?sslmode=disable
+# DATABASE_READ_HOST=
+# DATABASE_READ_PORT=
+# DATABASE_READ_USER=
+# DATABASE_READ_PASS=
+# DATABASE_READ_NAME=
+# DATABASE_READ_SSL_MODE=
 
 # minio settings
 MINIO_ENDPOINT=

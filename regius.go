@@ -3,7 +3,10 @@ package regius
 import (
 	"fmt"
 	"log"
+	"net"
+	"net/rpc"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -116,7 +119,7 @@ func (r *Regius) New(rootPath string) error {
 
 	err = r.checkDotEnv(rootPath)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	err = godotenv.Load(rootPath + "/.env")
@@ -125,16 +128,42 @@ func (r *Regius) New(rootPath string) error {
 	}
 
 	infoLog, errorLog := r.startLoggers()
+	setQueryLogLogger(infoLog)
 
 	if os.Getenv("DATABASE_TYPE") != "" {
-		db, err := r.OpenDB(os.Getenv("DATABASE_TYPE"), r.BuildDSN())
+		dsn, err := r.BuildDSN()
+		if err != nil {
+			return fmt.Errorf("failed to build database DSN: %w", err)
+		}
+		r.config.database.dsn = dsn
+
+		db, err := r.OpenDB(os.Getenv("DATABASE_TYPE"), dsn)
 		if err != nil {
 			return fmt.Errorf("failed to connect to database: %w", err)
 		}
 
 		r.DB = Database{
-			DataType: os.Getenv("DATABASE_TYPE"),
-			Pool:     db,
+			DataType:  os.Getenv("DATABASE_TYPE"),
+			Pool:      db,
+			WritePool: db,
+		}
+
+		readDSN, err := r.BuildReadDSN()
+		if err != nil {
+			return fmt.Errorf("failed to build read replica DSN: %w", err)
+		}
+		if readDSN != "" {
+			readDB, err := r.OpenDB(os.Getenv("DATABASE_TYPE"), readDSN)
+			if err != nil {
+				return fmt.Errorf("failed to connect to read replica: %w", err)
+			}
+			r.DB.ReadPool = readDB
+		} else {
+			r.DB.ReadPool = db
+		}
+
+		if err := r.DB.ConfigurePool(); err != nil {
+			return fmt.Errorf("failed to configure database pool: %w", err)
 		}
 	}
 
@@ -242,7 +271,7 @@ func (r *Regius) New(rootPath string) error {
 		sessionType: os.Getenv("SESSION_TYPE"),
 		database: databaseConfig{
 			database: os.Getenv("DATABASE_TYPE"),
-			dsn:      r.BuildDSN(),
+			dsn:      "",
 		},
 		redis: redisConfig{
 			host:     os.Getenv("REDIS_HOST"),
@@ -525,28 +554,84 @@ func parseStringSliceEnv(key, defaultValue string) []string {
 	return result
 }
 
-func (r *Regius) BuildDSN() string {
-	var dsn string
+func (r *Regius) BuildDSN() (string, error) {
+	return r.buildDSN("DATABASE_")
+}
 
-	switch os.Getenv("DATABASE_TYPE") {
-	case "postgres", "postgresql":
-		dsn = fmt.Sprintf(
-			"host=%s port=%s user=%s dbname=%s sslmode=%s timezone=UTC connect_timeout=5",
-			os.Getenv("DATABASE_HOST"),
-			os.Getenv("DATABASE_PORT"),
-			os.Getenv("DATABASE_USER"),
-			os.Getenv("DATABASE_NAME"),
-			os.Getenv("DATABASE_SSL_MODE"),
-		)
+// BuildReadDSN returns the DSN for the read replica. If no read-replica
+// configuration is present, it returns an empty string and a nil error.
+func (r *Regius) BuildReadDSN() (string, error) {
+	if dsn := os.Getenv("DATABASE_READ_DSN"); dsn != "" {
+		return dsn, nil
+	}
+	if !r.hasReadReplicaConfig() {
+		return "", nil
+	}
+	return r.buildDSN("DATABASE_READ_")
+}
 
-		if os.Getenv("DATABASE_PASS") != "" {
-			dsn = fmt.Sprintf("%s password=%s", dsn, os.Getenv("DATABASE_PASS"))
+func (r *Regius) hasReadReplicaConfig() bool {
+	return os.Getenv("DATABASE_READ_DSN") != "" ||
+		os.Getenv("DATABASE_READ_HOST") != "" ||
+		os.Getenv("DATABASE_READ_USER") != "" ||
+		os.Getenv("DATABASE_READ_NAME") != "" ||
+		os.Getenv("DATABASE_READ_PORT") != ""
+}
+
+func (r *Regius) buildDSN(prefix string) (string, error) {
+	dbType := strings.ToLower(os.Getenv("DATABASE_TYPE"))
+
+	get := func(name string) string {
+		if v := os.Getenv(prefix + name); v != "" {
+			return v
 		}
-	default:
-
+		if prefix != "DATABASE_" {
+			return os.Getenv("DATABASE_" + name)
+		}
+		return ""
 	}
 
-	return dsn
+	switch dbType {
+	case "postgres", "postgresql":
+		dsn := fmt.Sprintf(
+			"host=%s port=%s user=%s dbname=%s sslmode=%s timezone=UTC connect_timeout=5",
+			get("HOST"),
+			get("PORT"),
+			get("USER"),
+			get("NAME"),
+			get("SSL_MODE"),
+		)
+		if pass := get("PASS"); pass != "" {
+			dsn = fmt.Sprintf("%s password=%s", dsn, pass)
+		}
+		return dsn, nil
+
+	case "mysql", "mariadb":
+		return fmt.Sprintf(
+			"%s:%s@tcp(%s:%s)/%s?parseTime=true&multiStatements=true&loc=UTC",
+			get("USER"),
+			get("PASS"),
+			get("HOST"),
+			get("PORT"),
+			get("NAME"),
+		), nil
+
+	case "sqlite", "sqlite3":
+		name := get("NAME")
+		if name == "" {
+			name = "regius"
+		}
+		if name == ":memory:" {
+			return "file::memory:?cache=shared", nil
+		}
+		if !filepath.IsAbs(name) {
+			name = filepath.Join(r.RootPath, "data", name+".db")
+		}
+		return fmt.Sprintf("file:%s?_foreign_keys=on", name), nil
+
+	default:
+		return "", fmt.Errorf("unsupported database type: %s", os.Getenv("DATABASE_TYPE"))
+	}
 }
 
 func (r *Regius) createFileSystems() map[string]interface{} {
@@ -614,4 +699,33 @@ func (r *Regius) createFileSystems() map[string]interface{} {
 	}
 
 	return fileSystems
+}
+
+func (r *Regius) listenRPC() {
+	if os.Getenv("RPC_PORT") != "" {
+		port := os.Getenv("RPC_PORT")
+		r.InfoLog.Println("Starting RPC server on port " + port)
+		err := rpc.Register(new(RPCServer))
+		if err != nil {
+			r.ErrorLog.Println(err)
+			return
+		}
+
+		listen, err := net.Listen("tcp", "127.0.0.1:"+port)
+		if err != nil {
+			r.ErrorLog.Println(err)
+			return
+		}
+
+		for {
+			rpcConn, err := listen.Accept()
+			if err != nil {
+				r.ErrorLog.Println(err)
+				continue
+			}
+
+			go rpc.ServeConn(rpcConn)
+		}
+
+	}
 }

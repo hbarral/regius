@@ -15,6 +15,7 @@ func init() {
 	makeCmd.AddCommand(makeSessionCmd)
 	makeCmd.AddCommand(makeKeyCmd)
 	makeCmd.AddCommand(makeMailCmd)
+	makeCmd.AddCommand(makeGormModelCmd)
 }
 
 var makeCmd = &cobra.Command{
