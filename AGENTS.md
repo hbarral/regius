@@ -1,0 +1,426 @@
+# AGENTS.md - Regius Development Guidelines
+
+This file contains guidelines and commands for agentic coding assistants working on the Regius codebase.
+
+## Project Overview
+
+Regius is a CLI application for building web pages in Go, inspired by Laravel. It provides tools for database migrations, code generation, and web application scaffolding.
+
+This is a **single repository (monorepo)**. The starter app template is embedded directly in the CLI as `cmd/cli/_skeleton/` (embedded via `//go:embed all:_skeleton` in `cmd/cli/copy-files.go`), so `regius new <name>` writes the skeleton from the embedded filesystem — it does **not** clone an external repository. The underscore prefix makes Go's build tool ignore the skeleton directory (so it is not compiled as part of `go build ./...`), while `all:` lets the embed include it. The skeleton source uses the internal module name `regius-app` for its imports (e.g. `regius-app/data`); `regius new` rewrites the literal `regius-app` to the chosen app name via `updateSource()` in `cmd/cli/helpers.go`.
+
+When changing the skeleton (`cmd/cli/_skeleton/`), verify end-to-end by building the CLI and running `regius new smoketest && (cd smoketest && go build ./...)`. The skeleton's own `go.mod`/`go.sum` are intentionally absent — it is not a standalone module; its correctness is validated by generating an app from it and building that app.
+
+## Build/Lint/Test Commands
+
+### Testing
+```bash
+# Run all tests
+make test
+# or
+go test -v ./...
+
+# Run tests with coverage
+make coverage
+# or
+go test -cover ./...
+
+# Run tests and view coverage in browser
+make cover
+# or
+go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out
+
+# Run a specific test file
+go test -v ./render/render_test.go
+
+# Run a specific test function
+go test -v -run TestRender_Page ./render/
+
+# Run tests in a specific package
+go test -v ./session/
+```
+
+### Building
+```bash
+# Build CLI for current platform
+make build_cli
+
+# Build to dist directory
+make build
+# or
+go build -o ./dist/regius ./cmd/cli
+
+# Cross-platform builds (used in CI)
+GOOS=linux GOARCH=amd64 go build -o bin/regius-linux ./cmd/cli
+GOOS=windows GOARCH=amd64 go build -o bin/regius-windows.exe ./cmd/cli
+GOOS=darwin GOARCH=amd64 go build -o bin/regius-mac ./cmd/cli
+```
+
+### Formatting & Linting
+```bash
+# Format code (no linting config found, use standard Go tools)
+go fmt ./...
+
+# Vet for suspicious code
+go vet ./...
+
+# Run golangci-lint if available (recommended to add)
+golangci-lint run
+```
+
+## Code Style Guidelines
+
+### Go Conventions
+
+#### Naming Conventions
+- **Packages**: lowercase, single word (e.g., `render`, `session`, `mailer`)
+- **Exported functions/types**: PascalCase (e.g., `RenderPage`, `InitSession`)
+- **Unexported functions/types**: camelCase (e.g., `createDirIfNotExist`)
+- **Variables**: camelCase (e.g., `rootPath`, `cookieLifetime`)
+- **Constants**: PascalCase for exported, camelCase for unexported
+- **Test functions**: `TestXxx` format (e.g., `TestRender_Page`)
+
+#### File Organization
+- Main package files in root directory
+- Subpackages in subdirectories (e.g., `render/`, `session/`, `mailer/`)
+- Test files named `*_test.go` in same directory as code
+- CLI commands in `cmd/cli/` directory
+
+#### Imports
+```go
+import (
+    "standard/library"
+    "third/party/package"
+
+    "github.com/hbarral/regius/internal/package"
+)
+```
+- Standard library imports first
+- Third-party imports second
+- Local imports last (with blank line separation)
+- Group related imports together
+
+### Code Structure Patterns
+
+#### Error Handling
+```go
+// Always check and handle errors
+if err != nil {
+    return err
+}
+
+// Or wrap with context
+if err != nil {
+    return fmt.Errorf("failed to create directory: %w", err)
+}
+
+// For validation errors, use the Validation struct
+func (v *Validation) Check(ok bool, key, message string) {
+    if !ok {
+        v.AddError(key, message)
+    }
+}
+```
+
+#### Function Signatures
+```go
+// Methods on structs use pointer receivers
+func (r *Regius) CreateDirIfNotExist(path string) error
+
+// Factory functions return pointers
+func (r *Regius) Validator(data url.Values) *Validation
+
+// Simple functions use value receivers where appropriate
+func (v *Validation) Valid() bool
+```
+
+#### Type Definitions
+```go
+// Structs with proper JSON tags where needed
+type Database struct {
+    DataType string `json:"data_type"`
+    Pool     *sql.DB `json:"-"`
+}
+
+// Configuration structs
+type cookieConfig struct {
+    name     string
+    lifetime string
+    persist  string
+    secure   string
+    domain   string
+}
+```
+
+### Testing Patterns
+
+#### Table-Driven Tests
+```go
+var pageData = []struct {
+    name          string
+    renderer      string
+    template      string
+    errorExpected bool
+    errorMessage  string
+}{
+    {"go_page", "go", "home", false, "Error rendering Go template"},
+    {"jet_page", "jet", "home", false, "Error rendering Jet template"},
+}
+
+func TestRender_Page(t *testing.T) {
+    for _, e := range pageData {
+        // test implementation
+    }
+}
+```
+
+#### Setup/Teardown
+```go
+func TestMain(m *testing.M) {
+    // Setup code
+    setupTestEnvironment()
+
+    code := m.Run()
+
+    // Teardown code
+    cleanupTestEnvironment()
+
+    os.Exit(code)
+}
+```
+
+### Database & Migration Patterns
+
+#### Migration Commands
+```bash
+# Run migrations up
+./regius migrate
+# or
+./regius migrate up
+
+# Run migrations down
+./regius migrate down
+
+# Reset all migrations
+./regius migrate reset
+```
+
+#### Database Types
+- PostgreSQL
+- MySQL
+- SQLite (implied)
+
+### Session Management
+
+#### Session Types
+- Cookie-based sessions
+- Redis-backed sessions
+- Database-backed sessions (PostgreSQL/MySQL)
+
+### File System Abstractions
+
+#### Supported Filesystems
+- Local filesystem
+- S3
+- MinIO
+- SFTP
+- WebDAV
+
+### Email/Mailer System
+
+#### Template Support
+- Plain text templates
+- HTML templates
+- Uses `github.com/vanng822/go-premailer` for HTML processing
+
+### Web Framework Components
+
+#### Router
+- Uses Chi router (`github.com/go-chi/chi/v5`)
+
+#### Template Engines
+- Go templates (built-in)
+- Jet templates (`github.com/CloudyKit/jet/v6`)
+
+#### Middleware
+- CSRF protection (`github.com/justinas/nosurf`)
+- Session management
+- Custom middleware for maintenance mode
+- CORS middleware (`r.CORS`) — opt-out by default via `CORS_ENABLED`
+- Rate limiting middleware (`r.RateLimiter`) — token bucket / sliding window, in-memory/Redis/Badger; CIDR-aware whitelist (IPv4/IPv6, parsed once at construction); client IP extracted via the shared `clientIPAddress` helper (`net.SplitHostPort` for correct IPv6, first IP of `X-Forwarded-For` when `TrustProxy`)
+- Security headers middleware (`r.SecurityHeaders`) — helmet equivalent; opt-in via `SECURITY_HEADERS_ENABLED` (enabled in scaffolded apps)
+- API key auth middleware (`r.APIKeyAuth`) — static keys (constant-time) / pluggable `Validator` / cache `Store`; opt-in via `API_KEY_AUTH_ENABLED`; apply to API route groups (not global)
+- Request ID tracing middleware (`r.RequestID`) — stamps every request with a correlation ID; enabled by default (opt-out via `REQUEST_ID_ENABLED`); reuses an incoming ID from `REQUEST_ID_HEADER` (cross-service correlation), otherwise generates one (`REQUEST_ID_FORMAT`: `uuid` default | `xid` | `short` | `default`); echoes on `REQUEST_ID_RESPONSE_HEADER`; stored in context under chi's `RequestIDKey` (interoperable with `middleware.GetReqID`); retrieve via `regius.RequestIDFromContext(ctx)`; wired globally in `routes.go`
+- Request sanitization middleware (`r.RequestSanitizer`) — XSS prevention via [bluemonday](https://github.com/microcosm-cc/bluemonday); sanitizes query params, form values, and a header allowlist; opt-in via `REQUEST_SANITIZATION_ENABLED` (enabled in scaffolded apps); JSON bodies and `/api/*` exempt by default; wired globally in `routes.go`
+- IP whitelist/blacklist middleware (`r.IPFilter`) — allow/deny lists of IPs & CIDR ranges (IPv4/IPv6); deny-wins; pluggable `IPChecker` (e.g. `CacheIPChecker` for runtime fail2ban-style blocking); opt-in via `IP_FILTER_ENABLED`; wired globally in `routes.go` (after `RealIP`)
+
+### Security Considerations
+
+#### Encryption
+- AES encryption for sensitive data
+- Random string generation using crypto/rand
+
+#### Input Validation
+- Uses `github.com/asaskevich/govalidator`
+- Custom validation struct with error collection
+
+#### CSRF Protection
+- Automatic CSRF token generation and validation
+
+#### Security Headers
+- `r.SecurityHeaders(cfg)` sets a bundle of HTTP security response headers (CSP, HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, COOP, CORP, `X-Permitted-Cross-Domain-Policies`, `X-DNS-Prefetch-Control`)
+- Helmet-style safe defaults are applied for any field left at its zero value
+- HSTS (`Strict-Transport-Security`) is only emitted when `Server.Secure` is true, so it never locks out local dev
+- Wired globally in `routes.go`; disabled (passthrough) when `SECURITY_HEADERS_ENABLED` is false/absent
+- Configured via env vars in `regius.go` `New()`: `SECURITY_HEADERS_ENABLED`, `CONTENT_SECURITY_POLICY`, `HSTS_MAX_AGE`, `HSTS_INCLUDE_SUBDOMAINS`, `HSTS_PRELOAD`, `REFERRER_POLICY`, `X_FRAME_OPTIONS`
+- A route can override any header per-response via `w.Header().Set(...)` before writing
+
+#### API Key Authentication
+- `r.APIKeyAuth(cfg)` authenticates requests via an API key for API route groups (e.g. `/api/*`); opt-in via `API_KEY_AUTH_ENABLED`. Not wired globally — apply it to a route group so cookie-authed web routes are unaffected
+- Key sources (in order): `Authorization: Bearer <key>` (or configured scheme), `X-API-Key` header, and an opt-in query param (`API_KEY_QUERY_PARAM`, disabled by default since keys in URLs leak via logs/referrers)
+- Validation backends by precedence: pluggable `Validator` func (DB-backed) > `APIKeyStore` (cache/revocation) > static `Keys` (constant-time compare via `crypto/subtle`)
+- `CacheAPIKeyStore` adapts `cache.Cache` (Redis/Badger); entries are keyed by SHA-256 of the raw key so raw keys are never persisted; `Revoke` removes an entry
+- On success the `APIKeyIdentity` is stored in the request context; retrieve it with `regius.APIKeyFromContext(ctx)`
+- On failure responds `401` with `WWW-Authenticate: <scheme> realm="<realm>"`, `Cache-Control: no-store`, and a JSON body. The raw key is never logged
+- Configured via env vars in `regius.go` `New()`: `API_KEY_AUTH_ENABLED`, `API_KEYS`, `API_KEY_HEADER`, `API_KEY_SCHEME`, `API_KEY_ALT_HEADER`, `API_KEY_QUERY_PARAM`, `API_KEY_REALM`
+
+#### Request ID Tracing
+- `r.RequestID(cfg)` stamps every request with a correlation ID; enabled by default (opt-out via `REQUEST_ID_ENABLED`)
+- Reuses an incoming ID from the request header (`REQUEST_ID_HEADER`, default `X-Request-ID`) when present (cross-service correlation); otherwise generates one
+- Generated ID format via `REQUEST_ID_FORMAT`: `uuid` (default) | `xid` | `short` (12-char base62) | `default` (chi-style `host/random-counter`); a pluggable `Generator` func overrides the format
+- Echoed on the response via `REQUEST_ID_RESPONSE_HEADER` (default `X-Request-ID`); set before the downstream handler so a route can override per-response via `w.Header().Set(...)`
+- Stored in the request context under chi's `RequestIDKey` (interoperable with `middleware.GetReqID` and chi's request logger, which prints the ID when `DEBUG=true`); retrieve via `regius.RequestIDFromContext(ctx)`
+- Incoming IDs are trimmed and capped at 128 chars to prevent log injection / header abuse
+- Wired globally in `routes.go` (replaces chi's built-in `middleware.RequestID`)
+- Configured via env vars in `regius.go` `New()`: `REQUEST_ID_ENABLED`, `REQUEST_ID_HEADER`, `REQUEST_ID_RESPONSE_HEADER`, `REQUEST_ID_FORMAT`
+
+#### Request Sanitization
+- `r.RequestSanitizer(cfg)` sanitizes incoming request input (query params, form-encoded values, and a configurable header allowlist) for XSS prevention using [bluemonday](https://github.com/microcosm-cc/bluemonday); enabled in scaffolded apps via `REQUEST_SANITIZATION_ENABLED=true` (framework defaults to off when the env var is absent)
+- Policies (env `REQUEST_SANITIZATION_POLICY`): `strict` (default — strips all HTML, returns safe text) | `ugc` (allows a safe HTML subset like `<b>`, `<a>`); a `Custom *bluemonday.Policy` field overrides both
+- Scopes (all default to true via `*bool` fields — nil = true, `BoolPtr(false)` disables): `Query` sanitizes URL query params; `Form` sanitizes `application/x-www-form-urlencoded` and `multipart/form-data` text fields (in `r.Form`, `r.PostForm`, and `r.MultipartForm.Value`); `Headers` sanitizes only the names in the allowlist (`REQUEST_SANITIZATION_HEADERS`, default `Referer,User-Agent`)
+- JSON-safe: `application/json` (and other non-form) bodies are **never** parsed or consumed — API handlers retain full access to `r.Body`
+- Path exemption: `REQUEST_SANITIZATION_EXEMPT` (default `/api/.*`, mirroring `NoSurf`) bypasses sanitization for matching paths
+- Non-destructive: clean values are left byte-for-byte intact; only values containing HTML are rewritten. `r.URL.RawQuery` is only re-encoded when a query value actually changed
+- Standalone helpers: `r.Sanitize(s)` / `r.Sanitizer()` (app-configured policy) and package-level `regius.Sanitize(s)` (strict) for targeted use in handlers
+- Do NOT sanitize structural headers (`Authorization`, `Cookie`, `X-CSRF-Token`, `Content-*`, `X-Forwarded-*`, `X-Request-ID`) — doing so breaks routing, auth, and tracing; the default allowlist avoids these
+- Wired globally in `routes.go` (after `MaxRequestSize` so body parsing is bounded by the size limit, and after `NoSurf` so CSRF validation runs on raw input)
+- Configured via env vars in `regius.go` `New()`: `REQUEST_SANITIZATION_ENABLED`, `REQUEST_SANITIZATION_POLICY`, `REQUEST_SANITIZATION_QUERY`, `REQUEST_SANITIZATION_FORM`, `REQUEST_SANITIZATION_HEADERS`, `REQUEST_SANITIZATION_EXEMPT`
+
+#### IP Whitelist/Blacklist
+- `r.IPFilter(cfg)` allows or denies requests based on the client IP; opt-in via `IP_FILTER_ENABLED`. Wired globally in `routes.go` immediately after `middleware.RealIP` so denied requests short-circuit before heavier middleware runs
+- `Allow` and `Deny` accept IPs or CIDR ranges (e.g. `10.0.0.0/8`, `192.168.1.5`, `::1/128`); bare IPs are treated as `/32` (IPv4) or `/128` (IPv6). Invalid entries are logged via `ErrorLog` and skipped (non-fatal)
+- Semantics are deny-wins: a matching `Deny` entry always blocks; when `Allow` is non-empty, any IP not in `Allow` is blocked. With neither list set, all IPs are allowed
+- `TrustProxy` (default **false**) reads the client IP from `X-Forwarded-For` (first entry) or `X-Real-IP` instead of `RemoteAddr`. Only enable behind a trusted reverse proxy — otherwise an attacker can spoof the header to bypass the filter. Note `middleware.RealIP` already rewrites `RemoteAddr` from `X-Forwarded-For`, so the two interact; use `TrustProxy` for explicit control
+- Blocked requests respond with `StatusCode` (default 403) + a JSON body (`{"error":"forbidden","message":...}`) and `Cache-Control: no-store`
+- Optional pluggable `IPChecker` interface (`Check(ip) (IPDecision, error)`) for dynamic, DB/cache-backed decisions. `DecisionAllow`/`DecisionDeny` override the static lists; `DecisionNone` defers to them. Checker errors are logged and treated as `DecisionNone` (the dynamic layer fails open while the static baseline still applies)
+- `CacheIPChecker` adapts `cache.Cache` (Redis/Badger) for runtime block/unblock without restart (fail2ban-style); entries namespaced under `ipfilter:`; `Block`/`Allow`/`Unblock`/`Set` with TTL in seconds
+- Configured via env vars in `regius.go` `New()`: `IP_FILTER_ENABLED`, `IP_FILTER_ALLOW`, `IP_FILTER_DENY`, `IP_FILTER_TRUST_PROXY`, `IP_FILTER_STATUS_CODE`, `IP_FILTER_MESSAGE`
+
+### CLI Commands Structure
+
+#### Available Commands
+```bash
+./regius help                    # Show help
+./regius version                 # Show version
+./regius new <app_name>          # Create new app
+                                 #   flags: --db <postgres|mysql|sqlite|...> (pre-fill .env DATABASE_TYPE)
+                                 #          -v, --verbose (stream go get / go mod tidy output)
+./regius migrate [up|down|reset] # Run migrations
+./regius migrate version         # Show current migration version
+./regius db:seed                 # Run pending SQL seed files
+./regius make migration <name>          # Create SQL migration
+./regius make seed <name>        # Create SQL seed file
+./regius make auth               # Create auth scaffolding
+./regius make handler <name>     # Create handler stub
+./regius make model <name>       # Create model
+./regius make gorm-model <name>  # Create GORM model
+./regius make session            # Create session table
+./regius make mail <name>        # Create mail templates
+./regius down                    # Maintenance mode on
+./regius up                      # Maintenance mode off
+```
+
+### Environment Configuration
+
+#### Required Environment Variables
+```bash
+APP_NAME=testapp
+APP_URL="http://localhost:4000"
+DEBUG=true
+PORT=4000
+RPC_PORT=4001
+SERVER_NAME=localhost
+SECURE=false
+DATABASE_TYPE=postgres|mysql|sqlite
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_NAME=regius
+DATABASE_USER=user
+DATABASE_PASS=password
+```
+
+### Development Workflow
+
+#### Creating New Features
+1. Use CLI commands to scaffold code (`make handler`, `make model`, etc.)
+2. Write tests first (table-driven where appropriate)
+3. Implement functionality
+4. Run `make test` to verify
+5. Format code with `go fmt`
+6. Build and test manually
+7. **Check if the README needs updating** — when a feature adds user-facing behavior (new middleware, CLI command, config option, env var, or public API), update `README.md` (and `AGENTS.md`) to document it. The scaffolded `.env` template (`cmd/cli/templates/env`) must also be updated for any new env var so generated apps include it
+
+#### Code Generation
+- Use the CLI's `make` commands for consistent scaffolding
+- Follow existing patterns in generated code
+- Customize generated code as needed
+
+### Performance Considerations
+
+#### Caching
+- Redis cache support
+- BadgerDB cache support
+- In-memory caching
+
+#### Database Connection Pooling
+- Uses `database/sql` connection pooling
+- Redis connection pooling
+
+### Error Messages
+
+#### User-Friendly Messages
+- Use clear, descriptive error messages
+- Avoid technical jargon in user-facing messages
+- Provide actionable guidance when possible
+
+#### Logging
+- InfoLog and ErrorLog loggers available
+- Use appropriate log levels
+- Include context in log messages
+
+### Dependencies
+
+#### Core Dependencies
+- `github.com/go-chi/chi/v5` - HTTP router
+- `github.com/alexedwards/scs/v2` - Session management
+- `github.com/CloudyKit/jet/v6` - Template engine
+- `github.com/gomodule/redigo/redis` - Redis client
+- `github.com/dgraph-io/badger/v3` - Embedded key-value store
+
+#### Development Dependencies
+- Standard Go testing tools
+- Consider adding `golangci-lint` for consistent linting
+
+### Deployment
+
+#### Binary Distribution
+- Cross-platform binaries built via CI/CD
+- Install to `~/.regius/bin/` directory
+- Add to PATH for global access
+
+#### Maintenance Mode
+- `down` command puts app in maintenance mode
+- `up` command brings app back online
+- Affects all routes when active
+
+This document should be updated as the codebase evolves. Run `go fmt ./...` and `make test` before committing changes.</content>
+<parameter name="filePath">/home/hbarral/www/personal/regius/AGENTS.md

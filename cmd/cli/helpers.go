@@ -12,6 +12,22 @@ func migrationDSN() (string, error) {
 	return reg.MigrationDSNForCLI()
 }
 
+// normalizeDBType maps the user-facing DATABASE_TYPE aliases (sqlite3,
+// postgresql, mariadb) to the canonical template-file suffix used across the
+// embedded migration templates (sqlite, postgres, mysql).
+func normalizeDBType(dbType string) string {
+	switch strings.ToLower(dbType) {
+	case "sqlite3":
+		return "sqlite"
+	case "postgresql":
+		return "postgres"
+	case "mariadb":
+		return "mysql"
+	default:
+		return strings.ToLower(dbType)
+	}
+}
+
 func updateSourceFiles(path string, fi os.FileInfo, err error) error {
 	if err != nil {
 		return err

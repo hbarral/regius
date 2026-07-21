@@ -15,7 +15,7 @@ func doAuth() error {
 	appName := os.Getenv("APP_NAME")
 	appName = strings.ToLower(appName)
 	log.Println("APP NAME IS:", appName)
-	dbType := reg.DB.DataType
+	dbType := normalizeDBType(reg.DB.DataType)
 
 	dsn, err := migrationDSN()
 	if err != nil {
@@ -27,8 +27,10 @@ func doAuth() error {
 		exitGracefully(err)
 	}
 
+	// Drop dependents first so this runs portably on postgres, mysql and
+	// sqlite (sqlite rejects the CASCADE keyword on DROP TABLE).
 	downBytes := []byte(
-		"DROP TABLE IF EXISTS users CASCADE; DROP TABLE IF EXISTS tokens CASCADE; DROP TABLE IF EXISTS remember_tokens;",
+		"DROP TABLE IF EXISTS tokens; DROP TABLE IF EXISTS remember_tokens; DROP TABLE IF EXISTS users;",
 	)
 
 	if err := reg.CreateMigration(upBytes, downBytes, "auth", "sql"); err != nil {
