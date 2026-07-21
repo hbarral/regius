@@ -545,13 +545,33 @@ regius migrate --help
 
 ## 🚀 Getting Started
 
+### Homebrew (macOS & Linux)
+
+The easiest way to install Regius on macOS or Linux is with [Homebrew](https://brew.sh):
+
+```bash
+brew install hbarral/tap/regius
+```
+
+Verify the installation:
+
+```bash
+regius help
+```
+
+To upgrade to the latest release later on:
+
+```bash
+brew upgrade regius
+```
+
 ### Download Binaries
 
 Download the suitable binary for your operating system from the links below:
 
-- [Linux](https://github.com/hbarral/regius/releases/download/v1.7.0/regius_Linux_x86_64.tar.gz)
-- [Windows](https://github.com/hbarral/regius/releases/download/v1.7.0/regius_Windows_x86_64.zip)
-- [Mac](https://github.com/hbarral/regius/releases/download/v1.7.0/regius_Darwin_x86_64.tar.gz)
+- [Linux](https://github.com/hbarral/regius/releases/download/v1.8.0/regius_Linux_x86_64.tar.gz)
+- [Windows](https://github.com/hbarral/regius/releases/download/v1.8.0/regius_Windows_x86_64.zip)
+- [Mac](https://github.com/hbarral/regius/releases/download/v1.8.0/regius_Darwin_x86_64.tar.gz)
 
 <details>
   <summary>Build from Source</summary>
