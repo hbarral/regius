@@ -151,11 +151,11 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // In regius-app/routes.go - Apply to all routes
+```go
+  // In routes.go - Apply to all routes
   a.use(a.Middleware.RateLimit)
 
-  // In regius-app/routes-api.go - Apply to API routes
+  // In routes-api.go - Apply to API routes
   r.Use(a.Middleware.APIRateLimit)
 
   // Or apply to specific routes
@@ -177,18 +177,13 @@ regius migrate --help
   ```
 
   **Testing:**
-  The skeleton app includes comprehensive testing tools in `test-tools/` directory:
-
-  - `ratelimit-test.py` - Python-based tester with detailed output
-  - `ratelimit-test.sh` - Shell script using curl
-  - `ratelimit-tester.go` - Go-based high-performance tester
+  You can exercise the rate limiter with any HTTP load tool (e.g. `hey`, `wrk`, or a small `curl` loop) against a rate-limited route in your app.
 
   **Documentation:**
 
-  - Full documentation: `regius/RATE_LIMITER.md`
-  - Implementation details: `regius/RATE_LIMITER_IMPLEMENTATION.md`
-  - Testing guide: `regius-app/test-tools/README.md`
-  - Quick start: `regius-app/test-tools/QUICKSTART.md`
+  - Full documentation: `RATE_LIMITER.md`
+  - Implementation details: `RATE_LIMITER_IMPLEMENTATION.md`
+  - Testing guide and quick start: see the `test-tools/` directory in a generated app
 
 - **CORS Middleware**: Handle Cross-Origin Resource Sharing out of the box with flexible configuration.
 
@@ -737,7 +732,7 @@ CORS_MAX_AGE=300
 # security headers (helmet equivalent, disabled by default).
 # HSTS is only emitted when SECURE=true.
 SECURITY_HEADERS_ENABLED=false
-CONTENT_SECURITY_POLICY=default-src 'self'
+CONTENT_SECURITY_POLICY=default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; frame-ancestors 'self'
 HSTS_MAX_AGE=31536000
 HSTS_INCLUDE_SUBDOMAINS=true
 HSTS_PRELOAD=false
@@ -844,6 +839,17 @@ Each command has different options and parameters. Here are some basic usage exa
 
   ```bash
   ./regius new myapp
+  ```
+
+  Optional flags:
+
+  - `--db <type>`: pre-fill `DATABASE_TYPE` in the generated `.env`
+    (`postgres`|`postgresql`|`mysql`|`mariadb`|`sqlite`|`sqlite3`).
+  - `-v`, `--verbose`: stream `go get` / `go mod tidy` output live instead of
+    capturing it (the captured output is shown only on failure by default).
+
+  ```bash
+  ./regius new myapp --db postgres -v
   ```
 
 - Show help commands:

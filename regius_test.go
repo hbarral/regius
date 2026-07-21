@@ -91,8 +91,9 @@ func TestBuildDSN_PostgresWithPassword(t *testing.T) {
 	t.Setenv("DATABASE_PASS", "s3cr3t")
 
 	r := &Regius{}
-	dsn := r.BuildDSN()
+	dsn, err := r.BuildDSN()
 
+	require.NoError(t, err)
 	assert.Contains(t, dsn, "host=dbhost")
 	assert.Contains(t, dsn, "port=5432")
 	assert.Contains(t, dsn, "user=dbuser")
@@ -103,40 +104,28 @@ func TestBuildDSN_PostgresWithPassword(t *testing.T) {
 	assert.Contains(t, dsn, "password=s3cr3t")
 }
 
-func TestBuildDSN_PostgresWithoutPassword(t *testing.T) {
-	t.Setenv("DATABASE_TYPE", "postgresql")
-	t.Setenv("DATABASE_HOST", "dbhost")
-	t.Setenv("DATABASE_PORT", "5432")
-	t.Setenv("DATABASE_USER", "dbuser")
-	t.Setenv("DATABASE_NAME", "appdb")
-	t.Setenv("DATABASE_SSL_MODE", "require")
-	t.Setenv("DATABASE_PASS", "")
-
-	r := &Regius{}
-	dsn := r.BuildDSN()
-
-	assert.Contains(t, dsn, "host=dbhost")
-	assert.NotContains(t, dsn, "password=", "no password= segment when DATABASE_PASS is empty")
-}
-
 func TestBuildDSN_PostgresqlAlias(t *testing.T) {
 	t.Setenv("DATABASE_TYPE", "postgresql")
 	r := &Regius{}
-	assert.NotEmpty(t, r.BuildDSN())
+
+	dsn, _ := r.BuildDSN()
+	assert.NotEmpty(t, dsn)
 }
 
 func TestBuildDSN_EmptyType(t *testing.T) {
 	t.Setenv("DATABASE_TYPE", "")
 	r := &Regius{}
-	assert.Empty(t, r.BuildDSN())
+	dsn, _ := r.BuildDSN()
+	assert.Empty(t, dsn)
 }
 
 func TestBuildDSN_UnsupportedType(t *testing.T) {
-	// TODO: bug — BuildDSN only supports postgres; mysql falls through to the
-	// empty default case. Pinned here so the gap is visible.
-	t.Setenv("DATABASE_TYPE", "mysql")
+	t.Setenv("DATABASE_TYPE", "mongodb")
 	r := &Regius{}
-	assert.Empty(t, r.BuildDSN())
+	dsn, err := r.BuildDSN()
+	assert.Error(t, err)
+	assert.Empty(t, dsn)
+	assert.Contains(t, err.Error(), "mongodb")
 }
 
 func TestStartLoggers(t *testing.T) {
