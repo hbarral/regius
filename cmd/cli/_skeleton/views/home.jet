@@ -10,7 +10,7 @@
 <div class="col text-center">
   <div class="d-flex align-items-center justify-content-center mt-5">
     <div>
-      <img src="/public/images/regius.png" class="mb-5" style="width: 100px;height:auto;">
+      <img src="/public/images/regius.png" class="mb-1" style="width: 100px;height:auto;">
       <h1>Regius</h1>
       <hr>
       <small class="text-muted">Go build something real</small>
