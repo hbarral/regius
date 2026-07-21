@@ -8,6 +8,7 @@ import (
 	db2 "github.com/upper/db/v4"
 	"github.com/upper/db/v4/adapter/mysql"
 	"github.com/upper/db/v4/adapter/postgresql"
+	"github.com/upper/db/v4/adapter/sqlite"
 )
 
 var (
@@ -31,6 +32,8 @@ func New(databasePool *sql.DB) Models {
 		upper, _ = mysql.New(databasePool)
 	case "postgres", "postgresql":
 		upper, _ = postgresql.New(databasePool)
+	case "sqlite", "sqlite3":
+		upper, _ = sqlite.New(databasePool)
 	default:
 		// do nothing
 	}

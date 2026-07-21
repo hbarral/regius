@@ -6,15 +6,7 @@ import (
 )
 
 func doSessionTable() error {
-	dbType := reg.DB.DataType
-
-	if dbType == "mariadb" {
-		dbType = "mysql"
-	}
-
-	if dbType == "postgresql" {
-		dbType = "postgres"
-	}
+	dbType := normalizeDBType(reg.DB.DataType)
 
 	fileName := fmt.Sprintf("%d_create_sessions_table", time.Now().UnixMicro())
 
