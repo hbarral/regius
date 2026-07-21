@@ -322,6 +322,8 @@ func TestMain(m *testing.M) {
 ./regius help                    # Show help
 ./regius version                 # Show version
 ./regius new <app_name>          # Create new app
+                                 #   flags: --db <postgres|mysql|sqlite|...> (pre-fill .env DATABASE_TYPE)
+                                 #          -v, --verbose (stream go get / go mod tidy output)
 ./regius migrate [up|down|reset] # Run migrations
 ./regius migrate version         # Show current migration version
 ./regius db:seed                 # Run pending SQL seed files

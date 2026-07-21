@@ -841,6 +841,17 @@ Each command has different options and parameters. Here are some basic usage exa
   ./regius new myapp
   ```
 
+  Optional flags:
+
+  - `--db <type>`: pre-fill `DATABASE_TYPE` in the generated `.env`
+    (`postgres`|`postgresql`|`mysql`|`mariadb`|`sqlite`|`sqlite3`).
+  - `-v`, `--verbose`: stream `go get` / `go mod tidy` output live instead of
+    capturing it (the captured output is shown only on failure by default).
+
+  ```bash
+  ./regius new myapp --db postgres -v
+  ```
+
 - Show help commands:
 
   ```bash

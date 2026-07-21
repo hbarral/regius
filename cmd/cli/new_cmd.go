@@ -1,8 +1,8 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -18,10 +18,24 @@ const (
 	GOOSWindows = "windows"
 )
 
-var appURL string
+var (
+	newAppDB      string
+	newAppVerbose bool
+)
+
+var validDBTypes = map[string]bool{
+	"postgres":   true,
+	"postgresql": true,
+	"mysql":      true,
+	"mariadb":    true,
+	"sqlite":     true,
+	"sqlite3":    true,
+}
 
 func init() {
 	rootCmd.AddCommand(newCmd)
+	newCmd.Flags().StringVar(&newAppDB, "db", "", "pre-fill DATABASE_TYPE in .env (postgres|postgresql|mysql|mariadb|sqlite|sqlite3)")
+	newCmd.Flags().BoolVarP(&newAppVerbose, "verbose", "v", false, "stream go command output live instead of capturing it")
 }
 
 var newCmd = &cobra.Command{
@@ -35,6 +49,8 @@ and set up the initial configuration.`,
 	},
 }
 
+var appURL string
+
 func doNew(appName string) {
 	appName = strings.ToLower(appName)
 	appURL = appName
@@ -44,134 +60,116 @@ func doNew(appName string) {
 		appName = exploded[(len(exploded) - 1)]
 	}
 
-	log.Println("App name is:", appName)
-
-	color.Green("\tCreating application from embedded skeleton...")
-	err := writeSkeleton("./" + appName)
-	if err != nil {
-		exitGracefully(err)
+	if newAppDB != "" && !validDBTypes[strings.ToLower(newAppDB)] {
+		exitWithError(fmt.Errorf("unsupported --db type %q (use postgres|postgresql|mysql|mariadb|sqlite|sqlite3)", newAppDB))
 	}
 
-	color.Yellow("\tCreating .env file...")
+	color.Green("Creating application '%s'...", appName)
+
+	if err := writeSkeleton("./" + appName); err != nil {
+		exitGracefully(err)
+	}
+	color.Green("  ✓ Skeleton copied")
+
 	data, err := templateFS.ReadFile("templates/env")
 	if err != nil {
 		exitGracefully(err)
 	}
-
 	env := string(data)
+	if newAppDB != "" {
+		env = strings.Replace(env, "DATABASE_TYPE=", "DATABASE_TYPE="+strings.ToLower(newAppDB), 1)
+	}
 	env = strings.ReplaceAll(env, "${APP_NAME}", appName)
 	env = strings.ReplaceAll(env, "${KEY}", reg.RandomString(32))
+	if err := copyDataToFile([]byte(env), fmt.Sprintf("./%s/.env", appName)); err != nil {
+		exitGracefully(err)
+	}
+	color.Green("  ✓ .env written")
 
-	err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/.env", appName))
+	mkOS := runtime.GOOS
+	switch mkOS {
+	case GOOSDarwin:
+		mkOS = "mac"
+	case GOOSWindows:
+		mkOS = "windows"
+	default:
+		mkOS = "linux"
+	}
+	mkData, err := templateFS.ReadFile(fmt.Sprintf("templates/Makefile.%s", mkOS))
 	if err != nil {
 		exitGracefully(err)
 	}
-
-	switch runtime.GOOS {
-	case GOOSLinux:
-		color.Yellow("\tCreating Makefile for linux...")
-
-		data, err := templateFS.ReadFile("templates/Makefile.linux")
-		if err != nil {
-			exitGracefully(err)
-		}
-
-		env := string(data)
-		env = strings.ReplaceAll(env, "${NAME}", appName)
-		env = strings.ReplaceAll(env, "${BINARY_APP_NAME}", appName)
-
-		err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/Makefile", appName))
-		if err != nil {
-			exitGracefully(err)
-		}
-	case GOOSDarwin:
-		color.Yellow("\tCreating Makefile for MacOS...")
-
-		data, err := templateFS.ReadFile("templates/Makefile.mac")
-		if err != nil {
-			exitGracefully(err)
-		}
-
-		env := string(data)
-		env = strings.ReplaceAll(env, "${NAME}", appName)
-		env = strings.ReplaceAll(env, "${BINARY_APP_NAME}", appName)
-
-		err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/Makefile", appName))
-		if err != nil {
-			exitGracefully(err)
-		}
-	case GOOSWindows:
-		color.Yellow("\tCreating Makefile for Windows...")
-
-		data, err := templateFS.ReadFile("templates/Makefile.windows")
-		if err != nil {
-			exitGracefully(err)
-		}
-
-		env := string(data)
-		env = strings.ReplaceAll(env, "${NAME}", appName)
-		env = strings.ReplaceAll(env, "${BINARY_APP_NAME}", appName+".exe")
-
-		err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/Makefile", appName))
-		if err != nil {
-			exitGracefully(err)
-		}
-	default:
-		color.Yellow("\tCreating Makefile for linux...")
-
-		data, err := templateFS.ReadFile("templates/Makefile.linux")
-		if err != nil {
-			exitGracefully(err)
-		}
-
-		env := string(data)
-		env = strings.ReplaceAll(env, "${NAME}", appName)
-		env = strings.ReplaceAll(env, "${BINARY_APP_NAME}", appName)
-
-		err = copyDataToFile([]byte(env), fmt.Sprintf("./%s/Makefile", appName))
-		if err != nil {
-			exitGracefully(err)
-		}
+	mk := string(mkData)
+	mk = strings.ReplaceAll(mk, "${NAME}", appName)
+	binaryName := appName
+	if mkOS == "windows" {
+		binaryName = appName + ".exe"
 	}
+	mk = strings.ReplaceAll(mk, "${BINARY_APP_NAME}", binaryName)
+	if err := copyDataToFile([]byte(mk), fmt.Sprintf("./%s/Makefile", appName)); err != nil {
+		exitGracefully(err)
+	}
+	color.Green("  ✓ Makefile written (%s)", mkOS)
 
-	color.Yellow("\tCreating go.mod file...")
 	_ = os.Remove(fmt.Sprintf("./%s/go.mod", appName))
-
 	data, err = templateFS.ReadFile("templates/go_mod")
 	if err != nil {
 		exitGracefully(err)
 	}
-
-	mod := string(data)
-	mod = strings.ReplaceAll(mod, "${APP_NAME}", appName)
-
-	err = copyDataToFile([]byte(mod), fmt.Sprintf("./%s/go.mod", appName))
-	if err != nil {
+	mod := strings.ReplaceAll(string(data), "${APP_NAME}", appName)
+	if err := copyDataToFile([]byte(mod), fmt.Sprintf("./%s/go.mod", appName)); err != nil {
 		exitGracefully(err)
 	}
+	color.Green("  ✓ go.mod written")
 
-	color.Yellow("\tUpdating source files...")
-	os.Chdir("./" + appName)
+	if err := os.Chdir("./" + appName); err != nil {
+		exitGracefully(err)
+	}
 	updateSource()
+	color.Green("  ✓ Source files updated")
 
-	color.Yellow("\tRunning go mod tidy...")
-
-	getCmd := exec.Command("go", "get", "github.com/hbarral/regius")
-	getCmd.Stdout = os.Stdout
-	getCmd.Stderr = os.Stderr
-	err = getCmd.Run()
-	if err != nil {
+	if err := runGoCmd(exec.Command("go", "get", "github.com/hbarral/regius"), "go get github.com/hbarral/regius"); err != nil {
 		exitWithError(fmt.Errorf("go get failed: %w", err))
 	}
-
-	tidyCmd := exec.Command("go", "mod", "tidy")
-	tidyCmd.Stdout = os.Stdout
-	tidyCmd.Stderr = os.Stderr
-	err = tidyCmd.Run()
-	if err != nil {
+	if err := runGoCmd(exec.Command("go", "mod", "tidy"), "go mod tidy"); err != nil {
 		exitWithError(fmt.Errorf("go mod tidy failed: %w", err))
 	}
 
-	color.Green("\tDone building " + appURL)
-	color.Green("\tGo build something real!")
+	color.Green("  ✓ Done — %s is ready", appURL)
+	color.Green("  Go build something real!")
+}
+
+// runGoCmd executes a go subcommand. By default the command's output is
+// captured and a spinner animates while it runs; the captured output is only
+// shown on failure. With --verbose, the output streams live and no spinner is
+// drawn.
+func runGoCmd(cmd *exec.Cmd, label string) error {
+	if newAppVerbose {
+		color.Cyan("  • %s", label)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			color.Red("  ✗ %s", label)
+			return err
+		}
+		color.Green("  ✓ %s", label)
+		return nil
+	}
+
+	sp := newSpinner(label)
+	sp.start()
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	err := cmd.Run()
+	sp.stop()
+	if err != nil {
+		if buf.Len() > 0 {
+			fmt.Fprint(os.Stderr, buf.String())
+		}
+		color.Red("  ✗ %s", label)
+		return err
+	}
+	color.Green("  ✓ %s", label)
+	return nil
 }
