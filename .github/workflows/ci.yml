@@ -43,9 +43,11 @@ jobs:
       - name: Build CLI
         run: go build -v -o regius ./cmd/cli
 
+      - name: Create smoke directory
+        run: mkdir -p /tmp/smoke
+
       - name: Scaffold a new app and build it
         run: |
-          mkdir -p /tmp/smoke
           "$GITHUB_WORKSPACE/regius" new smoketest
           cd smoketest
           go mod tidy
