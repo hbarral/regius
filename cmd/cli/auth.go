@@ -210,7 +210,7 @@ func updateHomeTemplate() error {
 
 			oldHomeFunc := `func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
 	defer h.App.LoadTime(time.Now())
-	err := h.render(w, r, "home", nil, nil)
+	err := h.App.Render.Page(w, r, h.App.Render.Jet("home", nil), nil)
 	if err != nil {
 		h.App.ErrorLog.Println("error rendering", err)
 	}
@@ -230,7 +230,7 @@ func updateHomeTemplate() error {
 	data := make(map[string]interface{})
 	data["userName"] = userName
 
-	err := h.render(w, r, "home", nil, &render.TemplateData{Data: data})
+	err := h.App.Render.Page(w, r, h.App.Render.Jet("home", nil), &render.TemplateData{Data: data})
 	if err != nil {
 		h.App.ErrorLog.Println("error rendering", err)
 	}

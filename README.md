@@ -716,8 +716,9 @@ MAILER_API=
 MAILER_KEY=
 MAILER_URL=
 
-# Template engine configuration (jet | go)
-RENDERER=jet
+# Template engine (used by CLI scaffolding only; at runtime each handler
+# picks its engine via render.Jet(), render.Go(), or a templ component)
+RENDERER=templ
 
 # encryption key (32 characters long)
 KEY=DPFtfVnxbtnXXRzVnRzrLxDzXXRh+Xft
@@ -931,6 +932,34 @@ For more details about usage and commands, refer to the CLI help:
 ```bash
 ./regius help
 ```
+
+## 🎨 Rendering Templates
+
+Regius provides a unified `render.Template` interface for all three template engines: **jet**, **go**, and **templ**. Every handler calls the same `Page()` method — the only difference is how the `Template` is created.
+
+### Jet
+
+```go
+h.App.Render.Page(w, r, h.App.Render.Jet("home", nil), nil)
+```
+
+### Go
+
+```go
+h.App.Render.Page(w, r, h.App.Render.Go("home"), nil)
+```
+
+### Templ
+
+Templ components implement `render.Template` natively — pass them directly with no wrapper and no registration:
+
+```go
+h.App.Render.Page(w, r, views.Home(), &render.TemplateData{Data: data})
+```
+
+### Mixing Engines
+
+Each handler independently chooses its engine, so you can mix jet, go, and templ in the same application without any global `RENDERER` setting.
 
 ## 🤝 Contributing
 

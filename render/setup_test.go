@@ -14,7 +14,6 @@ var views = jet.NewSet(
 )
 
 var testRenderer = Render{
-	Renderer: "",
 	RootPath: "",
 	JetViews: views,
 	Session:  scs.New(),

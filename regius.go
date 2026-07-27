@@ -76,7 +76,6 @@ type Server struct {
 
 type config struct {
 	port             string
-	renderer         string
 	cookie           cookieConfig
 	sessionType      string
 	database         databaseConfig
@@ -259,8 +258,7 @@ func (r *Regius) New(rootPath string) error {
 	ipFilterStatusCode, _ := strconv.Atoi(os.Getenv("IP_FILTER_STATUS_CODE"))
 
 	r.config = config{
-		port:     os.Getenv("PORT"),
-		renderer: os.Getenv("RENDERER"),
+		port: os.Getenv("PORT"),
 		cookie: cookieConfig{
 			name:     os.Getenv("COOKIE_NAME"),
 			lifetime: os.Getenv("COOKIE_LIFETIME"),
@@ -424,7 +422,6 @@ func (r *Regius) startLoggers() (*log.Logger, *log.Logger) {
 
 func (r *Regius) createRenderer() {
 	myrenderer := render.Render{
-		Renderer: r.config.renderer,
 		RootPath: r.RootPath,
 		Port:     r.config.port,
 		JetViews: r.JetViews,

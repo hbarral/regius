@@ -5,10 +5,11 @@ import (
 	"net/http"
 
 	"github.com/hbarral/regius"
+	"github.com/hbarral/regius/render"
 )
 
-func (h *Handlers) render(w http.ResponseWriter, r *http.Request, tmpl string, variables, data interface{}) error {
-	return h.App.Render.Page(w, r, tmpl, variables, data)
+func (h *Handlers) render(w http.ResponseWriter, r *http.Request, view render.Template, data interface{}) error {
+	return h.App.Render.Page(w, r, view, data)
 }
 
 func (h *Handlers) sessionPut(ctx context.Context, key string, val interface{}) {

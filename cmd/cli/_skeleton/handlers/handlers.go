@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/hbarral/regius"
-
 	"regius-app/data"
+
+	"github.com/hbarral/regius"
 )
 
 type Handlers struct {
@@ -16,7 +16,7 @@ type Handlers struct {
 
 func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
 	defer h.App.LoadTime(time.Now())
-	err := h.render(w, r, "home", nil, nil)
+	err := h.App.Render.Page(w, r, h.App.Render.Jet("home", nil), nil)
 	if err != nil {
 		h.App.ErrorLog.Println("error rendering", err)
 	}

@@ -149,7 +149,8 @@ MAILER_API=
 MAILER_KEY=
 MAILER_URL=
 
-# Template engine configuration (jet | go | templ)
+# Template engine (used by CLI scaffolding only; at runtime each handler
+# picks its engine via render.Jet(), render.Go(), or a templ component)
 RENDERER=jet
 
 # encryption key (32 characthers long)

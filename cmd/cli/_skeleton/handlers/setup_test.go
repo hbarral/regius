@@ -10,6 +10,7 @@ import (
 	"github.com/CloudyKit/jet/v6"
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
+
 	"github.com/hbarral/regius"
 	"github.com/hbarral/regius/mailer"
 	"github.com/hbarral/regius/render"
@@ -37,7 +38,6 @@ func TestMain(m *testing.M) {
 	)
 
 	myRenderer := render.Render{
-		Renderer: "jet",
 		RootPath: "../",
 		Port:     "4000",
 		JetViews: views,

@@ -30,7 +30,7 @@ import (
 )
 
 func (h *Handlers) SignIn(w http.ResponseWriter, r *http.Request) {
-	err := h.App.Render.Page(w, r, "signin", nil, nil)
+	err := h.App.Render.Page(w, r, h.App.Render.Jet("signin", nil), nil)
 	if err != nil {
 		h.App.ErrorLog.Println(err)
 	}
@@ -104,7 +104,7 @@ func (h *Handlers) PostSignIn(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) SignUp(w http.ResponseWriter, r *http.Request) {
-	err := h.App.Render.Page(w, r, "signup", nil, nil)
+	err := h.App.Render.Page(w, r, h.App.Render.Jet("signup", nil), nil)
 	if err != nil {
 		h.App.ErrorLog.Println(err)
 	}
@@ -196,7 +196,7 @@ func (h *Handlers) SignOut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Forgot(w http.ResponseWriter, r *http.Request) {
-	err := h.render(w, r, "forgot", nil, nil)
+	err := h.render(w, r, h.App.Render.Jet("forgot", nil), nil)
 	if err != nil {
 		h.App.ErrorLog.Println("Error Rendering: ", err)
 		h.App.Error500(w, r)
@@ -290,7 +290,7 @@ func (h *Handlers) ResetPasswordForm(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Data["Email"] = encryptedEmail
 
-	err := h.render(w, r, "reset-password", vars, data)
+	err := h.render(w, r, h.App.Render.Jet("reset-password", vars), data)
 	if err != nil {
 		return
 	}
