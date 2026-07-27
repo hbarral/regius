@@ -83,6 +83,12 @@ func checkForDB() {
 		exitGracefully(errors.New("you must set DATABASE_TYPE in .env"))
 	}
 
+	// SQLite uses a local file path (DATABASE_NAME, optional) and does not
+	// need a network host, port, or database name.
+	if normalizeDBType(reg.DB.DataType) == "sqlite" {
+		return
+	}
+
 	if os.Getenv("DATABASE_HOST") == "" {
 		exitGracefully(errors.New("DATABASE_HOST must be set"))
 	}
