@@ -8,7 +8,9 @@ Regius is a CLI application for building web pages in Go, inspired by Laravel. I
 
 This is a **single repository (monorepo)**. The starter app template is embedded directly in the CLI as `cmd/cli/_skeleton/` (embedded via `//go:embed all:_skeleton` in `cmd/cli/copy-files.go`), so `regius new <name>` writes the skeleton from the embedded filesystem — it does **not** clone an external repository. The underscore prefix makes Go's build tool ignore the skeleton directory (so it is not compiled as part of `go build ./...`), while `all:` lets the embed include it. The skeleton source uses the internal module name `regius-app` for its imports (e.g. `regius-app/data`); `regius new` rewrites the literal `regius-app` to the chosen app name via `updateSource()` in `cmd/cli/helpers.go`.
 
-When changing the skeleton (`cmd/cli/_skeleton/`), verify end-to-end by building the CLI and running `regius new smoketest && (cd smoketest && go build ./...)`. The skeleton's own `go.mod`/`go.sum` are intentionally absent — it is not a standalone module; its correctness is validated by generating an app from it and building that app.
+When changing the skeleton (`cmd/cli/_skeleton/`), verify end-to-end by building the CLI and running `regius new smoketest && (cd smoketest && go build ./...)`. `regius new` runs `templ generate` for the default `--renderer templ`, so the generated app builds directly. The skeleton's own `go.mod`/`go.sum` are intentionally absent — it is not a standalone module; its correctness is validated by generating an app from it and building that app. When changing renderer-aware scaffolding, also smoke the matrix: `regius new jetapp --renderer jet`, `regius new goapp --renderer go`, and `regius make auth`/`regius make handler --renderer <e>` in each, then `go build ./...`.
+
+> **Release coupling:** the embedded skeleton's handlers use the head `Render.Page(view render.Template, data)` API. Before end-user apps build out-of-the-box (without a local `replace`), a `github.com/hbarral/regius` release carrying that API must be published and `cmd/cli/templates/go_mod` bumped to require it; until then verify generated apps with a `replace github.com/hbarral/regius => ../regius` directive in the app's `go.mod`.
 
 ## Build/Lint/Test Commands
 
@@ -238,8 +240,10 @@ func TestMain(m *testing.M) {
 - Uses Chi router (`github.com/go-chi/chi/v5`)
 
 #### Template Engines
-- Go templates (built-in)
-- Jet templates (`github.com/CloudyKit/jet/v6`)
+The scaffolded app defaults to **templ** (`github.com/a-h/templ`) with the [templui](https://github.com/templui/templui) component library + Tailwind v4; select another engine at create time with `regius new <name> --renderer jet|go`.
+- templ (`github.com/a-h/templ`) — default; ships a full templui/Tailwind UI (navbar, auth screens, theme switcher) and a `templ generate` build step. Views live in `views/*.templ` (+ generated `*_templ.go`); templ components satisfy `render.Template` natively, so handlers pass them straight to `Render.Page`.
+- Jet templates (`github.com/CloudyKit/jet/v6`) — same modern shadcn-style UI as the templ skeleton, implemented with `*.jet` views, shared `views/layouts/*.jet` layouts, Tailwind v4, and Alpine.js. Handlers call `Render.Jet("name", vars)`.
+- Go templates (built-in) — same modern shadcn-style UI as the templ skeleton, implemented with `html/template`, Tailwind v4, and Alpine.js. Views live in `views/*.page.template` and share layouts in `views/layouts/*.layout.template`; component partials live in `views/components/*.page.template`. Handlers call `Render.Go("name")` for single-file pages or `Render.GoLayout("name", "layout")` for layout-wrapped pages.
 
 #### Middleware
 - CSRF protection (`github.com/justinas/nosurf`)
@@ -321,8 +325,9 @@ func TestMain(m *testing.M) {
 ```bash
 ./regius help                    # Show help
 ./regius version                 # Show version
-./regius new <app_name>          # Create new app
-                                 #   flags: --db <postgres|mysql|sqlite|...> (pre-fill .env DATABASE_TYPE)
+./regius new <app_name>          # Create new app (defaults: --db sqlite --renderer templ)
+                                 #   flags: --db <postgres|mysql|sqlite|...> (pre-fill .env DATABASE_TYPE; sqlite is default)
+                                 #          --renderer <templ|jet|go> (templ is default)
                                  #          -v, --verbose (stream go get / go mod tidy output)
 ./regius migrate [up|down|reset] # Run migrations
 ./regius migrate version         # Show current migration version

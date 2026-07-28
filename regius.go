@@ -30,8 +30,6 @@ import (
 	"github.com/hbarral/regius/session"
 )
 
-const version = "1.3.0"
-
 var (
 	myRedisCache  *cache.RedisCache
 	myBadgerCache *cache.BadgerCache
@@ -44,7 +42,6 @@ var maintenanceMode bool
 type Regius struct {
 	AppName       string
 	Debug         bool
-	Version       string
 	ErrorLog      *log.Logger
 	InfoLog       *log.Logger
 	RootPath      string
@@ -191,7 +188,6 @@ func (r *Regius) New(rootPath string) error {
 	r.InfoLog = infoLog
 	r.ErrorLog = errorLog
 	r.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
-	r.Version = version
 	r.RootPath = rootPath
 	r.Mail = r.createMailer()
 

@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"path/filepath"
 
 	"github.com/CloudyKit/jet/v6"
 	"github.com/alexedwards/scs/v2"
@@ -85,6 +86,14 @@ func (re *Render) Go(name string) Template {
 	return &goView{rootPath: re.RootPath, name: name}
 }
 
+// GoLayout renders a Go template inside a shared layout.
+// The page file is views/<name>.page.template and must define a "content" block.
+// The layout file is views/layouts/<layout>.layout.template and executes the
+// "content" block, e.g. {{template "content" .}}.
+func (re *Render) GoLayout(name, layout string) Template {
+	return &goView{rootPath: re.RootPath, name: name, layout: layout}
+}
+
 type jetView struct {
 	set  *jet.Set
 	name string
@@ -113,15 +122,41 @@ func (j *jetView) Render(ctx context.Context, w io.Writer) error {
 type goView struct {
 	rootPath string
 	name     string
+	layout   string
 }
 
 func (g *goView) Render(ctx context.Context, w io.Writer) error {
-	t, err := template.ParseFiles(fmt.Sprintf("%s/views/%s.page.template", g.rootPath, g.name))
+	td, _ := ctx.Value("templateData").(*TemplateData)
+
+	files := []string{
+		fmt.Sprintf("%s/views/%s.page.template", g.rootPath, g.name),
+	}
+	if g.layout != "" {
+		files = append([]string{fmt.Sprintf("%s/views/layouts/%s.layout.template", g.rootPath, g.layout)}, files...)
+	}
+
+	// Make component partials available to all Go templates.
+	components, err := filepath.Glob(fmt.Sprintf("%s/views/components/*.page.template", g.rootPath))
 	if err != nil {
+		return fmt.Errorf("error listing go template components: %w", err)
+	}
+	files = append(files, components...)
+
+	t, err := template.ParseFiles(files...)
+	if err != nil {
+		if g.layout != "" {
+			return fmt.Errorf("error loading go layout %q or page %q: %w", g.layout, g.name, err)
+		}
 		return fmt.Errorf("error loading go template %s: %w", g.name, err)
 	}
 
-	td, _ := ctx.Value("templateData").(*TemplateData)
+	if g.layout != "" {
+		layoutName := fmt.Sprintf("%s.layout.template", g.layout)
+		if err := t.ExecuteTemplate(w, layoutName, td); err != nil {
+			return fmt.Errorf("error executing go layout %q: %w", g.layout, err)
+		}
+		return nil
+	}
 
 	if err := t.Execute(w, td); err != nil {
 		return fmt.Errorf("error executing go template %s: %w", g.name, err)

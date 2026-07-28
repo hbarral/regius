@@ -1,89 +1,68 @@
-{{extends "./layouts/base.jet"}}
+{{extends "./layouts/main.jet"}}
 
-{{block browserTitle()}}
-Sign in
-{{end}}
+{{block browserTitle()}}Sign in{{end}}
 
-{{block css()}} {{end}}
+{{block css()}}{{end}}
 
 {{block pageContent()}}
-<h2 class="mt-5 text-center">Sign in</h2>
-
-
-<hr>
-
-{{if .Flash != ""}}
-<div class="alert alert-info text-center">
-    {{.Flash}}
-</div>
-{{end}}
-<div class="row">
-    <div class="col text-center">
-        <a href="/auth/github?provider=github" class="btn btn-outline-secondary">
-            <i class="bi bi-github"></i>
-            Sign in with GitHub
-        </a>
-
-        <br>
-
-        <a href="/auth/google?provider=google" class="btn btn-outline-secondary mt-3">
-            <i class="bi bi-google"></i>
-            Sign in with Google
-        </a>
-    </div>
-    <div class="col">
-        <form method="post" action="/auth/signin"
-              name="signin-form" id="signin-form"
-              class="d-block needs-validation"
-              autocomplete="off" novalidate="">
-
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-
-            <div class="mb-3">
-                <label for="email" class="form-label">Email</label>
-                <input type="email" class="form-control" id="email" name="email"
-                       required="" autocomplete="email-new">
-            </div>
-
-            <div class="mb-3">
-                <label for="password" class="form-label">Password</label>
-                <input type="password" class="form-control" id="password" name="password"
-                       required="" autocomplete="password-new">
-            </div>
-
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" value="remember" name="remember" id="remember">
-                <label class="form-check-label" for="remember">Remember me</label>
-            </div>
-
-            <hr>
-
-            <a href="javascript:void(0)" class="btn btn-primary" onclick="val()">Sign in</a>
-            <p class="mt-2">
-                <small><a href="/auth/forgot-password">Forgot password?</a></small>
+<main class="flex-1">
+  <div class="flex h-full items-center justify-center">
+    <div class="flex w-full max-w-2xl flex-col items-center justify-center gap-4 px-4">
+      <div class="w-full max-w-sm rounded-xl border bg-card text-card-foreground shadow">
+        <div class="flex flex-col space-y-1.5 p-6">
+          <h3 class="text-2xl font-semibold leading-none tracking-tight">Sign in to your account</h3>
+          <p class="text-sm text-muted-foreground">Enter your email and password</p>
+        </div>
+        <div class="p-6 pt-0">
+          {{if .Error != ""}}
+          <div class="mb-4 rounded-md bg-destructive/10 p-3 text-center text-sm text-destructive dark:bg-destructive/20">
+            {{.Error}}
+          </div>
+          {{end}}
+          {{if .Flash != ""}}
+          <div class="mb-4 rounded-md bg-blue-50 p-3 text-center text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-200">
+            {{.Flash}}
+          </div>
+          {{end}}
+          <div class="flex flex-col gap-4">
+            <form method="post" action="/auth/signin" name="signin-form" id="signin-form" autocomplete="off">
+              <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+              <div class="flex flex-col gap-4">
+                <div class="w-full max-w-sm grid gap-2">
+                  <label for="email" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-50">Email</label>
+                  <input id="email" name="email" type="email" placeholder="username@example.com" required class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm">
+                </div>
+                <div class="w-full max-w-sm grid gap-2">
+                  <div class="flex items-center justify-between">
+                    <label for="password" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-50">Password</label>
+                    <a href="/auth/forgot-password" class="ml-auto text-sm underline-offset-4 hover:underline">Forgot your password?</a>
+                  </div>
+                  <input id="password" name="password" type="password" placeholder="password" required class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm">
+                </div>
+                <div class="flex items-center gap-2">
+                  <input id="remember" name="remember" type="checkbox" value="remember" class="peer border-input focus-visible:ring-[3px] disabled:cursor-not-allowed checked:border-primary indeterminate:bg-primary size-4 focus-visible:outline-none rounded-[4px] border disabled:opacity-50 indeterminate:text-primary-foreground shrink-0 cursor-pointer relative checked:bg-primary checked:text-primary-foreground indeterminate:border-primary focus-visible:ring-ring/50 appearance-none shadow-xs transition-shadow focus-visible:border-ring">
+                  <label for="remember" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-50">Remember me</label>
+                </div>
+              </div>
+            </form>
+            {{include "components/social_login_buttons.jet"}}
+          </div>
+        </div>
+        <div class="flex flex-col gap-2 p-6 pt-0">
+          <button type="submit" form="signin-form" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2 w-full">
+            Sign in
+          </button>
+          <div class="flex">
+            <p class="text-sm leading-normal font-normal text-muted-foreground text-center w-full">
+              Don&apos;t have an account?
+              <a href="/auth/signup" class="text-sm underline underline-offset-4 hover:text-primary">Sign up</a>
             </p>
-
-        </form>
+          </div>
+        </div>
+      </div>
     </div>
-</div>
-
-<p>&nbsp;</p>
-
+  </div>
+</main>
 {{end}}
 
-{{block js()}}
-<script>
-    function val() {
-        let form = document.getElementById("signin-form");
-        if (form.checkValidity() === false) {
-            this.event.preventDefault();
-            this.event.stopPropagation();
-            form.classList.add("was-validated");
-            return;
-        }
-
-        form.classList.add("was-validated");
-        form.submit();
-    }
-</script>
-{{end}}
+{{block js()}}{{end}}

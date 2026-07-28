@@ -14,7 +14,7 @@ Visit the official repository at [Regius on GitHub](https://github.com/hbarral/r
 
 ### Basic Commands
 
-- `regius new <app_name>`: Creates a new web application.
+- `regius new <app_name>`: Creates a new web application (defaults to `templ` renderer + `sqlite` database, with a runnable auth scaffold; switch with `--renderer jet|go` and/or `--db postgres|mysql|...`).
 - `regius version`: Print application version.
 - `regius help`: Show help for any command.
 - `regius up`: Bring the server back from maintenance mode.
@@ -619,8 +619,8 @@ SERVER_NAME=localhost
 # use https?
 SECURE=false
 
-# database configuration
-DATABASE_TYPE=
+# database configuration (sqlite is the default; a local file at data/<name>.db)
+DATABASE_TYPE=sqlite
 DATABASE_HOST=
 # ...
 ```
@@ -646,13 +646,13 @@ SERVER_NAME=localhost
 # use https?
 SECURE=false
 
-# database configuration
-DATABASE_TYPE=
+# database configuration (sqlite is the default; a local file at data/<name>.db)
+DATABASE_TYPE=sqlite
 DATABASE_HOST=
 DATABASE_PORT=
 DATABASE_USER=
 DATABASE_PASS=
-DATABASE_NAME=
+DATABASE_NAME=regius
 DATABASE_SSL_MODE=
 
 # minio settings
@@ -862,15 +862,39 @@ Each command has different options and parameters. Here are some basic usage exa
   ./regius new myapp
   ```
 
+  The scaffold defaults to the **templ** renderer (`github.com/a-h/templ` +
+  [templui](https://github.com/templui/templui) + Tailwind v4) and the
+  **sqlite** database, and ships a runnable auth scaffold (navbar, sign
+  in/up/forgot/reset-password). After `regius new`, run the auth migration
+  (`./regius migrate`) and `./regius migrate` then `go run .`:
+
+  ```bash
+  cd myapp
+  ./regius migrate        # creates users/tokens/remember_tokens on sqlite
+  go run .                # http://localhost:4000  (/ , /auth/signin)
+  ```
+
   Optional flags:
 
   - `--db <type>`: pre-fill `DATABASE_TYPE` in the generated `.env`
     (`postgres`|`postgresql`|`mysql`|`mariadb`|`sqlite`|`sqlite3`).
+    Defaults to `sqlite` (a local file at `data/<name>.db`, no server needed).
+  - `--renderer <engine>`: template engine to scaffold — `templ` (default) |
+    `jet` (`github.com/CloudyKit/jet/v6`, `*.jet` views with shared
+    `views/layouts/*.jet` layouts, Tailwind v4 + Alpine.js for the same modern
+    UI as the templ skeleton) |
+    `go` (built-in `html/template`, `*.page.template` views with a shared
+    `views/layouts/*.layout.template` layout system, Tailwind v4 + Alpine.js
+    for the same modern UI as the templ skeleton). `regius make auth` and
+    `regius make handler` also accept `--renderer`, falling back to the
+    `RENDERER` env var then `templ`.
   - `-v`, `--verbose`: stream `go get` / `go mod tidy` output live instead of
     capturing it (the captured output is shown only on failure by default).
 
   ```bash
   ./regius new myapp --db postgres -v
+  ./regius new jetapp --renderer jet
+  ./regius new goapp --renderer go
   ```
 
 - Show help commands:
@@ -935,7 +959,9 @@ For more details about usage and commands, refer to the CLI help:
 
 ## 🎨 Rendering Templates
 
-Regius provides a unified `render.Template` interface for all three template engines: **jet**, **go**, and **templ**. Every handler calls the same `Page()` method — the only difference is how the `Template` is created.
+Regius provides a unified `render.Template` interface for all three template engines: **jet**, **go**, and **templ**. The scaffolded app defaults to **templ** (`regius new --renderer templ`; switch with `--renderer jet|go`). Every handler calls the same `Page()` method — the only difference is how the `Template` is created.
+
+> **templ build step:** templ views (`*.templ`) are compiled to Go (`*_templ.go`) by `templ generate`. The scaffolded `Makefile` runs `templ generate` as part of `build`, and `regius new`/`regius make auth`/`regius make handler` invoke it automatically for templ apps.
 
 ### Jet
 
@@ -946,8 +972,18 @@ h.App.Render.Page(w, r, h.App.Render.Jet("home", nil), nil)
 ### Go
 
 ```go
+// Single-file template (no layout)
 h.App.Render.Page(w, r, h.App.Render.Go("home"), nil)
+
+// Template inside a shared layout (page defines a "content" block)
+h.App.Render.Page(w, r, h.App.Render.GoLayout("home", "base"), nil)
 ```
+
+The `go` renderer uses `html/template`. Pages rendered with `GoLayout(name,
+layout)` must define a `{{define "content"}}...{{end}}` block; the layout in
+`views/layouts/<layout>.layout.template` executes it with
+`{{template "content" .}}`. Component partials in `views/components/*.page.template`
+are automatically available to every Go template.
 
 ### Templ
 
@@ -960,6 +996,29 @@ h.App.Render.Page(w, r, views.Home(), &render.TemplateData{Data: data})
 ### Mixing Engines
 
 Each handler independently chooses its engine, so you can mix jet, go, and templ in the same application without any global `RENDERER` setting.
+
+## 🎨 Tailwind CSS
+
+The `templ`, `go`, and `jet` renderers ship a pre-built stylesheet at
+`public/css/output.css` so generated apps look correct immediately. The source
+of truth is `assets/css/input.css` plus the Tailwind utility classes used in
+your views.
+
+To customize styles you need the **Tailwind CSS CLI** installed:
+
+```bash
+# Rebuild once
+make tailwind
+
+# Or watch for changes (requires go-task)
+go-task tailwind
+```
+
+Scanning by renderer:
+
+- `go`: `*.page.template`, `*.layout.template`, `*.js`
+- `jet`: `*.jet`, `*.js`
+- `templ`: `*.templ`, `*.js`, and the `templui` component library
 
 ## 🤝 Contributing
 

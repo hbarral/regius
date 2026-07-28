@@ -1,0 +1,85 @@
+package components
+
+import (
+	"github.com/templui/templui/components/avatar"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/sheet"
+)
+
+templ Navbar() {
+	<nav class="sticky top-0 z-50 w-full transition-all duration-300">
+		<div class="container mx-auto px-4">
+			<div class="flex h-20 items-center justify-between">
+				<div class="flex items-center space-x-2">
+					<a href="/" class="flex items-center gap-1.5">
+						@avatar.Avatar(avatar.Props{
+							Class: "size-10 p-1",
+						}) {
+							@avatar.Image(avatar.ImageProps{
+								Src:   "/public/images/regius.png",
+								Alt:   "Regius Logo",
+								Class: "select-none",
+							})
+						}
+					</a>
+					<a href="/" class="text-xl font-bold transition-colors duration-300 select-none">
+						Regius
+					</a>
+				</div>
+				<div class="hidden md:flex items-center space-x-8 select-none">
+					@button.Button(button.Props{
+						Variant: button.VariantGhost,
+						Href:    "/",
+						Class:   "text-sm font-medium transition-colors duration-300 select-none",
+					}) {
+						Home
+					}
+					@button.Button(button.Props{
+						Variant: button.VariantGhost,
+						Href:    "https://regius.pro/docs/intro",
+						Class:   "text-sm font-medium transition-colors duration-300 select-none",
+						Target:  "_blank",
+					}) {
+						Docs
+					}
+					@button.Button(button.Props{
+						Variant: button.VariantGhost,
+						Href:    "https://github.com/hbarral/regius",
+						Class:   "text-sm font-medium transition-colors duration-300 select-none",
+						Target:  "_blank",
+					}) {
+						Github
+					}
+				</div>
+				<div class="flex items-center gap-2">
+					<div class="hidden md:flex items-center space-x-4">
+						@button.Button(button.Props{
+							Href:   "https://regius.pro/docs/usage",
+							Class:  "shadow-lg select-none",
+							Target: "_blank",
+						}) {
+							Get Started
+						}
+					</div>
+					@ThemeSwitcher()
+					@sheet.Trigger(sheet.TriggerProps{
+						For: "mobile-menu-sheet",
+					}) {
+						<button
+							type="button"
+							aria-label="Toggle menu"
+							class="md:hidden inline-flex size-10 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 transition-all"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-5">
+								<path d="M4 5h16"></path>
+								<path d="M4 12h16"></path>
+								<path d="M4 19h16"></path>
+							</svg>
+						</button>
+					}
+				</div>
+			</div>
+		</div>
+		@MenuMobile()
+	</nav>
+}

@@ -1,0 +1,89 @@
+package views
+
+import (
+	"github.com/hbarral/regius/render"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/card"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/components/label"
+	"${APP_NAME}/views/layouts"
+)
+
+templ Forgot() {
+	@layouts.MainLayout() {
+		{{ td, _ := ctx.Value("templateData").(*render.TemplateData) }}
+		<main class="flex-1">
+			<div class="flex h-full items-center justify-center">
+				<div class="flex w-full max-w-2xl flex-col items-center justify-center gap-4 px-4">
+					<div class="w-full max-w-sm">
+						@card.Card() {
+							@card.Header() {
+								@card.Title() {
+									Forgot your password?
+								}
+								@card.Description() {
+									Enter your email address and we'll email you a link to reset your password
+								}
+							}
+							@card.Content() {
+								if td.Error != "" {
+									<div class="mb-4 rounded-md bg-destructive/10 p-3 text-center text-sm text-destructive dark:bg-destructive/20">
+										{ td.Error }
+									</div>
+								}
+								if td.Flash != "" {
+									<div class="mb-4 rounded-md bg-blue-50 p-3 text-center text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-200">
+										{ td.Flash }
+									</div>
+								}
+								<div class="flex flex-col gap-4">
+									<form method="post" action="/auth/forgot-password" name="forgot-form" id="forgot-form" autocomplete="off">
+										<input type="hidden" name="csrf_token" value={ td.CSRFToken }/>
+										<div class="flex flex-col gap-4">
+											<div class="w-full max-w-sm grid gap-2">
+												@label.Label(label.Props{
+													For: "email",
+												}) {
+													Email
+												}
+												@input.Input(input.Props{
+													ID:          "email",
+													Name:        "email",
+													Type:        input.TypeEmail,
+													Placeholder: "username@example.com",
+													Required:    true,
+												})
+											</div>
+										</div>
+									</form>
+								</div>
+							}
+							@card.Footer(card.FooterProps{
+								Class: "flex flex-col gap-2",
+							}) {
+								@button.Button(button.Props{
+									Type:  button.TypeSubmit,
+									Form:  "forgot-form",
+									Class: "w-full",
+								}) {
+									Send reset password email
+								}
+								<div class="flex">
+									@card.Description(card.DescriptionProps{
+										Class: "text-sm leading-normal font-normal text-muted-foreground [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary text-center",
+									}) {
+										Remember your password?
+										<a href="/auth/signin" class="text-sm underline underline-offset-4">
+											Sign in
+										</a>
+									}
+								</div>
+							}
+						}
+					</div>
+				</div>
+			</div>
+		</main>
+		@input.Script()
+	}
+}

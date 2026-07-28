@@ -16,10 +16,10 @@ func doAuth() error {
 	appName = strings.ToLower(appName)
 	log.Println("APP NAME IS:", appName)
 	dbType := normalizeDBType(reg.DB.DataType)
-
-	dsn, err := migrationDSN()
-	if err != nil {
-		exitGracefully(err)
+	renderer := strings.ToLower(resolveRenderer())
+	if !validRenderers[renderer] {
+		log.Println("invalid renderer", renderer, "defaulting to", defaultRenderer)
+		renderer = defaultRenderer
 	}
 
 	upBytes, err := templateFS.ReadFile(fmt.Sprintf("templates/migrations/auth_tables.%s.sql", dbType))
@@ -34,10 +34,6 @@ func doAuth() error {
 	)
 
 	if err := reg.CreateMigration(upBytes, downBytes, "auth", "sql"); err != nil {
-		exitGracefully(err)
-	}
-
-	if err := reg.RunMigrations(dsn); err != nil {
 		exitGracefully(err)
 	}
 
@@ -77,14 +73,14 @@ func doAuth() error {
 		exitGracefully(err)
 	}
 
-	data, err = templateFS.ReadFile("templates/handlers/auth-handlers")
+	// auth-handlers: pick the variant for the active renderer.
+	// Overwrite (not skip) so `make auth --renderer X` can switch engines.
+	data, err = templateFS.ReadFile(fmt.Sprintf("templates/handlers/auth-handlers.%s", handlerTemplateSuffix(renderer)))
 	if err != nil {
 		exitGracefully(err)
 	}
-
 	authHandlerFileContent := string(data)
 	authHandlerFileContent = strings.ReplaceAll(authHandlerFileContent, "${APP_NAME}", appName)
-
 	err = copyDataToFile([]byte(authHandlerFileContent), "./handlers/auth-handlers.go")
 	if err != nil {
 		exitGracefully(err)
@@ -114,26 +110,8 @@ func doAuth() error {
 		exitGracefully(err)
 	}
 
-	err = copyFileFromTemplate("templates/views/signin.jet", reg.RootPath+"/views/signin.jet")
-	if err != nil {
-		exitGracefully(err)
-	}
-
-	err = copyFileFromTemplate("templates/views/signup.jet", reg.RootPath+"/views/signup.jet")
-	if err != nil {
-		exitGracefully(err)
-	}
-
-	err = copyFileFromTemplate("templates/views/forgot.jet", reg.RootPath+"/views/forgot.jet")
-	if err != nil {
-		exitGracefully(err)
-	}
-
-	err = copyFileFromTemplate(
-		"templates/views/reset-password.jet",
-		reg.RootPath+"/views/reset-password.jet",
-	)
-	if err != nil {
+	// install the auth views for the active renderer (skips any that exist).
+	if err := installAuthViews(renderer); err != nil {
 		exitGracefully(err)
 	}
 
@@ -148,8 +126,11 @@ func doAuth() error {
 	}
 
 	routesStr := string(routesData)
-	routesStr = strings.Replace(routesStr, "a.get(\"/\", a.Handlers.Home)", "a.get(\"/\", a.Handlers.Home)\n\ta.App.Routes.Mount(\"/auth\", a.AuthRoutes())", 1)
-
+	if !strings.Contains(routesStr, "a.AuthRoutes()") {
+		routesStr = strings.Replace(routesStr, "a.get(\"/\", a.Handlers.Home)", "a.get(\"/\", a.Handlers.Home)\n\ta.App.Routes.Mount(\"/auth\", a.AuthRoutes())", 1)
+	}
+	// enable the remember-me middleware.
+	routesStr = strings.Replace(routesStr, "// a.use(a.Middleware.CheckRemember)", "a.use(a.Middleware.CheckRemember)", 1)
 	err = os.WriteFile(reg.RootPath+"/routes.go", []byte(routesStr), 0644)
 	if err != nil {
 		exitGracefully(err)
@@ -173,9 +154,16 @@ func doAuth() error {
 		exitGracefully(err)
 	}
 
-	err = updateHomeTemplate()
+	err = updateHomeTemplate(renderer)
 	if err != nil {
 		exitGracefully(err)
+	}
+
+	// regen templ sources if needed.
+	if renderer == "templ" {
+		if err := runTemplGenerate(); err != nil {
+			color.Yellow("  ! templ generate failed; run `templ generate` manually: %v", err)
+		}
 	}
 
 	color.Yellow("\tRunning go mod tidy...")
@@ -186,8 +174,8 @@ func doAuth() error {
 		exitGracefully(err)
 	}
 
-	color.Yellow("Auth setup completed:")
-	color.Yellow(" - Migrations for users, tokens, and remember_tokens have been created and executed.")
+	color.Yellow("Auth setup completed (renderer=%s):", renderer)
+	color.Yellow(" - Migrations for users, tokens, and remember_tokens have been created (run `regius migrate` to apply them).")
 	color.Yellow(" - Models for users and tokens have been created.")
 	color.Yellow(" - Auth middleware has been created.")
 	color.Yellow(" - Auth routes have been created.")
@@ -197,25 +185,34 @@ func doAuth() error {
 	return nil
 }
 
-func updateHomeTemplate() error {
+// updateHomeTemplate patches the scaffolded Home handler and home view to be
+// auth-aware for the given renderer. It is idempotent: a view that already has
+// a navbar/Sign Out is left untouched.
+func updateHomeTemplate(renderer string) error {
 	handlersFile := reg.RootPath + "/handlers/handlers.go"
-	if _, err := os.Stat(handlersFile); err == nil {
-		handlersData, err := os.ReadFile(handlersFile)
-		if err == nil {
-			handlersStr := string(handlersData)
+	if data, err := os.ReadFile(handlersFile); err == nil {
+		handlersStr := string(data)
 
-			if !strings.Contains(handlersStr, `"github.com/hbarral/regius/render"`) {
-				handlersStr = strings.Replace(handlersStr, `"github.com/hbarral/regius"`, "\"github.com/hbarral/regius\"\n\t\"github.com/hbarral/regius/render\"", 1)
-			}
+		if !strings.Contains(handlersStr, `"github.com/hbarral/regius/render"`) {
+			handlersStr = strings.Replace(handlersStr, `"github.com/hbarral/regius"`, "\"github.com/hbarral/regius\"\n\t\"github.com/hbarral/regius/render\"", 1)
+		}
 
-			oldHomeFunc := `func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
+		// The lean skeleton ships a simple Home. After `make auth`, upgrade it
+		// to read the authenticated user's name from the session and pass it
+		// to the view.
+		var oldHome, newHome string
+		switch strings.ToLower(renderer) {
+		case "jet", "go":
+			// Non-templ lean skeletons don't import `views` in Home by default;
+			// they use Render.Jet/Render.Go directly.
+			oldHome = `func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
 	defer h.App.LoadTime(time.Now())
-	err := h.App.Render.Page(w, r, h.App.Render.Jet("home", nil), nil)
+	err := h.App.Render.Page(w, r, h.App.Render.` + renderCallFor(renderer) + `, nil)
 	if err != nil {
 		h.App.ErrorLog.Println("error rendering", err)
 	}
 }`
-			newHomeFunc := `func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
+			newHome = `func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
 	defer h.App.LoadTime(time.Now())
 
 	var userName string
@@ -230,32 +227,69 @@ func updateHomeTemplate() error {
 	data := make(map[string]interface{})
 	data["userName"] = userName
 
-	err := h.App.Render.Page(w, r, h.App.Render.Jet("home", nil), &render.TemplateData{Data: data})
+	err := h.App.Render.Page(w, r, h.App.Render.` + renderCallFor(renderer) + `, &render.TemplateData{Data: data})
 	if err != nil {
 		h.App.ErrorLog.Println("error rendering", err)
 	}
 }`
-			if strings.Contains(handlersStr, oldHomeFunc) {
-				handlersStr = strings.Replace(handlersStr, oldHomeFunc, newHomeFunc, 1)
-				_ = os.WriteFile(handlersFile, []byte(handlersStr), 0644)
-			}
+		default: // templ
+			oldHome = `func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
+	defer h.App.LoadTime(time.Now())
+	err := h.App.Render.Page(w, r, views.Home(), nil)
+	if err != nil {
+		h.App.ErrorLog.Println("error rendering", err)
+	}
+}`
+			newHome = `func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
+	defer h.App.LoadTime(time.Now())
+
+	var userName string
+	if h.App.Session.Exists(r.Context(), "userID") {
+		userID := h.App.Session.GetInt(r.Context(), "userID")
+		u, err := h.Models.Users.Get(userID)
+		if err == nil {
+			userName = u.FirstName
 		}
 	}
 
-	renderer := os.Getenv("RENDERER")
-	if renderer == "" {
-		renderer = "jet"
+	data := make(map[string]interface{})
+	data["userName"] = userName
+
+	err := h.App.Render.Page(w, r, views.Home(), &render.TemplateData{Data: data})
+	if err != nil {
+		h.App.ErrorLog.Println("error rendering", err)
+	}
+}`
+		}
+
+		if strings.Contains(handlersStr, oldHome) && !strings.Contains(handlersStr, "userName") {
+			handlersStr = strings.Replace(handlersStr, oldHome, newHome, 1)
+			_ = os.WriteFile(handlersFile, []byte(handlersStr), 0644)
+		}
 	}
 
 	switch strings.ToLower(renderer) {
 	case "jet":
 		return updateJetHomeTemplate()
 	case "go":
-		return nil
-	case "templ":
-		return nil
+		return updateGoHomeTemplate()
 	default:
+		// templ: the navbar lives in the shared BaseLayout component, so no
+		// home template needs patching.
 		return nil
+	}
+}
+
+// renderCallFor returns the Render engine call expression for the given renderer
+// as it appears in the Home handler.
+func renderCallFor(renderer string) string {
+	switch strings.ToLower(renderer) {
+	case "jet":
+		return `Jet("home", nil)`
+	case "go":
+		return `GoLayout("home", "base")`
+	default:
+		return ``
 	}
 }
 
@@ -269,8 +303,11 @@ func updateJetHomeTemplate() error {
 		return err
 	}
 
+	// The modern jet skeleton keeps the navbar in a shared component, so the
+	// home template only needs the centered hero. If it already uses the
+	// modern classes, leave it alone.
 	content := string(data)
-	if strings.Contains(content, "nav class=\"navbar") {
+	if strings.Contains(content, "bg-border") && strings.Contains(content, "text-muted-foreground") {
 		return nil
 	}
 
@@ -278,57 +315,35 @@ func updateJetHomeTemplate() error {
 
 {{block browserTitle()}}Welcome{{end}}
 
-{{block css()}}
-
-{{end}}
+{{block css()}}{{end}}
 
 {{block pageContent()}}
-<nav class="navbar navbar-expand-lg navbar-light bg-light">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="/">Regius</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarNav">
-      <ul class="navbar-nav ms-auto">
-        {{if .IsAuthenticated}}
-          <li class="nav-item">
-            <span class="nav-link">Welcome, {{.Data["userName"]}}</span>
-          </li>
-          <li class="nav-item">
-            <form method="post" action="/auth/signout" class="d-inline">
-              <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-              <button type="submit" class="nav-link btn btn-link border-0" style="text-decoration: none;">Sign Out</button>
-            </form>
-          </li>
-        {{else}}
-          <li class="nav-item">
-            <a class="nav-link" href="/auth/signin">Sign In</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/auth/signup">Sign Up</a>
-          </li>
-        {{end}}
-      </ul>
-    </div>
-  </div>
-</nav>
-
-<div class="col text-center">
-  <div class="d-flex align-items-center justify-content-center mt-5">
-    <div>
-      <img src="/public/images/regius.png" class="mb-5" style="width: 100px;height:auto;">
-      <h1>Regius</h1>
-      <hr>
-      <small class="text-muted">Go build something real</small>
-    </div>
+<div class="flex h-full items-center justify-center">
+  <div class="flex flex-col items-center gap-6 text-center">
+    <img src="/public/images/regius.png" alt="Regius" class="h-auto w-24 select-none">
+    <h1 class="text-4xl font-bold tracking-tight select-none">
+      Regius
+    </h1>
+    <div class="h-px w-48 bg-border"></div>
+    <small class="text-muted-foreground select-none">
+      Go build something real
+    </small>
   </div>
 </div>
 {{end}}
 
-{{block js()}}
-
-{{end}}`
+{{block js()}}{{end}}`
 
 	return os.WriteFile(homeFile, []byte(newContent), 0644)
+}
+
+// updateGoHomeTemplate writes the auth-aware home.page.template for the go
+// engine if it does not already contain the navbar.
+func updateGoHomeTemplate() error {
+	homeFile := reg.RootPath + "/views/home.page.template"
+	data, err := os.ReadFile(homeFile)
+	if err == nil && strings.Contains(string(data), "Sign Out") {
+		return nil
+	}
+	return copyFileFromTemplate("templates/views/home.page.template", homeFile)
 }

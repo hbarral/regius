@@ -19,8 +19,9 @@ const (
 )
 
 var (
-	newAppDB      string
-	newAppVerbose bool
+	newAppDB       string
+	newAppRenderer string
+	newAppVerbose  bool
 )
 
 var validDBTypes = map[string]bool{
@@ -34,7 +35,8 @@ var validDBTypes = map[string]bool{
 
 func init() {
 	rootCmd.AddCommand(newCmd)
-	newCmd.Flags().StringVar(&newAppDB, "db", "", "pre-fill DATABASE_TYPE in .env (postgres|postgresql|mysql|mariadb|sqlite|sqlite3)")
+	newCmd.Flags().StringVar(&newAppDB, "db", "sqlite", "pre-fill DATABASE_TYPE in .env (postgres|postgresql|mysql|mariadb|sqlite|sqlite3)")
+	newCmd.Flags().StringVar(&newAppRenderer, "renderer", defaultRenderer, "template engine to scaffold (templ|jet|go)")
 	newCmd.Flags().BoolVarP(&newAppVerbose, "verbose", "v", false, "stream go command output live instead of capturing it")
 }
 
@@ -60,25 +62,31 @@ func doNew(appName string) {
 		appName = exploded[(len(exploded) - 1)]
 	}
 
-	if newAppDB != "" && !validDBTypes[strings.ToLower(newAppDB)] {
+	db := strings.ToLower(newAppDB)
+	renderer := strings.ToLower(newAppRenderer)
+
+	if !validDBTypes[db] {
 		exitWithError(fmt.Errorf("unsupported --db type %q (use postgres|postgresql|mysql|mariadb|sqlite|sqlite3)", newAppDB))
 	}
+	if !validRenderers[renderer] {
+		exitWithError(fmt.Errorf("unsupported --renderer %q (use templ|jet|go)", newAppRenderer))
+	}
 
-	color.Green("Creating application '%s'...", appName)
+	color.Green("Creating application '%s' (db=%s, renderer=%s)...", appName, db, renderer)
 
 	if err := writeSkeleton("./" + appName); err != nil {
 		exitGracefully(err)
 	}
 	color.Green("  ✓ Skeleton copied")
 
+	// .env: substitute DATABASE_TYPE and RENDERER, plus app name + key.
 	data, err := templateFS.ReadFile("templates/env")
 	if err != nil {
 		exitGracefully(err)
 	}
 	env := string(data)
-	if newAppDB != "" {
-		env = strings.Replace(env, "DATABASE_TYPE=", "DATABASE_TYPE="+strings.ToLower(newAppDB), 1)
-	}
+	env = strings.Replace(env, "DATABASE_TYPE=sqlite", "DATABASE_TYPE="+db, 1)
+	env = strings.Replace(env, "RENDERER=templ", "RENDERER="+renderer, 1)
 	env = strings.ReplaceAll(env, "${APP_NAME}", appName)
 	env = strings.ReplaceAll(env, "${KEY}", reg.RandomString(32))
 	if err := copyDataToFile([]byte(env), fmt.Sprintf("./%s/.env", appName)); err != nil {
@@ -86,6 +94,8 @@ func doNew(appName string) {
 	}
 	color.Green("  ✓ .env written")
 
+	// Makefile: the per-OS template, with templ targets + a templ generate step
+	// prepended to `build` when the renderer is templ.
 	mkOS := runtime.GOOS
 	switch mkOS {
 	case GOOSDarwin:
@@ -106,17 +116,23 @@ func doNew(appName string) {
 		binaryName = appName + ".exe"
 	}
 	mk = strings.ReplaceAll(mk, "${BINARY_APP_NAME}", binaryName)
+	if renderer == "templ" {
+		mk = strings.Replace(mk, "@go mod vendor\n", "@go mod vendor\n\t@templ generate\n", 1)
+		mk += "\n" + templMakefileTargets()
+	}
 	if err := copyDataToFile([]byte(mk), fmt.Sprintf("./%s/Makefile", appName)); err != nil {
 		exitGracefully(err)
 	}
 	color.Green("  ✓ Makefile written (%s)", mkOS)
 
+	// go.mod: from the template, with the app module name substituted.
 	_ = os.Remove(fmt.Sprintf("./%s/go.mod", appName))
 	data, err = templateFS.ReadFile("templates/go_mod")
 	if err != nil {
 		exitGracefully(err)
 	}
 	mod := strings.ReplaceAll(string(data), "${APP_NAME}", appName)
+	mod = strings.ReplaceAll(mod, "${REGIUS_VERSION}", regiusGoModVersion())
 	if err := copyDataToFile([]byte(mod), fmt.Sprintf("./%s/go.mod", appName)); err != nil {
 		exitGracefully(err)
 	}
@@ -128,6 +144,17 @@ func doNew(appName string) {
 	updateSource()
 	color.Green("  ✓ Source files updated")
 
+	// Non-templ renderers drop the templui/Tailwind stack and swap Home + auth.
+	if err := pruneForRenderer(renderer); err != nil {
+		exitWithError(fmt.Errorf("renderer setup failed: %w", err))
+	}
+
+	if renderer == "templ" {
+		if err := runTemplGenerate(); err != nil {
+			color.Yellow("  ! templ generate failed (build may need `templ generate`): %v", err)
+		}
+	}
+
 	if err := runGoCmd(exec.Command("go", "get", "github.com/hbarral/regius"), "go get github.com/hbarral/regius"); err != nil {
 		exitWithError(fmt.Errorf("go get failed: %w", err))
 	}
@@ -137,6 +164,24 @@ func doNew(appName string) {
 
 	color.Green("  ✓ Done — %s is ready", appURL)
 	color.Green("  Go build something real!")
+}
+
+// templMakefileTargets returns the templ/tailwind recipes appended to the
+// scaffolded Makefile for templ-based apps.
+func templMakefileTargets() string {
+	return `templ:
+	@templ generate
+
+tailwind:
+	@TEMPLUI_PATH="$$(go list -mod=mod -m -f '{{.Dir}}' github.com/templui/templui)" && \
+	 printf '%s\n' \
+	   '@source "./**/*.templ";' \
+	   '@source "./**/*.js";' \
+	   "@source \"$$TEMPLUI_PATH/components/**/*.templ\";" \
+	   "@source \"$$TEMPLUI_PATH/components/**/*.js\";" \
+	   > ./assets/css/sources.generated.css && \
+	tailwindcss -i ./assets/css/input.css -o ./public/css/output.css
+`
 }
 
 // runGoCmd executes a go subcommand. By default the command's output is

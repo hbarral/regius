@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/templui/templui/utils"
 )
 
 func (a *application) routes() *chi.Mux {
@@ -16,6 +17,11 @@ func (a *application) routes() *chi.Mux {
 	// static routes
 	fileServer := http.FileServer(http.Dir("./public"))
 	a.App.Routes.Handle("/public/*", http.StripPrefix("/public", fileServer))
+
+	// templui component scripts
+	templuiMux := http.NewServeMux()
+	utils.SetupScriptRoutes(templuiMux, a.App.Debug)
+	a.App.Routes.Handle("/templui/js/*", templuiMux)
 
 	// api
 	a.App.Routes.Mount("/api", a.ApiRoutes())

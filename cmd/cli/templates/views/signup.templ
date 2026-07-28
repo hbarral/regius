@@ -1,0 +1,150 @@
+package views
+
+import (
+	"github.com/hbarral/regius/render"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/card"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/components/label"
+	"${APP_NAME}/views/components"
+	"${APP_NAME}/views/layouts"
+)
+
+templ SignUp() {
+	@layouts.MainLayout() {
+		{{ td, _ := ctx.Value("templateData").(*render.TemplateData) }}
+		<main class="flex-1">
+			<div class="flex h-full items-center justify-center">
+				<div class="flex w-full max-w-2xl flex-col items-center justify-center gap-4 px-4">
+					<div class="w-full max-w-sm">
+						@card.Card() {
+							@card.Header() {
+								@card.Title() {
+									Create an account
+								}
+								@card.Description() {
+									Enter your details to sign up
+								}
+							}
+							@card.Content() {
+								if td.Flash != "" {
+									<div class="mb-4 rounded-md bg-blue-50 p-3 text-center text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-200">
+										{ td.Flash }
+									</div>
+								}
+								<div class="flex flex-col gap-4">
+									<form method="post" action="/auth/signup" name="signup-form" id="signup-form" autocomplete="off">
+										<input type="hidden" name="csrf_token" value={ td.CSRFToken }/>
+										<div class="flex flex-col gap-4">
+											<div class="w-full max-w-sm grid gap-2">
+												@label.Label(label.Props{
+													For: "first_name",
+												}) {
+													First Name
+												}
+												@input.Input(input.Props{
+													ID:       "first_name",
+													Name:     "first_name",
+													Type:     input.TypeText,
+													Required: true,
+												})
+											</div>
+											<div class="w-full max-w-sm grid gap-2">
+												@label.Label(label.Props{
+													For: "last_name",
+												}) {
+													Last Name
+												}
+												@input.Input(input.Props{
+													ID:       "last_name",
+													Name:     "last_name",
+													Type:     input.TypeText,
+													Required: true,
+												})
+											</div>
+											<div class="w-full max-w-sm grid gap-2">
+												@label.Label(label.Props{
+													For: "email",
+												}) {
+													Email
+												}
+												@input.Input(input.Props{
+													ID:          "email",
+													Name:        "email",
+													Type:        input.TypeEmail,
+													Placeholder: "username@example.com",
+													Required:    true,
+												})
+											</div>
+											<div class="w-full max-w-sm grid gap-2">
+												@label.Label(label.Props{
+													For: "password",
+												}) {
+													Password
+												}
+												@input.Input(input.Props{
+													ID:          "password",
+													Name:        "password",
+													Type:        input.TypePassword,
+													Placeholder: "password",
+													Required:    true,
+												})
+											</div>
+											<div class="w-full max-w-sm grid gap-2">
+												@label.Label(label.Props{
+													For: "verify_password",
+												}) {
+													Verify Password
+												}
+												@input.Input(input.Props{
+													ID:          "verify_password",
+													Name:        "verify_password",
+													Type:        input.TypePassword,
+													Placeholder: "password",
+													Required:    true,
+												})
+											</div>
+										</div>
+									</form>
+									@components.SocialLoginButtons()
+								</div>
+							}
+							@card.Footer(card.FooterProps{
+								Class: "flex flex-col gap-2",
+							}) {
+								@button.Button(button.Props{
+									Type:  button.TypeSubmit,
+									Form:  "signup-form",
+									Class: "w-full",
+								}) {
+									Sign up
+								}
+								<div class="flex">
+									@card.Description(card.DescriptionProps{
+										Class: "text-sm leading-normal font-normal text-muted-foreground [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary text-center",
+									}) {
+										Already have an account?
+										<a href="/auth/signin" class="text-sm underline underline-offset-4">
+											Sign in
+										</a>
+									}
+								</div>
+							}
+						}
+					</div>
+				</div>
+			</div>
+		</main>
+		@input.Script()
+		<script>
+			document.getElementById("signup-form").addEventListener("submit", function (e) {
+				var p = document.getElementById("password").value;
+				var v = document.getElementById("verify_password").value;
+				if (p !== v) {
+					e.preventDefault();
+					alert("Passwords do not match!");
+				}
+			});
+		</script>
+	}
+}

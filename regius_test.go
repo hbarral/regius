@@ -360,7 +360,6 @@ func TestNew_MinimalSuccess(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, root, r.RootPath)
-	assert.NotEmpty(t, r.Version)
 	assert.NotNil(t, r.Routes)
 	assert.NotNil(t, r.Session)
 	assert.NotNil(t, r.Render)

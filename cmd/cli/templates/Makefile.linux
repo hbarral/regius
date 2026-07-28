@@ -40,3 +40,12 @@ stop_compose:
 
 coverprofile:
 	go test -coverprofile=coverage.out
+
+# Build the Tailwind CSS stylesheet once. Requires the tailwindcss CLI.
+tailwind:
+	@printf '%s\n' \
+	  '@source "./**/*.page.template";' \
+	  '@source "./**/*.layout.template";' \
+	  '@source "./**/*.js";' \
+	  > ./assets/css/sources.generated.css && \
+	  tailwindcss -i ./assets/css/input.css -o ./public/css/output.css

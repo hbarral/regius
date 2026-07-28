@@ -61,7 +61,7 @@ func TestTemplatePathsExist(t *testing.T) {
 								if formatLit, ok := fmtCall.Args[0].(*ast.BasicLit); ok && formatLit.Kind == token.STRING {
 									formatStr := strings.Trim(formatLit.Value, `"`)
 									if strings.Contains(formatStr, "auth_tables.%s.sql") {
-										for _, db := range []string{"mysql", "postgres"} {
+										for _, db := range []string{"mysql", "postgres", "sqlite"} {
 											path := strings.Replace(formatStr, "%s", db, 1)
 											_, err := templateFS.ReadFile(path)
 											if err != nil {

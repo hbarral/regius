@@ -1,0 +1,94 @@
+package components
+
+import (
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/sheet"
+	"github.com/hbarral/regius/render"
+)
+
+templ MenuMobile() {
+	{{ td, _ := ctx.Value("templateData").(*render.TemplateData) }}
+	@sheet.Sheet(sheet.Props{
+		ID:   "mobile-menu-sheet",
+		Side: sheet.SideRight,
+	}) {
+		@sheet.Content() {
+			@sheet.Header() {
+				@sheet.Title() {
+					Menu
+				}
+			}
+			<div class="flex flex-col gap-1 px-4 pb-4">
+				@sheet.Close() {
+					@button.Button(button.Props{
+						Variant: button.VariantGhost,
+						Href:    "/",
+						Class:   "justify-start w-full text-sm font-medium text-foreground transition-colors duration-300 select-none",
+					}) {
+						Home
+					}
+				}
+				@sheet.Close() {
+					@button.Button(button.Props{
+						Variant: button.VariantGhost,
+						Href:    "https://regius.pro/docs/intro",
+						Target:  "_blank",
+						Class:   "justify-start w-full text-sm font-medium text-foreground transition-colors duration-300 select-none",
+					}) {
+						Docs
+					}
+				}
+				@sheet.Close() {
+					@button.Button(button.Props{
+						Variant: button.VariantGhost,
+						Href:    "https://github.com/hbarral/regius",
+						Target:  "_blank",
+						Class:   "justify-start w-full text-sm font-medium text-foreground transition-colors duration-300 select-none",
+					}) {
+						Github
+					}
+				}
+			</div>
+			<div class="mt-auto flex flex-col gap-2 p-4">
+				<div class="mb-1 h-px bg-border"></div>
+				if td != nil && td.IsAuthenticated {
+					{{ userName, _ := td.Data["userName"].(string) }}
+					<span class="px-4 py-2 text-sm font-medium text-foreground">
+						Welcome, { userName }
+					</span>
+					<form method="post" action="/auth/signout" class="inline">
+						<input type="hidden" name="csrf_token" value={ td.CSRFToken }/>
+						@sheet.Close() {
+							@button.Button(button.Props{
+								Type:    button.TypeSubmit,
+								Variant: button.VariantGhost,
+								Class:   "justify-start w-full text-sm font-medium text-foreground",
+							}) {
+								Sign Out
+							}
+						}
+					</form>
+				} else {
+					@sheet.Close() {
+						@button.Button(button.Props{
+							Variant: button.VariantGhost,
+							Href:    "/auth/signin",
+							Class:   "justify-start w-full text-sm font-medium text-foreground select-none",
+						}) {
+							Sign In
+						}
+					}
+					@sheet.Close() {
+						@button.Button(button.Props{
+							Href:   "https://regius.pro/docs/usage",
+							Class:  "shadow-lg select-none w-full",
+							Target: "_blank",
+						}) {
+							Get Started
+						}
+					}
+				}
+			</div>
+		}
+	}
+}

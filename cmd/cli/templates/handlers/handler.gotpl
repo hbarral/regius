@@ -1,0 +1,19 @@
+package handlers
+
+import (
+	"net/http"
+	"time"
+
+	"github.com/hbarral/regius/render"
+)
+
+// $HANDLER_NAME comment goes here
+
+func (h *Handlers) $HANDLER_NAME(w http.ResponseWriter, r *http.Request) {
+	defer h.App.LoadTime(time.Now())
+
+	err := h.App.Render.Page(w, r, h.App.Render.GoLayout("$VIEW_NAME", "main"), &render.TemplateData{Data: make(map[string]interface{})})
+	if err != nil {
+		h.App.ErrorLog.Println("error rendering", err)
+	}
+}

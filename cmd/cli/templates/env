@@ -66,12 +66,14 @@ IP_FILTER_MESSAGE=
 
 # database configuration
 # supported types: postgres, postgresql, mysql, mariadb, sqlite, sqlite3
-DATABASE_TYPE=
+# sqlite is the default; it stores a local file at <root>/data/<DATABASE_NAME>.db
+# and needs no host/port/user/password.
+DATABASE_TYPE=sqlite
 DATABASE_HOST=
 DATABASE_PORT=
 DATABASE_USER=
 DATABASE_PASS=
-DATABASE_NAME=
+DATABASE_NAME=regius
 # DATABASE_SSL_MODE (enable | disable)
 DATABASE_SSL_MODE=
 # DATABASE_MAX_OPEN_CONNS=25
@@ -135,14 +137,14 @@ COOKIE_DOMAIN=localhost
 SESSION_TYPE=cookie
 
 # mail settings (SMTP_ENCRYPTION=tls | ssl | none)
-SMTP_HOST=
+SMTP_HOST=localhost
 SMTP_USERNAME=
 SMTP_PASSWORD=
-SMTP_PORT=
-SMTP_ENCRYPTION=
-MAIL_DOMAIN=
-FROM_NAME=
-FROM_ADDRESS=
+SMTP_PORT=1025
+SMTP_ENCRYPTION=none
+MAIL_DOMAIN=${APP_NAME}.com
+FROM_NAME=${APP_NAME}
+FROM_ADDRESS=no-reply@${APP_NAME}.com
 
 # mail settings for api services
 MAILER_API=
@@ -150,8 +152,9 @@ MAILER_KEY=
 MAILER_URL=
 
 # Template engine (used by CLI scaffolding only; at runtime each handler
-# picks its engine via render.Jet(), render.Go(), or a templ component)
-RENDERER=jet
+# picks its engine via render.Jet(), render.Go(), or a templ component).
+# templ is the default. Options: templ | jet | go
+RENDERER=templ
 
 # encryption key (32 characthers long)
 KEY=${KEY}

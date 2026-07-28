@@ -4,6 +4,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// makeRenderer is set by --renderer on the make subcommands that care about the
+// template engine (make auth, make handler). Empty falls back to the RENDERER
+// env var and then the default (templ).
+var makeRenderer string
+
 func init() {
 	rootCmd.AddCommand(makeCmd)
 

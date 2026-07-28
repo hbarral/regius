@@ -10,13 +10,15 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"${APP_NAME}/data"
 	"strings"
 	"time"
 
-	"github.com/CloudyKit/jet/v6"
+	"${APP_NAME}/data"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/sessions"
+	"github.com/hbarral/regius/render"
+	"github.com/hbarral/regius/urlsigner"
 	"github.com/markbates/goth"
 	"github.com/markbates/goth/gothic"
 	"github.com/markbates/goth/providers/github"
@@ -25,12 +27,10 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/hbarral/regius/mailer"
-	"github.com/hbarral/regius/render"
-	"github.com/hbarral/regius/urlsigner"
 )
 
 func (h *Handlers) SignIn(w http.ResponseWriter, r *http.Request) {
-	err := h.App.Render.Page(w, r, h.App.Render.Jet("signin", nil), nil)
+	err := h.App.Render.Page(w, r, h.App.Render.GoLayout("signin", "main"), nil)
 	if err != nil {
 		h.App.ErrorLog.Println(err)
 	}
@@ -39,7 +39,7 @@ func (h *Handlers) SignIn(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) PostSignIn(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
-		w.Write([]byte(err.Error()))
+		h.App.ErrorStatus(w, http.StatusBadRequest)
 		return
 	}
 
@@ -48,18 +48,15 @@ func (h *Handlers) PostSignIn(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.Models.Users.GetByEmail(email)
 	if err != nil {
-		w.Write([]byte(err.Error()))
+		h.App.Session.Put(r.Context(), "error", "Invalid credentials")
+		http.Redirect(w, r, "/auth/signin", http.StatusSeeOther)
 		return
 	}
 
 	matches, err := h.App.Hash.Compare(user.Password, password)
-	if err != nil {
-		w.Write([]byte("Error validating password"))
-		return
-	}
-
-	if !matches {
-		w.Write([]byte("Invalid password!"))
+	if err != nil || !matches {
+		h.App.Session.Put(r.Context(), "error", "Invalid credentials")
+		http.Redirect(w, r, "/auth/signin", http.StatusSeeOther)
 		return
 	}
 
@@ -95,7 +92,7 @@ func (h *Handlers) PostSignIn(w http.ResponseWriter, r *http.Request) {
 		}
 
 		http.SetCookie(w, &cookie)
-		h.App.Session.Put(r.Context(), "rememberToken", sha)
+		h.App.Session.Put(r.Context(), "remember_token", sha)
 	}
 
 	h.App.Session.Put(r.Context(), "userID", user.ID)
@@ -104,7 +101,7 @@ func (h *Handlers) PostSignIn(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) SignUp(w http.ResponseWriter, r *http.Request) {
-	err := h.App.Render.Page(w, r, h.App.Render.Jet("signup", nil), nil)
+	err := h.App.Render.Page(w, r, h.App.Render.GoLayout("signup", "main"), nil)
 	if err != nil {
 		h.App.ErrorLog.Println(err)
 	}
@@ -131,6 +128,14 @@ func (h *Handlers) PostSignUp(w http.ResponseWriter, r *http.Request) {
 	if password == "" {
 		h.App.InfoLog.Println("Empty password, not a valid password")
 		h.App.ErrorStatus(w, http.StatusBadRequest)
+		return
+	}
+
+	verifyPassword := r.Form.Get("verify_password")
+	if verifyPassword == "" || verifyPassword != password {
+		h.App.InfoLog.Println("Passwords do not match")
+		h.App.Session.Put(r.Context(), "flash", "Passwords do not match.")
+		http.Redirect(w, r, "/auth/signup", http.StatusSeeOther)
 		return
 	}
 
@@ -196,7 +201,7 @@ func (h *Handlers) SignOut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Forgot(w http.ResponseWriter, r *http.Request) {
-	err := h.render(w, r, h.App.Render.Jet("forgot", nil), nil)
+	err := h.App.Render.Page(w, r, h.App.Render.GoLayout("forgot", "main"), nil)
 	if err != nil {
 		h.App.ErrorLog.Println("Error Rendering: ", err)
 		h.App.Error500(w, r)
@@ -282,15 +287,13 @@ func (h *Handlers) ResetPasswordForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	encryptedEmail, _ := h.encrypt(email)
-	vars := make(jet.VarMap)
-	vars.Set("email", encryptedEmail)
 
-	data := &render.TemplateData{
+	td := &render.TemplateData{
 		Data: make(map[string]interface{}),
 	}
-	data.Data["Email"] = encryptedEmail
+	td.Data["Email"] = encryptedEmail
 
-	err := h.render(w, r, h.App.Render.Jet("reset-password", vars), data)
+	err := h.App.Render.Page(w, r, h.App.Render.GoLayout("reset-password", "main"), td)
 	if err != nil {
 		return
 	}
@@ -300,6 +303,15 @@ func (h *Handlers) PostResetPassword(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		h.App.Error500(w, r)
+		return
+	}
+
+	password := r.Form.Get("password")
+	verifyPassword := r.Form.Get("verify-password")
+	if verifyPassword == "" || verifyPassword != password {
+		h.App.InfoLog.Println("Passwords do not match")
+		h.App.Session.Put(r.Context(), "flash", "Passwords do not match.")
+		http.Redirect(w, r, r.URL.String(), http.StatusSeeOther)
 		return
 	}
 
