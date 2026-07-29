@@ -5,9 +5,11 @@ import (
 	"os"
 
 	"github.com/hbarral/regius"
+	"github.com/hbarral/regius/i18n"
 
 	"regius-app/data"
 	"regius-app/handlers"
+	"regius-app/locales"
 	"regius-app/middleware"
 )
 
@@ -38,6 +40,10 @@ func initApplication() *application {
 		App:        reg,
 		Handlers:   myHandlers,
 		Middleware: myMiddleware,
+	}
+
+	if err := i18n.LoadWithDefault(locales.Content, app.App.I18n.DefaultLocale); err != nil {
+		log.Fatalf("error loading locales: %v", err)
 	}
 
 	app.App.Routes = app.routes()

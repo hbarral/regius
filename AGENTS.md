@@ -256,6 +256,26 @@ The scaffolded app defaults to **templ** (`github.com/a-h/templ`) with the [temp
 - Request ID tracing middleware (`r.RequestID`) — stamps every request with a correlation ID; enabled by default (opt-out via `REQUEST_ID_ENABLED`); reuses an incoming ID from `REQUEST_ID_HEADER` (cross-service correlation), otherwise generates one (`REQUEST_ID_FORMAT`: `uuid` default | `xid` | `short` | `default`); echoes on `REQUEST_ID_RESPONSE_HEADER`; stored in context under chi's `RequestIDKey` (interoperable with `middleware.GetReqID`); retrieve via `regius.RequestIDFromContext(ctx)`; wired globally in `routes.go`
 - Request sanitization middleware (`r.RequestSanitizer`) — XSS prevention via [bluemonday](https://github.com/microcosm-cc/bluemonday); sanitizes query params, form values, and a header allowlist; opt-in via `REQUEST_SANITIZATION_ENABLED` (enabled in scaffolded apps); JSON bodies and `/api/*` exempt by default; wired globally in `routes.go`
 - IP whitelist/blacklist middleware (`r.IPFilter`) — allow/deny lists of IPs & CIDR ranges (IPv4/IPv6); deny-wins; pluggable `IPChecker` (e.g. `CacheIPChecker` for runtime fail2ban-style blocking); opt-in via `IP_FILTER_ENABLED`; wired globally in `routes.go` (after `RealIP`)
+- Internationalization middleware (`r.Language`) — detects locale from the `LOCALE_COOKIE_NAME` cookie, then the `Accept-Language` header, then `DEFAULT_LOCALE`; enabled by default (`I18N_ENABLED=true`); wired globally in `routes.go`; the resolved locale is available via `i18n.Locale(ctx)` and `i18n.T(ctx, "key")`
+
+### Internationalization
+
+#### Locale Detection & Middleware
+- Locale resolution order: cookie (`LOCALE_COOKIE_NAME`, default `locale`) → `Accept-Language` header → `DEFAULT_LOCALE` (default `en`).
+- Supported locales are configured via the comma-separated `SUPPORTED_LOCALES` env var (default `en,es`).
+- The middleware is enabled by default and wired globally in `regius/routes.go`.
+- Handlers can read the current locale with `i18n.Locale(ctx)` from `github.com/hbarral/regius/i18n`.
+
+#### Translation Files
+- Generated apps store translations under `locales/<code>/<code>.yaml` (e.g. `locales/en/en.yaml`).
+- Files are embedded via `locales.Content` and loaded in `init.regius.go` with `i18n.LoadWithDefault(locales.Content, app.App.I18n.DefaultLocale)`.
+- Translations follow the `ctxi18n` YAML/JSON format: the top-level key is the locale code, values are nested maps.
+- Add a new locale with `./regius make locale <code>`, which creates `locales/<code>/<code>.yaml` seeded with the default translation keys.
+
+#### Using Translations in Views
+- **templ** (default renderer): import `github.com/hbarral/regius/i18n` and use `{ i18n.T(ctx, "key") }`. Interpolation: `i18n.T(ctx, "navbar.welcome", i18n.M{"name": userName})`.
+- **jet** and **go** templates: use `{{T "key"}}` (the render package injects a `T` function that reads the locale from context).
+- Always update the `<html lang="...">` attribute to use `i18n.Locale(ctx)` (templ) or `{{.Locale}}` (jet/go).
 
 ### Security Considerations
 
@@ -340,6 +360,7 @@ The scaffolded app defaults to **templ** (`github.com/a-h/templ`) with the [temp
 ./regius make gorm-model <name>  # Create GORM model
 ./regius make session            # Create session table
 ./regius make mail <name>        # Create mail templates
+./regius make locale <code>      # Create a new translation locale (e.g. fr)
 ./regius down                    # Maintenance mode on
 ./regius up                      # Maintenance mode off
 ```
@@ -373,6 +394,7 @@ DATABASE_PASS=password
 5. Format code with `go fmt`
 6. Build and test manually
 7. **Check if the README needs updating** — when a feature adds user-facing behavior (new middleware, CLI command, config option, env var, or public API), update `README.md` (and `AGENTS.md`) to document it. The scaffolded `.env` template (`cmd/cli/templates/env`) must also be updated for any new env var so generated apps include it
+8. **Update translations when adding user-facing strings** — if a feature adds or changes text shown in templates, add the new keys to `cmd/cli/_skeleton/locales/en/en.yaml` and `es/es.yaml`, plus `cmd/cli/templates/locales/locale.yaml` so newly generated locales inherit the keys
 
 #### Code Generation
 - Use the CLI's `make` commands for consistent scaffolding

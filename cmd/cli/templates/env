@@ -151,6 +151,14 @@ MAILER_API=
 MAILER_KEY=
 MAILER_URL=
 
+# internationalization (i18n). Enabled by default.
+# DEFAULT_LOCALE is used when no locale cookie or Accept-Language header is present.
+# SUPPORTED_LOCALES is a comma-separated list of available languages.
+I18N_ENABLED=true
+DEFAULT_LOCALE=en
+SUPPORTED_LOCALES=en,es
+LOCALE_COOKIE_NAME=locale
+
 # Template engine (used by CLI scaffolding only; at runtime each handler
 # picks its engine via render.Jet(), render.Go(), or a templ component).
 # templ is the default. Options: templ | jet | go

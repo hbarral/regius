@@ -11,6 +11,8 @@ import (
 	"github.com/CloudyKit/jet/v6"
 	"github.com/alexedwards/scs/v2"
 	"github.com/justinas/nosurf"
+
+	ri18n "github.com/hbarral/regius/i18n"
 )
 
 type Render struct {
@@ -32,6 +34,7 @@ type TemplateData struct {
 	Port            string
 	ServerName      string
 	Secure          bool
+	Locale          string
 	Error           string
 	Flash           string
 }
@@ -45,6 +48,7 @@ func (s *Render) defaultData(td *TemplateData, r *http.Request) *TemplateData {
 	td.ServerName = s.ServerName
 	td.CSRFToken = nosurf.Token(r)
 	td.Port = s.Port
+	td.Locale = ri18n.Locale(r.Context())
 	if s.Session.Exists(r.Context(), "userID") {
 		td.IsAuthenticated = true
 	}
@@ -110,6 +114,10 @@ func (j *jetView) Render(ctx context.Context, w io.Writer) error {
 		j.vars = make(jet.VarMap)
 	}
 
+	j.vars.Set("T", func(key string) string {
+		return ri18n.T(ctx, key)
+	})
+
 	td, _ := ctx.Value("templateData").(*TemplateData)
 
 	if err := t.Execute(w, j.vars, td); err != nil {
@@ -142,7 +150,12 @@ func (g *goView) Render(ctx context.Context, w io.Writer) error {
 	}
 	files = append(files, components...)
 
-	t, err := template.ParseFiles(files...)
+	rootName := filepath.Base(files[0])
+	t, err := template.New(rootName).Funcs(template.FuncMap{
+		"T": func(key string) string {
+			return ri18n.T(ctx, key)
+		},
+	}).ParseFiles(files...)
 	if err != nil {
 		if g.layout != "" {
 			return fmt.Errorf("error loading go layout %q or page %q: %w", g.layout, g.name, err)

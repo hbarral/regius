@@ -12,8 +12,11 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/hbarral/regius"
+	"github.com/hbarral/regius/i18n"
 	"github.com/hbarral/regius/mailer"
 	"github.com/hbarral/regius/render"
+
+	"regius-app/locales"
 )
 
 var (
@@ -47,7 +50,6 @@ func TestMain(m *testing.M) {
 	reg = regius.Regius{
 		AppName:       "regius-app",
 		Debug:         true,
-		Version:       "1.0.0",
 		ErrorLog:      errorLog,
 		InfoLog:       infoLog,
 		RootPath:      "../",
@@ -61,16 +63,29 @@ func TestMain(m *testing.M) {
 		Scheduler:     nil,
 		Mail:          mailer.Mail{},
 		Server:        regius.Server{},
+		I18n: regius.I18nConfig{
+			Enabled:          true,
+			DefaultLocale:    "en",
+			SupportedLocales: []string{"en", "es"},
+			CookieName:       "locale",
+		},
 	}
 
 	testHandlers.App = &reg
+
+	if err := i18n.LoadWithDefault(locales.Content, reg.I18n.DefaultLocale); err != nil {
+		log.Fatalf("error loading locales: %v", err)
+	}
+
 	os.Exit(m.Run())
 }
 
 func getRoutes() http.Handler {
 	mux := chi.NewRouter()
 	mux.Use(reg.SessionLoad)
+	mux.Use(reg.Language(reg.I18n))
 	mux.Get("/", testHandlers.Home)
+	mux.Get("/set-language/{lang}", testHandlers.SetLanguage)
 
 	fileServer := http.FileServer(http.Dir("./../public/"))
 	mux.Handle("/public/*", http.StripPrefix("/public", fileServer))

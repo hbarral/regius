@@ -1,6 +1,7 @@
 package views
 
 import (
+	"github.com/hbarral/regius/i18n"
 	"github.com/hbarral/regius/render"
 	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/card"
@@ -20,10 +21,10 @@ templ SignUp() {
 						@card.Card() {
 							@card.Header() {
 								@card.Title() {
-									Create an account
+									{ i18n.T(ctx, "auth.sign_up_title") }
 								}
 								@card.Description() {
-									Enter your details to sign up
+									{ i18n.T(ctx, "auth.sign_up_description") }
 								}
 							}
 							@card.Content() {
@@ -40,7 +41,7 @@ templ SignUp() {
 												@label.Label(label.Props{
 													For: "first_name",
 												}) {
-													First Name
+													{ i18n.T(ctx, "auth.first_name") }
 												}
 												@input.Input(input.Props{
 													ID:       "first_name",
@@ -53,7 +54,7 @@ templ SignUp() {
 												@label.Label(label.Props{
 													For: "last_name",
 												}) {
-													Last Name
+													{ i18n.T(ctx, "auth.last_name") }
 												}
 												@input.Input(input.Props{
 													ID:       "last_name",
@@ -66,7 +67,7 @@ templ SignUp() {
 												@label.Label(label.Props{
 													For: "email",
 												}) {
-													Email
+													{ i18n.T(ctx, "auth.email") }
 												}
 												@input.Input(input.Props{
 													ID:          "email",
@@ -80,7 +81,7 @@ templ SignUp() {
 												@label.Label(label.Props{
 													For: "password",
 												}) {
-													Password
+													{ i18n.T(ctx, "auth.password") }
 												}
 												@input.Input(input.Props{
 													ID:          "password",
@@ -94,7 +95,7 @@ templ SignUp() {
 												@label.Label(label.Props{
 													For: "verify_password",
 												}) {
-													Verify Password
+													{ i18n.T(ctx, "auth.verify_password") }
 												}
 												@input.Input(input.Props{
 													ID:          "verify_password",
@@ -117,15 +118,15 @@ templ SignUp() {
 									Form:  "signup-form",
 									Class: "w-full",
 								}) {
-									Sign up
+									{ i18n.T(ctx, "auth.sign_up_button") }
 								}
 								<div class="flex">
 									@card.Description(card.DescriptionProps{
 										Class: "text-sm leading-normal font-normal text-muted-foreground [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary text-center",
 									}) {
-										Already have an account?
+										{ i18n.T(ctx, "auth.has_account") }
 										<a href="/auth/signin" class="text-sm underline underline-offset-4">
-											Sign in
+											{ i18n.T(ctx, "auth.sign_in_link") }
 										</a>
 									}
 								</div>

@@ -13,6 +13,7 @@ func (r *Regius) routes() http.Handler {
 	mux := chi.NewRouter()
 	mux.Use(r.RequestID(r.config.requestID))
 	mux.Use(middleware.RealIP)
+	mux.Use(r.Language(r.config.i18n))
 	mux.Use(r.IPFilter(r.config.ipFilter))
 
 	if r.config.cors.Enabled {

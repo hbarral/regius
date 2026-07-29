@@ -21,6 +21,7 @@ func init() {
 	makeCmd.AddCommand(makeKeyCmd)
 	makeCmd.AddCommand(makeMailCmd)
 	makeCmd.AddCommand(makeGormModelCmd)
+	makeCmd.AddCommand(makeLocaleCmd)
 }
 
 var makeCmd = &cobra.Command{

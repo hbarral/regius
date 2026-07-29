@@ -1,6 +1,7 @@
 package views
 
 import (
+	"github.com/hbarral/regius/i18n"
 	"github.com/hbarral/regius/render"
 	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/card"
@@ -19,10 +20,10 @@ templ Forgot() {
 						@card.Card() {
 							@card.Header() {
 								@card.Title() {
-									Forgot your password?
+									{ i18n.T(ctx, "auth.forgot_title") }
 								}
 								@card.Description() {
-									Enter your email address and we'll email you a link to reset your password
+									{ i18n.T(ctx, "auth.forgot_description") }
 								}
 							}
 							@card.Content() {
@@ -44,7 +45,7 @@ templ Forgot() {
 												@label.Label(label.Props{
 													For: "email",
 												}) {
-													Email
+													{ i18n.T(ctx, "auth.email") }
 												}
 												@input.Input(input.Props{
 													ID:          "email",
@@ -66,15 +67,15 @@ templ Forgot() {
 									Form:  "forgot-form",
 									Class: "w-full",
 								}) {
-									Send reset password email
+									{ i18n.T(ctx, "auth.send_reset_email") }
 								}
 								<div class="flex">
 									@card.Description(card.DescriptionProps{
 										Class: "text-sm leading-normal font-normal text-muted-foreground [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary text-center",
 									}) {
-										Remember your password?
+										{ i18n.T(ctx, "auth.remember_password") }
 										<a href="/auth/signin" class="text-sm underline underline-offset-4">
-											Sign in
+											{ i18n.T(ctx, "auth.sign_in_link") }
 										</a>
 									}
 								</div>

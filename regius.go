@@ -57,6 +57,7 @@ type Regius struct {
 	Scheduler     *cron.Cron
 	Mail          mailer.Mail
 	Server        Server
+	I18n          I18nConfig
 	FileSystems   map[string]interface{}
 	S3            s3filesystem.S3
 	SFTP          sftpfilesystem.SFTP
@@ -84,6 +85,7 @@ type config struct {
 	requestID        RequestIDConfig
 	requestSanitizer RequestSanitizerConfig
 	ipFilter         IPFilterConfig
+	i18n             I18nConfig
 	hash             hashConfig
 }
 
@@ -253,6 +255,34 @@ func (r *Regius) New(rootPath string) error {
 	ipFilterTrustProxy, _ := strconv.ParseBool(os.Getenv("IP_FILTER_TRUST_PROXY"))
 	ipFilterStatusCode, _ := strconv.Atoi(os.Getenv("IP_FILTER_STATUS_CODE"))
 
+	i18nEnabled := true
+	if os.Getenv("I18N_ENABLED") != "" {
+		i18nEnabled, _ = strconv.ParseBool(os.Getenv("I18N_ENABLED"))
+	}
+	defaultLocale := os.Getenv("DEFAULT_LOCALE")
+	if defaultLocale == "" {
+		defaultLocale = "en"
+	}
+	supportedLocales := parseStringSliceEnv("SUPPORTED_LOCALES", "en,es")
+	if len(supportedLocales) == 0 {
+		supportedLocales = []string{defaultLocale}
+	}
+	// Ensure the default locale is always part of the supported list.
+	foundDefault := false
+	for _, l := range supportedLocales {
+		if strings.EqualFold(l, defaultLocale) {
+			foundDefault = true
+			break
+		}
+	}
+	if !foundDefault {
+		supportedLocales = append([]string{defaultLocale}, supportedLocales...)
+	}
+	localeCookieName := os.Getenv("LOCALE_COOKIE_NAME")
+	if localeCookieName == "" {
+		localeCookieName = "locale"
+	}
+
 	r.config = config{
 		port: os.Getenv("PORT"),
 		cookie: cookieConfig{
@@ -330,8 +360,16 @@ func (r *Regius) New(rootPath string) error {
 			StatusCode: ipFilterStatusCode,
 			Message:    os.Getenv("IP_FILTER_MESSAGE"),
 		},
+		i18n: I18nConfig{
+			Enabled:          i18nEnabled,
+			DefaultLocale:    defaultLocale,
+			SupportedLocales: supportedLocales,
+			CookieName:       localeCookieName,
+		},
 		hash: r.createHashConfig(),
 	}
+
+	r.I18n = r.config.i18n
 
 	r.Routes = r.routes().(*chi.Mux)
 

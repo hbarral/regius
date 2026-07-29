@@ -1,11 +1,12 @@
 package views
 
 import (
+	"github.com/hbarral/regius/i18n"
 	"github.com/hbarral/regius/render"
+	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/card"
 	"github.com/templui/templui/components/checkbox"
 	"github.com/templui/templui/components/input"
-	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/label"
 	"${APP_NAME}/views/components"
 	"${APP_NAME}/views/layouts"
@@ -21,10 +22,10 @@ templ SignIn() {
 						@card.Card() {
 							@card.Header() {
 								@card.Title() {
-									Sign in to your account
+									{ i18n.T(ctx, "auth.sign_in_title") }
 								}
 								@card.Description() {
-									Enter your email and password
+									{ i18n.T(ctx, "auth.sign_in_description") }
 								}
 							}
 							@card.Content() {
@@ -46,7 +47,7 @@ templ SignIn() {
 												@label.Label(label.Props{
 													For: "email",
 												}) {
-													Email
+													{ i18n.T(ctx, "auth.email") }
 												}
 												@input.Input(input.Props{
 													ID:          "email",
@@ -61,10 +62,10 @@ templ SignIn() {
 													@label.Label(label.Props{
 														For: "password",
 													}) {
-														Password
+														{ i18n.T(ctx, "auth.password") }
 													}
 													<a href="/auth/forgot-password" class="ml-auto text-sm underline-offset-4 hover:underline">
-														Forgot your password?
+														{ i18n.T(ctx, "auth.forgot_password") }
 													</a>
 												</div>
 												@input.Input(input.Props{
@@ -84,7 +85,7 @@ templ SignIn() {
 												@label.Label(label.Props{
 													For: "remember",
 												}) {
-													Remember me
+													{ i18n.T(ctx, "auth.remember_me") }
 												}
 											</div>
 										</div>
@@ -100,15 +101,15 @@ templ SignIn() {
 									Form:  "signin-form",
 									Class: "w-full",
 								}) {
-									Sign in
+									{ i18n.T(ctx, "auth.sign_in_button") }
 								}
 								<div class="flex">
 									@card.Description(card.DescriptionProps{
 										Class: "text-sm leading-normal font-normal text-muted-foreground [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary text-center",
 									}) {
-										Don&apos;t have an account?
+										{ i18n.T(ctx, "auth.no_account") }
 										<a href="/auth/signup" class="text-sm underline underline-offset-4">
-											Sign up
+											{ i18n.T(ctx, "auth.sign_up_link") }
 										</a>
 									}
 								</div>

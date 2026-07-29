@@ -45,6 +45,7 @@ Seed files are plain `.sql` files executed in a single transaction, and each is 
 - `regius make session`: Create session table in database.
 - `regius make key`: Generate 32-character encryption key.
 - `regius make mail <name>`: Create mail templates.
+- `regius make locale <code>`: Create a new translation locale file (e.g. `regius make locale fr`).
 
 ### CLI Features
 
@@ -541,6 +542,40 @@ regius migrate --help
   IP_FILTER_TRUST_PROXY=false               # read X-Forwarded-For/X-Real-IP
   IP_FILTER_STATUS_CODE=403
   IP_FILTER_MESSAGE=
+  ```
+
+- **Internationalization (i18n)**: Ship multi-language apps out of the box with locale detection, translation file management, and a built-in language selector.
+
+  - Enabled by default (`I18N_ENABLED=true`); applied globally in `routes.go`
+  - Locale resolution order: `LOCALE_COOKIE_NAME` cookie → `Accept-Language` header → `DEFAULT_LOCALE`
+  - Default supported locales are **English** (`en`) and **Spanish** (`es`), configurable via `SUPPORTED_LOCALES`
+  - Generated apps embed translations under `locales/<code>/<code>.yaml` and load them in `init.regius.go`
+  - Add new locales with `./regius make locale <code>` (e.g. `./regius make locale fr`)
+
+  **Usage in templ views:**
+
+  ```go
+  import "github.com/hbarral/regius/i18n"
+
+  templ Hello(name string) {
+    <p>{ i18n.T(ctx, "navbar.welcome", i18n.M{"name": name}) }</p>
+  }
+  ```
+
+  **Usage in Jet/Go templates:**
+
+  ```html
+  <p>{{T "navbar.home"}}</p>
+  <html lang="{{.Locale}}">
+  ```
+
+  **Environment Variables:**
+
+  ```env
+  I18N_ENABLED=true
+  DEFAULT_LOCALE=en
+  SUPPORTED_LOCALES=en,es
+  LOCALE_COOKIE_NAME=locale
   ```
 
 ## 🚀 Getting Started

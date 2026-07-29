@@ -1,14 +1,16 @@
 package components
 
 import (
+	"github.com/hbarral/regius/i18n"
+	"github.com/hbarral/regius/render"
 	"github.com/templui/templui/components/avatar"
 	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/sheet"
-	"github.com/hbarral/regius/render"
 )
 
 templ Navbar() {
 	{{ td, _ := ctx.Value("templateData").(*render.TemplateData) }}
+	{{ currentLocale := i18n.Locale(ctx) }}
 	<nav class="sticky top-0 z-50 w-full transition-all duration-300">
 		<div class="container mx-auto px-4">
 			<div class="flex h-20 items-center justify-between">
@@ -19,13 +21,13 @@ templ Navbar() {
 						}) {
 							@avatar.Image(avatar.ImageProps{
 								Src:   "/public/images/regius.png",
-								Alt:   "Regius Logo",
+								Alt:   i18n.T(ctx, "app.name"),
 								Class: "select-none",
 							})
 						}
 					</a>
 					<a href="/" class="text-xl font-bold transition-colors duration-300 select-none">
-						Regius
+						{ i18n.T(ctx, "app.name") }
 					</a>
 				</div>
 				<div class="hidden md:flex items-center space-x-8 select-none">
@@ -34,7 +36,7 @@ templ Navbar() {
 						Href:    "/",
 						Class:   "text-sm font-medium transition-colors duration-300 select-none",
 					}) {
-						Home
+						{ i18n.T(ctx, "navbar.home") }
 					}
 					@button.Button(button.Props{
 						Variant: button.VariantGhost,
@@ -42,7 +44,7 @@ templ Navbar() {
 						Class:   "text-sm font-medium transition-colors duration-300 select-none",
 						Target:  "_blank",
 					}) {
-						Docs
+						{ i18n.T(ctx, "navbar.docs") }
 					}
 					@button.Button(button.Props{
 						Variant: button.VariantGhost,
@@ -50,7 +52,7 @@ templ Navbar() {
 						Class:   "text-sm font-medium transition-colors duration-300 select-none",
 						Target:  "_blank",
 					}) {
-						Github
+						{ i18n.T(ctx, "navbar.github") }
 					}
 				</div>
 				<div class="flex items-center gap-2">
@@ -58,7 +60,7 @@ templ Navbar() {
 						if td != nil && td.IsAuthenticated {
 							{{ userName, _ := td.Data["userName"].(string) }}
 							<span class="text-sm font-medium transition-colors duration-300">
-								Welcome, { userName }
+								{ i18n.T(ctx, "navbar.welcome", i18n.M{"name": userName}) }
 							</span>
 							<form method="post" action="/auth/signout" class="inline">
 								<input type="hidden" name="csrf_token" value={ td.CSRFToken }/>
@@ -66,7 +68,7 @@ templ Navbar() {
 									Type:    button.TypeSubmit,
 									Variant: button.VariantGhost,
 								}) {
-									Sign Out
+									{ i18n.T(ctx, "navbar.sign_out") }
 								}
 							</form>
 						} else {
@@ -75,7 +77,7 @@ templ Navbar() {
 								Href:    "/auth/signin",
 								Class:   "select-none",
 							}) {
-								Sign In
+								{ i18n.T(ctx, "navbar.sign_in") }
 							}
 						}
 						@button.Button(button.Props{
@@ -83,16 +85,17 @@ templ Navbar() {
 							Class:  "shadow-lg select-none",
 							Target: "_blank",
 						}) {
-							Get Started
+							{ i18n.T(ctx, "navbar.get_started") }
 						}
 					</div>
+					@LanguageSelector(currentLocale)
 					@ThemeSwitcher()
 					@sheet.Trigger(sheet.TriggerProps{
 						For: "mobile-menu-sheet",
 					}) {
 						<button
 							type="button"
-							aria-label="Toggle menu"
+							aria-label={ i18n.T(ctx, "navbar.menu") }
 							class="md:hidden inline-flex size-10 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 transition-all"
 						>
 							<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-5">
@@ -107,4 +110,22 @@ templ Navbar() {
 		</div>
 		@MenuMobile()
 	</nav>
+}
+
+templ LanguageSelector(currentLocale string) {
+	<div class="relative">
+		<select
+			aria-label={ i18n.T(ctx, "language.selector_label") }
+			class="appearance-none rounded-md border border-input bg-background pl-2 pr-6  py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+			onchange="window.location.href = '/set-language/' + this.value;"
+		>
+			<option value="en" selected?={ currentLocale == "en" }>🇬🇧 { i18n.T(ctx, "language.english") }</option>
+			<option value="es" selected?={ currentLocale == "es" }>🇪🇸 { i18n.T(ctx, "language.spanish") }</option>
+		</select>
+		<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-muted-foreground">
+			<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="m6 9 6 6 6-6"></path>
+			</svg>
+		</div>
+	</div>
 }

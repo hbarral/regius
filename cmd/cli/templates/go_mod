@@ -9,6 +9,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/gorilla/sessions v1.4.0
 	github.com/hbarral/regius ${REGIUS_VERSION}
+	github.com/invopop/ctxi18n v0.9.0
 	github.com/markbates/goth v1.82.0
 	github.com/templui/templui v1.12.1
 	github.com/upper/db/v4 v4.6.0
