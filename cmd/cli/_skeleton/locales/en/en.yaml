@@ -20,6 +20,7 @@ en:
   home:
     title: Regius
     subtitle: Go build something real
+    send_ping: Send ping
 
   auth:
     sign_in_title: Sign in to your account

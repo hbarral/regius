@@ -13,7 +13,7 @@ func (r *Regius) ListenAndServe() error {
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%s", os.Getenv("PORT")),
 		ErrorLog:     r.ErrorLog,
-		Handler:      r.Routes,
+		Handler:      r.Handler(),
 		IdleTimeout:  30 * time.Second,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 600 * time.Second,

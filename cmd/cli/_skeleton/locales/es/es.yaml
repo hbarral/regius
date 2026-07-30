@@ -20,6 +20,7 @@ es:
   home:
     title: Regius
     subtitle: Crea algo real con Go
+    send_ping: Enviar ping
 
   auth:
     sign_in_title: Inicia sesión en tu cuenta

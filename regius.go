@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"net/rpc"
 	"os"
 	"path/filepath"
@@ -58,11 +59,13 @@ type Regius struct {
 	Mail          mailer.Mail
 	Server        Server
 	I18n          I18nConfig
+	SSE           *SSEBroker
 	FileSystems   map[string]interface{}
 	S3            s3filesystem.S3
 	SFTP          sftpfilesystem.SFTP
 	WebDAV        webdavfilesystem.WebDAV
 	Minio         miniofilesystem.Minio
+	handler       http.Handler
 }
 
 type Server struct {
@@ -370,6 +373,7 @@ func (r *Regius) New(rootPath string) error {
 	}
 
 	r.I18n = r.config.i18n
+	r.SSE = NewSSEBroker()
 
 	r.Routes = r.routes().(*chi.Mux)
 

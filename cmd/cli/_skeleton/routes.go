@@ -14,6 +14,7 @@ func (a *application) routes() *chi.Mux {
 	// routes
 	a.get("/", a.Handlers.Home)
 	a.get("/set-language/{lang}", a.Handlers.SetLanguage)
+	a.get("/sse/ping", a.Handlers.SSEPing)
 
 	// static routes
 	fileServer := http.FileServer(http.Dir("./public"))

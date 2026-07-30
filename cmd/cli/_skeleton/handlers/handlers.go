@@ -24,6 +24,20 @@ func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handlers) SSEPing(w http.ResponseWriter, r *http.Request) {
+	err := h.App.SSEBroadcastJSON("ping", map[string]string{
+		"message": "pong",
+		"time":    time.Now().Format(time.RFC3339),
+	})
+	if err != nil {
+		h.App.ErrorLog.Println("sse ping error:", err)
+		h.App.WriteJSON(w, http.StatusInternalServerError, map[string]string{"status": "error"})
+		return
+	}
+
+	h.App.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func (h *Handlers) SetLanguage(w http.ResponseWriter, r *http.Request) {
 	lang := chi.URLParam(r, "lang")
 	if !h.App.I18n.IsSupported(lang) {

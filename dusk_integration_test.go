@@ -48,7 +48,7 @@ func TestDusk_Navigation(t *testing.T) {
 		fmt.Fprint(w, `<html><head><title>Dusk E2E</title></head><body><h1>Hello Dusk</h1></body></html>`)
 	})
 
-	ts := httptest.NewServer(r.Routes)
+	ts := httptest.NewServer(r.Handler())
 	defer ts.Close()
 
 	browser := newRodBrowser(t)
@@ -87,7 +87,7 @@ func TestDusk_FormSubmission(t *testing.T) {
 		fmt.Fprintf(w, "<html><body><h1>Hello %s</h1></body></html>", submitted)
 	})
 
-	ts := httptest.NewServer(r.Routes)
+	ts := httptest.NewServer(r.Handler())
 	defer ts.Close()
 
 	browser := newRodBrowser(t)

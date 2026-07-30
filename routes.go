@@ -10,6 +10,16 @@ import (
 )
 
 func (r *Regius) routes() http.Handler {
+	appRoutes := chi.NewRouter()
+	appRoutes.Use(r.SessionLoad)
+	appRoutes.Use(r.NoSurf)
+	maxSize, _ := strconv.ParseInt(os.Getenv("MAX_FILESIZE"), 10, 64)
+	appRoutes.Use(r.MaxRequestSize(maxSize))
+	appRoutes.Use(r.RequestSanitizer(r.config.requestSanitizer))
+	appRoutes.Use(r.CheckForMaintenanceMode)
+
+	r.Routes = appRoutes
+
 	mux := chi.NewRouter()
 	mux.Use(r.RequestID(r.config.requestID))
 	mux.Use(middleware.RealIP)
@@ -26,12 +36,17 @@ func (r *Regius) routes() http.Handler {
 	}
 
 	mux.Use(middleware.Recoverer)
-	mux.Use(r.SessionLoad)
-	mux.Use(r.NoSurf)
-	maxSize, _ := strconv.ParseInt(os.Getenv("MAX_FILESIZE"), 10, 64)
-	mux.Use(r.MaxRequestSize(maxSize))
-	mux.Use(r.RequestSanitizer(r.config.requestSanitizer))
-	mux.Use(r.CheckForMaintenanceMode)
 
-	return mux
+	if r.SSE != nil {
+		mux.Get("/sse/stream", r.SSE.Handler())
+	}
+
+	mux.Mount("/", appRoutes)
+
+	r.handler = mux
+	return appRoutes
+}
+
+func (r *Regius) Handler() http.Handler {
+	return r.handler
 }

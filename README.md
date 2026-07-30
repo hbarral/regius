@@ -578,6 +578,51 @@ regius migrate --help
   LOCALE_COOKIE_NAME=locale
   ```
 
+- **Server-Sent Events (SSE)**: Push real-time updates to browsers over standard HTTP with a built-in, zero-dependency SSE broker.
+
+  - Global broker available on every app: `app.SSE`
+  - Broadcast to all connected clients or send to a specific client
+  - JSON helper: `app.SSEBroadcastJSON(event, payload)` marshals a payload and broadcasts it
+  - Automatic client disconnect detection via request context cancellation
+  - Works through the existing middleware stack (`RequestID`, `CORS`, `SecurityHeaders`, `SessionLoad`, etc.)
+  - Generated apps include a visual SSE demo on the home page (`/sse/stream` and `/sse/ping`)
+
+  **Usage Example in Your App:**
+
+  ```go
+  // Broadcast a JSON event to every connected browser
+  _ = app.SSEBroadcastJSON("notification", map[string]string{
+      "message": "Hello, world!",
+  })
+
+  // Or build an event manually and broadcast it
+  app.SSE.Broadcast(regius.SSEEvent{
+      Event: "notification",
+      Data:  []byte(`{"message":"Hello, world!"}`),
+  })
+
+  // Stream events from a handler
+  r.Get("/sse/stream", app.SSE.Handler())
+  ```
+
+  **Configuration Options:**
+
+  ```go
+  config := regius.SSEEvent{
+      ID:    "1",                       // Optional event id for the Last-Event-ID header
+      Event: "update",                  // Event name listeners can subscribe to
+      Data:  []byte(`{"ok":true}`),     // Raw event payload
+      Retry: 3000,                      // Optional reconnection time in milliseconds
+  }
+  ```
+
+  **Environment Variables:**
+
+  ```env
+  # Disable the demo heartbeat in generated apps (enabled by default)
+  SSE_DEMO_HEARTBEAT=false
+  ```
+
 ## 🚀 Getting Started
 
 ### Homebrew (macOS & Linux)

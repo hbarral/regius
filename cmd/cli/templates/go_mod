@@ -2,6 +2,8 @@ module ${APP_NAME}
 
 go 1.25.0
 
+replace github.com/hbarral/regius => ../../regius
+
 require (
 	github.com/CloudyKit/jet/v6 v6.2.0
 	github.com/a-h/templ v0.3.1020
