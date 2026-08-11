@@ -8,6 +8,10 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/hbarral/regius/filesystems/miniofilesystem"
+	"github.com/hbarral/regius/filesystems/s3filesystem"
+	"github.com/hbarral/regius/filesystems/webdavfilesystem"
 )
 
 func TestParseStringSliceEnv(t *testing.T) {
@@ -232,7 +236,7 @@ func TestCreateFileSystems_NoneConfigured(t *testing.T) {
 	}
 
 	r := &Regius{}
-	fs := r.createFileSystems()
+	fs := r.initFileSystems()
 
 	assert.Empty(t, fs)
 }
@@ -263,7 +267,7 @@ func TestCreateFileSystems_AllConfigured(t *testing.T) {
 	t.Setenv("S3_ENDPOINT", "https://s3.local")
 
 	r := &Regius{}
-	fs := r.createFileSystems()
+	fs := r.initFileSystems()
 
 	assert.Len(t, fs, 4)
 	assert.Contains(t, fs, "MINIO")
@@ -272,12 +276,15 @@ func TestCreateFileSystems_AllConfigured(t *testing.T) {
 	assert.Contains(t, fs, "S3")
 
 	// Receiver fields are populated (spot-check S3 + Minio/WebDAV SSL flags).
-	assert.Equal(t, "s3-key", r.S3.Key)
-	assert.Equal(t, "s3-secret", r.S3.Secret)
-	assert.Equal(t, "s3bucket", r.S3.Bucket)
-	assert.Equal(t, "minio-secret", r.Minio.Secret)
-	assert.True(t, r.Minio.UseSSL)
-	assert.False(t, r.WebDAV.UseSSL)
+	s3FS := fs["S3"].(*s3filesystem.S3)
+	assert.Equal(t, "s3-key", s3FS.Key)
+	assert.Equal(t, "s3-secret", s3FS.Secret)
+	assert.Equal(t, "s3bucket", s3FS.Bucket)
+	minioFS := fs["MINIO"].(*miniofilesystem.Minio)
+	assert.Equal(t, "minio-secret", minioFS.Secret)
+	assert.True(t, minioFS.UseSSL)
+	webdavFS := fs["WebDAV"].(*webdavfilesystem.WebDAV)
+	assert.False(t, webdavFS.UseSSL)
 }
 
 func TestRPCServer_MaintenanceMode(t *testing.T) {
@@ -352,6 +359,7 @@ func TestNew_MinimalSuccess(t *testing.T) {
 	t.Setenv("DATABASE_TYPE", "")
 	t.Setenv("CACHE", "")
 	t.Setenv("SESSION_TYPE", "")
+	t.Setenv("SMTP_HOST", "localhost")
 
 	root := t.TempDir()
 	r := &Regius{}

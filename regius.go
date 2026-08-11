@@ -21,10 +21,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/hbarral/regius/cache"
-	"github.com/hbarral/regius/filesystems/miniofilesystem"
-	"github.com/hbarral/regius/filesystems/s3filesystem"
-	"github.com/hbarral/regius/filesystems/sftpfilesystem"
-	"github.com/hbarral/regius/filesystems/webdavfilesystem"
+	"github.com/hbarral/regius/filesystems"
 	"github.com/hbarral/regius/hash"
 	"github.com/hbarral/regius/mailer"
 	"github.com/hbarral/regius/render"
@@ -61,10 +58,10 @@ type Regius struct {
 	I18n          I18nConfig
 	SSE           *SSEBroker
 	FileSystems   map[string]interface{}
-	S3            s3filesystem.S3
-	SFTP          sftpfilesystem.SFTP
-	WebDAV        webdavfilesystem.WebDAV
-	Minio         miniofilesystem.Minio
+	S3            filesystems.FS
+	SFTP          filesystems.FS
+	WebDAV        filesystems.FS
+	Minio         filesystems.FS
 	handler       http.Handler
 }
 
@@ -194,7 +191,10 @@ func (r *Regius) New(rootPath string) error {
 	r.ErrorLog = errorLog
 	r.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
 	r.RootPath = rootPath
-	r.Mail = r.createMailer()
+
+	if os.Getenv("SMTP_HOST") != "" || os.Getenv("MAILER_API") != "" {
+		r.Mail = r.createMailer()
+	}
 
 	exploded := strings.Split(os.Getenv("ALLOWED_FILETYPES"), ",")
 	var allowedTypes []string
@@ -421,8 +421,10 @@ func (r *Regius) New(rootPath string) error {
 	}
 
 	r.createRenderer()
-	r.FileSystems = r.createFileSystems()
-	go r.Mail.ListenForMail()
+	r.FileSystems = r.initFileSystems()
+	if os.Getenv("SMTP_HOST") != "" || os.Getenv("MAILER_API") != "" {
+		go r.Mail.ListenForMail()
+	}
 
 	return nil
 }
@@ -667,73 +669,6 @@ func (r *Regius) buildDSN(prefix string) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported database type: %s", os.Getenv("DATABASE_TYPE"))
 	}
-}
-
-func (r *Regius) createFileSystems() map[string]interface{} {
-	fileSystems := make(map[string]interface{})
-
-	if os.Getenv("MINIO_SECRET") != "" {
-		useSSL := false
-
-		if strings.ToLower(os.Getenv("MINIO_USESSL")) == "true" {
-			useSSL = true
-		}
-
-		minio := miniofilesystem.Minio{
-			Endpoint: os.Getenv("MINIO_ENDPOINT"),
-			Key:      os.Getenv("MINIO_KEY"),
-			Secret:   os.Getenv("MINIO_SECRET"),
-			UseSSL:   useSSL,
-			Region:   os.Getenv("MINIO_REGION"),
-			Bucket:   os.Getenv("MINIO_BUCKET"),
-		}
-		fileSystems["MINIO"] = minio
-		r.Minio = minio
-	}
-
-	if os.Getenv("SFTP_HOST") != "" {
-		sftp := sftpfilesystem.SFTP{
-			Host: os.Getenv("SFTP_HOST"),
-			Port: os.Getenv("SFTP_PORT"),
-			User: os.Getenv("SFTP_USER"),
-			Pass: os.Getenv("SFTP_PASS"),
-		}
-
-		fileSystems["SFTP"] = sftp
-		r.SFTP = sftp
-	}
-
-	if os.Getenv("WEBDAV_HOST") != "" {
-		useSSL := false
-		if strings.ToLower(os.Getenv("WEBDAV_USESSL")) == "true" {
-			useSSL = true
-		}
-
-		webdav := webdavfilesystem.WebDAV{
-			Host:   os.Getenv("WEBDAV_HOST"),
-			Port:   os.Getenv("WEBDAV_PORT"),
-			User:   os.Getenv("WEBDAV_USER"),
-			Pass:   os.Getenv("WEBDAV_PASS"),
-			UseSSL: useSSL,
-		}
-
-		fileSystems["WebDAV"] = webdav
-		r.WebDAV = webdav
-	}
-
-	if os.Getenv("S3_KEY") != "" {
-		s3 := s3filesystem.S3{
-			Key:      os.Getenv("S3_KEY"),
-			Secret:   os.Getenv("S3_SECRET"),
-			Region:   os.Getenv("S3_REGION"),
-			Bucket:   os.Getenv("S3_BUCKET"),
-			Endpoint: os.Getenv("S3_ENDPOINT"),
-		}
-		fileSystems["S3"] = s3
-		r.S3 = s3
-	}
-
-	return fileSystems
 }
 
 func (r *Regius) listenRPC() {
