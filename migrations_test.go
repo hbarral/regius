@@ -73,7 +73,7 @@ func TestRegius_RunMigrations(t *testing.T) {
 		"sql",
 	))
 
-	dsn := "sqlite://" + dbPath
+	dsn := "sqlite3://" + dbPath
 	err := r.RunMigrations(dsn)
 	require.NoError(t, err)
 
@@ -98,7 +98,7 @@ func TestRegius_MigrateVersion(t *testing.T) {
 		"sql",
 	))
 
-	dsn := "sqlite://" + dbPath
+	dsn := "sqlite3://" + dbPath
 	require.NoError(t, r.RunMigrations(dsn))
 
 	version, dirty, err := r.MigrateVersion(dsn)
@@ -119,7 +119,7 @@ func TestRegius_MigrateDown(t *testing.T) {
 		"sql",
 	))
 
-	dsn := "sqlite://" + dbPath
+	dsn := "sqlite3://" + dbPath
 	require.NoError(t, r.RunMigrations(dsn))
 	require.NoError(t, r.MigrateDown(dsn, 1))
 
@@ -144,7 +144,7 @@ func TestRegius_MigrateReset(t *testing.T) {
 		"sql",
 	))
 
-	dsn := "sqlite://" + dbPath
+	dsn := "sqlite3://" + dbPath
 	require.NoError(t, r.RunMigrations(dsn))
 	require.NoError(t, r.MigrateReset(dsn))
 
@@ -199,7 +199,7 @@ func TestRegius_MigrationDSNForCLI_SQLite(t *testing.T) {
 	dsn, err := r.MigrationDSNForCLI()
 
 	require.NoError(t, err)
-	assert.Equal(t, "sqlite://file:/tmp/app.db?_foreign_keys=on", dsn)
+	assert.Equal(t, "sqlite3://file:/tmp/app.db?_foreign_keys=on", dsn)
 }
 
 func TestRegius_MigrationDSNForCLI_Postgres(t *testing.T) {
