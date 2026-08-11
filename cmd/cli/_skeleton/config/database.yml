@@ -1,9 +1,0 @@
----
-development:
-  dialect: {{ envOr "DATABASE_TYPE" "postgres" }}
-  database: {{ envOr "DATABASE_NAME" "regius" }}
-  user: {{ envOr "DATABASE_USER" "postgres" }}
-  password: {{ envOr "DATABASE_PASS" "postgres" }}
-  host: {{ envOr "DATABASE_HOST" "127.0.0.1" }}
-  port: {{ envOr "DATABASE_PORT" "5432" }}
-  pool: 5

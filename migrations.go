@@ -14,7 +14,6 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/database/sqlite"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
@@ -182,7 +181,7 @@ func (r *Regius) MigrationDSNForCLI() (string, error) {
 	case "mysql", "mariadb":
 		return "mysql://" + dsn, nil
 	case "sqlite", "sqlite3":
-		return "sqlite://" + dsn, nil
+		return "sqlite3://" + dsn, nil
 	default:
 		return dsn, nil
 	}
@@ -264,7 +263,7 @@ func normalizeDBTypeForMigrate(dbType string) string {
 	case "mysql", "mariadb":
 		return "mysql"
 	case "sqlite", "sqlite3":
-		return "sqlite"
+		return "sqlite3"
 	default:
 		return ""
 	}

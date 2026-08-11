@@ -6,20 +6,31 @@ This file contains guidelines and commands for agentic coding assistants working
 
 Regius is a CLI application for building web pages in Go, inspired by Laravel. It provides tools for database migrations, code generation, and web application scaffolding.
 
-This is a **single repository (monorepo)**. The starter app template is embedded directly in the CLI as `cmd/cli/_skeleton/` (embedded via `//go:embed all:_skeleton` in `cmd/cli/copy-files.go`), so `regius new <name>` writes the skeleton from the embedded filesystem — it does **not** clone an external repository. The underscore prefix makes Go's build tool ignore the skeleton directory (so it is not compiled as part of `go build ./...`), while `all:` lets the embed include it. The skeleton source uses the internal module name `regius-app` for its imports (e.g. `regius-app/data`); `regius new` rewrites the literal `regius-app` to the chosen app name via `updateSource()` in `cmd/cli/helpers.go`.
+This repository uses a **split-module layout** to keep the CLI binary small:
 
-When changing the skeleton (`cmd/cli/_skeleton/`), verify end-to-end by building the CLI and running `regius new smoketest && (cd smoketest && go build ./...)`. `regius new` runs `templ generate` for the default `--renderer templ`, so the generated app builds directly. The skeleton's own `go.mod`/`go.sum` are intentionally absent — it is not a standalone module; its correctness is validated by generating an app from it and building that app. When changing renderer-aware scaffolding, also smoke the matrix: `regius new jetapp --renderer jet`, `regius new goapp --renderer go`, and `regius make auth`/`regius make handler --renderer <e>` in each, then `go build ./...`.
+- **Root module** (`github.com/hbarral/regius`): the web framework — `regius.go`, `render/`, `session/`, `mailer/`, `cache/`, `filesystems/`, etc. This is what end-user apps import.
+- **CLI module** (`github.com/hbarral/regius/cli`): the command-line tool — a separate Go module under `cli/` with its own `go.mod` and a minimal dependency set. It does **not** import the root module; instead it has a lightweight `Backend` struct (`cli/backend.go`) that reimplements the few methods the CLI needs (RandomString, CreateMigration, DSN building, golang-migrate wrappers, Seeder). This keeps the CLI binary at ~12 MB instead of ~35 MB.
+- **Entry point** (`cmd/cli/main.go`): a thin `package main` that imports `github.com/hbarral/regius/cli` and calls `cli.Execute()`. It lives in the root module so `go build ./cmd/cli` works from the repo root.
 
-> **Release coupling:** the embedded skeleton's handlers use the head `Render.Page(view render.Template, data)` API. Before end-user apps build out-of-the-box (without a local `replace`), a `github.com/hbarral/regius` release carrying that API must be published and `cmd/cli/templates/go_mod` bumped to require it; until then verify generated apps with a `replace github.com/hbarral/regius => ../regius` directive in the app's `go.mod`.
+The starter app template is embedded directly in the CLI module as `cli/_skeleton/` (embedded via `//go:embed all:_skeleton` in `cli/copy-files.go`), so `regius new <name>` writes the skeleton from the embedded filesystem.
+The underscore prefix makes Go's build tool ignore the skeleton directory, while `all:` lets the embed include it. The skeleton source uses the internal module name `regius-app` for its imports; `regius new` rewrites the literal `regius-app` to the chosen app name via `updateSource()` in `cli/helpers.go`.
+
+Code-generation templates are embedded in `cli/templates/` (via `//go:embed templates`).
+
+When changing the skeleton (`cli/_skeleton/`), verify end-to-end by building the CLI and running `regius new smoketest && (cd smoketest && go build ./...)`. `regius new` runs `templ generate` for the default `--renderer templ`, so the generated app builds directly.
+The skeleton's own `go.mod`/`go.sum` are intentionally absent — it is not a standalone module; its correctness is validated by generating an app from it and building that app. When changing renderer-aware scaffolding, also smoke the matrix: `regius new jetapp --renderer jet`, `regius new goapp --renderer go`, and `regius make auth`/`regius make handler --renderer <e>` in each, then `go build ./...`.
+
+> **Release coupling:** the embedded skeleton's handlers use the head `Render.Page(view render.Template, data)` API. Before end-user apps build out-of-the-box (without a local `replace`), a `github.com/hbarral/regius` release carrying that API must be published and `cli/templates/go_mod` bumped to require it; until then verify generated apps with a `replace github.com/hbarral/regius => ../regius` directive in the app's `go.mod`.
 
 ## Build/Lint/Test Commands
 
 ### Testing
 ```bash
-# Run all tests
+# Run all tests (both root and CLI modules)
 make test
 # or
-go test -v ./...
+Go test -v ./...
+go test -v ./cli/...
 
 # Run tests with coverage
 make coverage
@@ -44,17 +55,18 @@ go test -v ./session/
 ### Building
 ```bash
 # Build CLI for current platform
-make build_cli
-
-# Build to dist directory
 make build
-# or
-go build -o ./dist/regius ./cmd/cli
+
+# Build to a specific path
+go build -ldflags "-s -w" -o ./dist/regius ./cmd/cli
 
 # Cross-platform builds (used in CI)
 GOOS=linux GOARCH=amd64 go build -o bin/regius-linux ./cmd/cli
 GOOS=windows GOARCH=amd64 go build -o bin/regius-windows.exe ./cmd/cli
 GOOS=darwin GOARCH=amd64 go build -o bin/regius-mac ./cmd/cli
+
+# Build the CLI module directly (for testing CLI deps in isolation)
+cd cli && go build -o /tmp/regius-cli .
 ```
 
 ### Formatting & Linting

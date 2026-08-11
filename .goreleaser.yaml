@@ -5,10 +5,11 @@ project_name: regius
 before:
   hooks:
     - go mod tidy
+    - go mod vendor
 
 builds:
   - env:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
     goos:
       - linux
       - windows
@@ -19,7 +20,7 @@ builds:
     main: ./cmd/cli
     binary: regius
     ldflags:
-      - -s -w -X main.Version={{.Version}}
+      - -s -w -X github.com/hbarral/regius/cli.Version={{.Version}}
 
 archives:
   - format: tar.gz
