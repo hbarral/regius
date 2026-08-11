@@ -1,13 +1,15 @@
 ## Build CLI
 build: create_dirs
 	@echo "Building CLI for $(UNAME_S)"
-	@go build -o "$(BINARY_PATH)" ./cmd/cli
+	@go mod vendor
+	@go build -ldflags "-s -w" -o "$(BINARY_PATH)" ./cmd/cli
 	@echo "Build complete!"
 	@echo $(PATH_INSTRUCTIONS)
 
-## test: run all tests
+## test: run all tests (both root and cli modules)
 test:
 	@go test -v ./...
+	@cd cli && go test -v ./...
 
 ## cover: opens coverage in browser
 cover:
