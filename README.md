@@ -70,7 +70,7 @@ Regius includes a unified database layer that works out of the box with PostgreS
 
 **Configuration Options:**
 
-```env
+```properties
 DATABASE_TYPE=postgres
 DATABASE_HOST=127.0.0.1
 DATABASE_PORT=5432
@@ -124,7 +124,7 @@ _ = app.AutoMigrate(&User{}, &Post{})
 
 ### Examples
 
-```bash
+```sh
 # Create migration with sql format
 regius make migration create_users --format=sql
 
@@ -161,21 +161,21 @@ regius migrate --help
 
   // Or apply to specific routes
   r.Post("/login", a.Middleware.RateLimitStrict(a.Handlers.Login))
-  ```
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.RateLimiterConfig{
-      Enabled:    true,                    // Enable/disable rate limiting
-      Algorithm:  regius.RateLimiterAlgorithmSlidingWindow,  // "token_bucket" or "sliding_window"
-      Requests:   100,                   // Maximum requests per window
-      Window:     time.Minute,           // Time duration (time.Second, time.Minute, time.Hour)
-      Storage:    "",                     // "" for in-memory, "redis" or "badger"
-      TrustProxy: true,                   // Trust proxy headers
-      Whitelist:  []string{"127.0.0.1", "::1", "10.0.0.0/8"},  // IPs/CIDRs to exclude
-  }
-  ```
+```go
+config := regius.RateLimiterConfig{
+    Enabled:    true,                                       // Enable/disable rate limiting
+    Algorithm:  regius.RateLimiterAlgorithmSlidingWindow,   // "token_bucket" or "sliding_window"
+    Requests:   100,                                        // Maximum requests per window
+    Window:     time.Minute,                                // Time duration (time.Second, time.Minute, time.Hour)
+    Storage:    "",                                         // "" for in-memory, "redis" or "badger"
+    TrustProxy: true,                                       // Trust proxy headers
+    Whitelist:  []string{"127.0.0.1", "::1", "10.0.0.0/8"}, // IPs/CIDRs to exclude
+}
+```
 
   **Testing:**
   You can exercise the rate limiter with any HTTP load tool (e.g. `hey`, `wrk`, or a small `curl` loop) against a rate-limited route in your app.
@@ -197,39 +197,39 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // CORS is applied globally by default when CORS_ENABLED=true (or unset)
-  // No additional code is required
+```go
+// CORS is applied globally by default when CORS_ENABLED=true (or unset)
+// No additional code is required
 
-  // To apply CORS only to API routes, disable global CORS in .env:
-  // CORS_ENABLED=false
-  // Then manually apply in your routes file:
-  r.Group(func(mux chi.Router) {
-      mux.Use(a.CORS(regius.CORSConfig{
-          Enabled:        true,
-          AllowedOrigins: []string{"https://app.example.com"},
-          AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
-          AllowCredentials: true,
-      }))
-      // API routes here
-  })
-  ```
+// To apply CORS only to API routes, disable global CORS in .env:
+// CORS_ENABLED=false
+// Then manually apply in your routes file:
+r.Group(func(mux chi.Router) {
+  mux.Use(a.CORS(regius.CORSConfig{
+      Enabled:        true,
+      AllowedOrigins: []string{"https://app.example.com"},
+      AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
+      AllowCredentials: true,
+  }))
+  // API routes here
+})
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.CORSConfig{
-      Enabled:            true,                                              // Enable/disable CORS
-      AllowedOrigins:     []string{"*"},                                     // Allowed origins (use "*" for any)
-      AllowedMethods:     []string{"GET","POST","PUT","DELETE","OPTIONS"},   // Allowed HTTP methods
-      AllowedHeaders:     []string{"Accept","Authorization","Content-Type"}, // Allowed request headers
-      ExposedHeaders:     []string{},                                        // Headers exposed to the client
-      MaxAge:             300,                                               // Preflight cache duration in seconds
-      AllowCredentials:   true,                                              // Allow cookies/auth headers
-      OptionsPassthrough: false,                                             // Let OPTIONS requests pass through
-      Debug:              false,                                             // Enable debug logging
-  }
-  ```
+```go
+config := regius.CORSConfig{
+    Enabled:            true,                                                // Enable/disable CORS
+    AllowedOrigins:     []string{"*"},                                       // Allowed origins (use "*" for any)
+    AllowedMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}, // Allowed HTTP methods
+    AllowedHeaders:     []string{"Accept", "Authorization", "Content-Type"}, // Allowed request headers
+    ExposedHeaders:     []string{},                                          // Headers exposed to the client
+    MaxAge:             300,                                                 // Preflight cache duration in seconds
+    AllowCredentials:   true,                                                // Allow cookies/auth headers
+    OptionsPassthrough: false,                                               // Let OPTIONS requests pass through
+    Debug:              false,                                               // Enable debug logging
+}
+```
 
 - **Security Headers Middleware**: Set a bundle of HTTP security response headers out of the box — an Express "helmet" equivalent — to harden every response against XSS, clickjacking, MIME-sniffing, and SSL-downgrade attacks.
 
@@ -241,44 +241,44 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // Security headers are applied globally when SECURITY_HEADERS_ENABLED=true.
-  // No additional code is required.
+```go
+// Security headers are applied globally when SECURITY_HEADERS_ENABLED=true.
+// No additional code is required.
 
-  // To override a header for a specific route, set it in the handler:
-  func (a *App) WidgetShow(w http.ResponseWriter, r *http.Request) {
-      w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src https://cdn.example.com")
-      // ...
-  }
+// To override a header for a specific route, set it in the handler:
+func (a *App) WidgetShow(w http.ResponseWriter, r *http.Request) {
+  w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src https://cdn.example.com")
+  // ...
+}
 
-  // Or build the middleware manually for a route group:
-  r.Group(func(mux chi.Router) {
-      mux.Use(a.SecurityHeaders(regius.SecurityHeadersConfig{
-          Enabled:                true,
-          ContentSecurityPolicy:  "default-src 'self'; script-src 'self'",
-          HSTSIncludeSubDomains:  true,
-      }))
-      // routes here
-  })
-  ```
+// Or build the middleware manually for a route group:
+r.Group(func(mux chi.Router) {
+  mux.Use(a.SecurityHeaders(regius.SecurityHeadersConfig{
+      Enabled:                true,
+      ContentSecurityPolicy:  "default-src 'self'; script-src 'self'",
+      HSTSIncludeSubDomains:  true,
+  }))
+  // routes here
+})
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.SecurityHeadersConfig{
-      Enabled:                       true,                          // Master toggle
-      ContentSecurityPolicy:         "default-src 'self'",          // Empty -> default
-      HSTSMaxAge:                    31536000,                       // 0 -> 1 year default
-      HSTSIncludeSubDomains:         true,                           // Add includeSubDomains
-      HSTSPreload:                   false,                          // Add preload
-      ReferrerPolicy:                "strict-origin-when-cross-origin",
-      XFrameOptions:                 "SAMEORIGIN",
-      XPermittedCrossDomainPolicies: "none",
-      CrossOriginOpenerPolicy:       "same-origin",
-      CrossOriginResourcePolicy:     "same-origin",
-      XDNSPrefetchControl:           "off",
-  }
-  ```
+```go
+config := regius.SecurityHeadersConfig{
+    Enabled:                       true,                 // Master toggle
+    ContentSecurityPolicy:         "default-src 'self'", // Empty -> default
+    HSTSMaxAge:                    31536000,             // 0 -> 1 year default
+    HSTSIncludeSubDomains:         true,                 // Add includeSubDomains
+    HSTSPreload:                   false,                // Add preload
+    ReferrerPolicy:                "strict-origin-when-cross-origin",
+    XFrameOptions:                 "SAMEORIGIN",
+    XPermittedCrossDomainPolicies: "none",
+    CrossOriginOpenerPolicy:       "same-origin",
+    CrossOriginResourcePolicy:     "same-origin",
+    XDNSPrefetchControl:           "off",
+}
+```
 
 - **API Key Authentication Middleware**: Authenticate API requests with API keys, complementing the existing session/cookie auth used by web routes.
 
@@ -291,68 +291,68 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // Apply to your API route group (routes.go). API key auth is NOT global.
-  r.Group(func(mux chi.Router) {
-      mux.Use(a.APIKeyAuth(regius.APIKeyAuthConfig{
-          Enabled: true,
-          Keys:    []string{"client-1-secret", "client-2-secret"},
-      }))
-      // API routes here...
-  })
-
-  // Or use env-driven config (set API_KEY_AUTH_ENABLED=true and API_KEYS in .env):
-  mux.Use(a.APIKeyAuth(a.APIKeyAuthCfg()))
-
-  // DB-backed keys via a custom validator:
+```go
+// Apply to your API route group (routes.go). API key auth is NOT global.
+r.Group(func(mux chi.Router) {
   mux.Use(a.APIKeyAuth(regius.APIKeyAuthConfig{
       Enabled: true,
-      Validator: func(key string) (regius.APIKeyIdentity, bool) {
-          // look up key in DB; return identity if valid
-          return regius.APIKeyIdentity{ID: "user-42"}, true
-      },
+      Keys:    []string{"client-1-secret", "client-2-secret"},
   }))
+  // API routes here...
+})
 
-  // Retrieve the authenticated caller in a handler:
-  func (a *App) SomeAPIHandler(w http.ResponseWriter, r *http.Request) {
-      id, ok := regius.APIKeyFromContext(r.Context())
-      if !ok { /* unauthorized */ }
-      // use id.ID, id.Metadata...
-  }
-  ```
+// Or use env-driven config (set API_KEY_AUTH_ENABLED=true and API_KEYS in .env):
+mux.Use(a.APIKeyAuth(a.APIKeyAuthCfg()))
+
+// DB-backed keys via a custom validator:
+mux.Use(a.APIKeyAuth(regius.APIKeyAuthConfig{
+  Enabled: true,
+  Validator: func(key string) (regius.APIKeyIdentity, bool) {
+      // look up key in DB; return identity if valid
+      return regius.APIKeyIdentity{ID: "user-42"}, true
+  },
+}))
+
+// Retrieve the authenticated caller in a handler:
+func (a *App) SomeAPIHandler(w http.ResponseWriter, r *http.Request) {
+  id, ok := regius.APIKeyFromContext(r.Context())
+  if !ok { /* unauthorized */ }
+  // use id.ID, id.Metadata...
+}
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.APIKeyAuthConfig{
-      Enabled:    true,                 // Master toggle
-      Keys:       []string{"secret"},   // Static valid keys (constant-time compare)
-      Validator:  nil,                  // Pluggable func(key) (identity, ok); takes precedence
-      Store:      nil,                  // APIKeyStore (e.g. CacheAPIKeyStore) for lookup/revocation
-      Header:     "Authorization",      // Primary header (default "Authorization")
-      Scheme:     "Bearer",             // Scheme prefix for Header (default "Bearer")
-      AltHeader:  "X-API-Key",          // Secondary header, no prefix (default "X-API-Key")
-      QueryParam: "",                   // Opt-in query param name (default "" = off)
-      Realm:      "api",                // Used in WWW-Authenticate (default "api")
-  }
+```go
+config := regius.APIKeyAuthConfig{
+    Enabled:    true,               // Master toggle
+    Keys:       []string{"secret"}, // Static valid keys (constant-time compare)
+    Validator:  nil,                // Pluggable func(key) (identity, ok); takes precedence
+    Store:      nil,                // APIKeyStore (e.g. CacheAPIKeyStore) for lookup/revocation
+    Header:     "Authorization",    // Primary header (default "Authorization")
+    Scheme:     "Bearer",           // Scheme prefix for Header (default "Bearer")
+    AltHeader:  "X-API-Key",        // Secondary header, no prefix (default "X-API-Key")
+    QueryParam: "",                 // Opt-in query param name (default "" = off)
+    Realm:      "api",              // Used in WWW-Authenticate (default "api")
+}
 
-  // Cache-backed store (keys hashed with SHA-256, never stored raw):
-  store := regius.NewCacheAPIKeyStore(a.Cache, "apikey:")
-  _ = store.Set("client-secret", regius.APIKeyIdentity{ID: "client-1"}, 0)
-  _ = store.Revoke("client-secret") // invalidate later
-  ```
+// Cache-backed store (keys hashed with SHA-256, never stored raw):
+store := regius.NewCacheAPIKeyStore(a.Cache, "apikey:")
+_ = store.Set("client-secret", regius.APIKeyIdentity{ID: "client-1"}, 0)
+_ = store.Revoke("client-secret") // invalidate later
+```
 
   **Environment Variables:**
 
-  ```env
-  API_KEY_AUTH_ENABLED=false
-  API_KEYS=                          # comma-separated list of valid keys
-  API_KEY_HEADER=Authorization
-  API_KEY_SCHEME=Bearer
-  API_KEY_ALT_HEADER=X-API-Key
-  API_KEY_QUERY_PARAM=               # empty = disabled
-  API_KEY_REALM=api
-  ```
+```properties
+API_KEY_AUTH_ENABLED=false
+API_KEYS=                          # comma-separated list of valid keys
+API_KEY_HEADER=Authorization
+API_KEY_SCHEME=Bearer
+API_KEY_ALT_HEADER=X-API-Key
+API_KEY_QUERY_PARAM=               # empty = disabled
+API_KEY_REALM=api
+```
 
 - **Request ID Tracing Middleware**: Stamp every request with a unique correlation ID for log correlation, distributed tracing, and client-side debugging.
 
@@ -366,49 +366,49 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // Request ID tracing is applied globally by default.
-  // No additional code is required.
+```go
+// Request ID tracing is applied globally by default.
+// No additional code is required.
 
-  // Retrieve the request ID in a handler:
-  func (a *App) SomeHandler(w http.ResponseWriter, r *http.Request) {
-      id, ok := regius.RequestIDFromContext(r.Context())
-      if ok {
-          a.InfoLog.Printf("handling request %s", id)
-      }
-      // ...
+// Retrieve the request ID in a handler:
+func (a *App) SomeHandler(w http.ResponseWriter, r *http.Request) {
+  id, ok := regius.RequestIDFromContext(r.Context())
+  if ok {
+      a.InfoLog.Printf("handling request %s", id)
   }
+  // ...
+}
 
-  // Or build the middleware manually for a route group:
-  r.Group(func(mux chi.Router) {
-      mux.Use(a.RequestID(regius.RequestIDConfig{
-          Enabled:        true,
-          Format:         regius.RequestIDFormatXID,
-          ResponseHeader: "X-Correlation-ID",
-      }))
-      // routes here
-  })
-  ```
+// Or build the middleware manually for a route group:
+r.Group(func(mux chi.Router) {
+  mux.Use(a.RequestID(regius.RequestIDConfig{
+      Enabled:        true,
+      Format:         regius.RequestIDFormatXID,
+      ResponseHeader: "X-Correlation-ID",
+  }))
+  // routes here
+})
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.RequestIDConfig{
-      Enabled:        true,                 // Master toggle (default true)
-      Header:         "X-Request-ID",       // Request header to read incoming ID from
-      ResponseHeader: "X-Request-ID",       // Response header to echo the ID on ("" = don't echo)
-      Format:         regius.RequestIDFormatUUID, // "uuid" | "xid" | "short" | "default"
-      Generator:      nil,                  // Optional override of Format
-  }
-  ```
+```go
+config := regius.RequestIDConfig{
+    Enabled:        true,                       // Master toggle (default true)
+    Header:         "X-Request-ID",             // Request header to read incoming ID from
+    ResponseHeader: "X-Request-ID",             // Response header to echo the ID on ("" = don't echo)
+    Format:         regius.RequestIDFormatUUID, // "uuid" | "xid" | "short" | "default"
+    Generator:      nil,                        // Optional override of Format
+}
+```
 
   **Environment Variables:**
 
-  ```env
-  REQUEST_ID_ENABLED=true
-  REQUEST_ID_HEADER=X-Request-ID
-  REQUEST_ID_RESPONSE_HEADER=X-Request-ID
-  REQUEST_ID_FORMAT=uuid                   # uuid | xid | short | default
+```properties
+REQUEST_ID_ENABLED=true
+REQUEST_ID_HEADER=X-Request-ID
+REQUEST_ID_RESPONSE_HEADER=X-Request-ID
+REQUEST_ID_FORMAT=uuid                   # uuid | xid | short | default
 ```
 
 - **Request Sanitization Middleware**: Neutralize XSS at the request boundary by sanitizing query params, form-encoded values, and selected request headers with [bluemonday](https://github.com/microcosm-cc/bluemonday) before downstream handlers ever see them.
@@ -424,55 +424,55 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // Request sanitization is applied globally when REQUEST_SANITIZATION_ENABLED=true.
-  // No additional code is required.
+```go
+// Request sanitization is applied globally when REQUEST_SANITIZATION_ENABLED=true.
+// No additional code is required.
 
-  // Targeted sanitization in a handler (e.g. before storing user input):
-  func (a *App) StoreComment(w http.ResponseWriter, r *http.Request) {
-      raw := r.FormValue("comment")
-      safe := a.Sanitize(raw) // uses the app's configured policy
-      // store safe...
-  }
+// Targeted sanitization in a handler (e.g. before storing user input):
+func (a *App) StoreComment(w http.ResponseWriter, r *http.Request) {
+  raw := r.FormValue("comment")
+  safe := a.Sanitize(raw) // uses the app's configured policy
+  // store safe...
+}
 
-  // Or build the middleware manually for a route group:
-  r.Group(func(mux chi.Router) {
-      mux.Use(a.RequestSanitizer(regius.RequestSanitizerConfig{
-          Enabled: true,
-          Policy:  regius.SanitizePolicyUGC, // allow safe HTML subset
-          Headers: []string{"Referer"},
-      }))
-      // routes here...
-  })
-  ```
+// Or build the middleware manually for a route group:
+r.Group(func(mux chi.Router) {
+  mux.Use(a.RequestSanitizer(regius.RequestSanitizerConfig{
+      Enabled: true,
+      Policy:  regius.SanitizePolicyUGC, // allow safe HTML subset
+      Headers: []string{"Referer"},
+  }))
+  // routes here...
+})
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.RequestSanitizerConfig{
-      Enabled: true,                          // Master toggle
-      Policy:  regius.SanitizePolicyStrict,   // "strict" (default) | "ugc"
-      Query:   regius.BoolPtr(true),          // Sanitize URL query params (default true)
-      Form:    regius.BoolPtr(true),          // Sanitize form-encoded values (default true)
-      Headers: []string{"Referer", "User-Agent"}, // Header allowlist (default none)
-      Exempt:  "/api/.*",                     // Regex of paths to skip (default "/api/.*")
-      Custom:  nil,                           // Optional *bluemonday.Policy override
-  }
+```go
+config := regius.RequestSanitizerConfig{
+	Enabled: true,                              // Master toggle
+	Policy:  regius.SanitizePolicyStrict,       // "strict" (default) | "ugc"
+	Query:   regius.BoolPtr(true),              // Sanitize URL query params (default true)
+	Form:    regius.BoolPtr(true),              // Sanitize form-encoded values (default true)
+	Headers: []string{"Referer", "User-Agent"}, // Header allowlist (default none)
+	Exempt:  "/api/.*",                         // Regex of paths to skip (default "/api/.*")
+	Custom:  nil,                               // Optional *bluemonday.Policy override
+}
 
-  // BoolPtr is a tiny helper to set *bool fields (nil defaults to true):
-  regius.BoolPtr(false) // explicitly disable a scope
-  ```
+// BoolPtr is a tiny helper to set *bool fields (nil defaults to true):
+regius.BoolPtr(false) // explicitly disable a scope
+```
 
   **Environment Variables:**
 
-  ```env
-  REQUEST_SANITIZATION_ENABLED=true
-  REQUEST_SANITIZATION_POLICY=strict         # strict | ugc
-  REQUEST_SANITIZATION_QUERY=true
-  REQUEST_SANITIZATION_FORM=true
-  REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
-  REQUEST_SANITIZATION_EXEMPT=/api/.*
-  ```
+```properties
+REQUEST_SANITIZATION_ENABLED=true
+REQUEST_SANITIZATION_POLICY=strict         # strict | ugc
+REQUEST_SANITIZATION_QUERY=true
+REQUEST_SANITIZATION_FORM=true
+REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
+REQUEST_SANITIZATION_EXEMPT=/api/.*
+```
 
 - **IP Whitelist/Blacklist Middleware**: Allow or deny requests based on the client IP, using static lists and optional runtime (cache/DB-backed) decisions for fail2ban-style blocking.
 
@@ -487,62 +487,62 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // IP filtering is applied globally when IP_FILTER_ENABLED=true.
-  // No additional code is required.
+```go
+// IP filtering is applied globally when IP_FILTER_ENABLED=true.
+// No additional code is required.
 
-  // Or build the middleware manually for a route group (e.g. restrict admin):
-  r.Group(func(mux chi.Router) {
-      mux.Use(a.IPFilter(regius.IPFilterConfig{
-          Enabled: true,
-          Allow:   []string{"10.0.0.0/8", "192.168.1.0/24"},
-          Deny:    []string{"10.0.0.99"},
-      }))
-      // admin routes here...
-  })
+// Or build the middleware manually for a route group (e.g. restrict admin):
+r.Group(func(mux chi.Router) {
+	mux.Use(a.IPFilter(regius.IPFilterConfig{
+		Enabled: true,
+		Allow:   []string{"10.0.0.0/8", "192.168.1.0/24"},
+		Deny:    []string{"10.0.0.99"},
+	}))
+	// admin routes here...
+})
 
-  // Runtime (fail2ban-style) blocking via a cache-backed checker:
-  checker := regius.NewCacheIPChecker(a.Cache, "ipfilter:")
-  _ = checker.Block("203.0.113.50", 3600) // block for 1 hour
-  _ = checker.Unblock("203.0.113.50")     // unblock later
+// Runtime (fail2ban-style) blocking via a cache-backed checker:
+checker := regius.NewCacheIPChecker(a.Cache, "ipfilter:")
+_ = checker.Block("203.0.113.50", 3600) // block for 1 hour
+_ = checker.Unblock("203.0.113.50")     // unblock later
 
-  mux.Use(a.IPFilter(regius.IPFilterConfig{
-      Enabled: true,
-      Deny:    []string{"198.51.100.0/24"}, // static baseline
-      Checker: checker,                      // dynamic layer on top
-  }))
-  ```
+mux.Use(a.IPFilter(regius.IPFilterConfig{
+	Enabled: true,
+	Deny:    []string{"198.51.100.0/24"}, // static baseline
+	Checker: checker,                     // dynamic layer on top
+}))
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.IPFilterConfig{
-      Enabled:    true,                       // Master toggle
-      Allow:      []string{"10.0.0.0/8"},     // Only these networks pass (deny-wins)
-      Deny:       []string{"10.0.0.99"},      // Always blocked
-      TrustProxy: false,                      // Read X-Forwarded-For/X-Real-IP (default false)
-      StatusCode: 403,                        // Block response status (default 403)
-      Message:    "ip address not allowed",   // Block response message
-      Checker:    nil,                        // Optional IPChecker (e.g. CacheIPChecker)
-  }
+```go
+config := regius.IPFilterConfig{
+	Enabled:    true,                     // Master toggle
+	Allow:      []string{"10.0.0.0/8"},   // Only these networks pass (deny-wins)
+	Deny:       []string{"10.0.0.99"},    // Always blocked
+	TrustProxy: false,                    // Read X-Forwarded-For/X-Real-IP (default false)
+	StatusCode: 403,                      // Block response status (default 403)
+	Message:    "ip address not allowed", // Block response message
+	Checker:    nil,                      // Optional IPChecker (e.g. CacheIPChecker)
+}
 
-  // Cache-backed checker for runtime decisions (TTL in seconds; 0 = no expiry):
-  checker := regius.NewCacheIPChecker(a.Cache, "ipfilter:")
-  _ = checker.Block(ip, 3600)            // DecisionDeny
-  _ = checker.Allow(ip, 0)               // DecisionAllow
-  _ = checker.Unblock(ip)                // remove decision -> defer to static lists
-  ```
+// Cache-backed checker for runtime decisions (TTL in seconds; 0 = no expiry):
+checker := regius.NewCacheIPChecker(a.Cache, "ipfilter:")
+_ = checker.Block(ip, 3600) // DecisionDeny
+_ = checker.Allow(ip, 0)    // DecisionAllow
+_ = checker.Unblock(ip)     // remove decision -> defer to static lists
+```
 
   **Environment Variables:**
 
-  ```env
-  IP_FILTER_ENABLED=false
-  IP_FILTER_ALLOW=                          # comma-separated IPs/CIDRs to permit
-  IP_FILTER_DENY=                           # comma-separated IPs/CIDRs to block (deny-wins)
-  IP_FILTER_TRUST_PROXY=false               # read X-Forwarded-For/X-Real-IP
-  IP_FILTER_STATUS_CODE=403
-  IP_FILTER_MESSAGE=
-  ```
+```properties
+IP_FILTER_ENABLED=false
+IP_FILTER_ALLOW=                          # comma-separated IPs/CIDRs to permit
+IP_FILTER_DENY=                           # comma-separated IPs/CIDRs to block (deny-wins)
+IP_FILTER_TRUST_PROXY=false               # read X-Forwarded-For/X-Real-IP
+IP_FILTER_STATUS_CODE=403
+IP_FILTER_MESSAGE=
+```
 
 - **Internationalization (i18n)**: Ship multi-language apps out of the box with locale detection, translation file management, and a built-in language selector.
 
@@ -554,29 +554,29 @@ regius migrate --help
 
   **Usage in templ views:**
 
-  ```go
-  import "github.com/hbarral/regius/i18n"
+```go
+import "github.com/hbarral/regius/i18n"
 
-  templ Hello(name string) {
-    <p>{ i18n.T(ctx, "navbar.welcome", i18n.M{"name": name}) }</p>
-  }
-  ```
+templ Hello(name string) {
+<p>{ i18n.T(ctx, "navbar.welcome", i18n.M{"name": name}) }</p>
+}
+```
 
   **Usage in Jet/Go templates:**
 
-  ```html
-  <p>{{T "navbar.home"}}</p>
-  <html lang="{{.Locale}}">
-  ```
+```html
+<p>{{T "navbar.home"}}</p>
+<html lang="{{.Locale}}">
+```
 
   **Environment Variables:**
 
-  ```env
-  I18N_ENABLED=true
-  DEFAULT_LOCALE=en
-  SUPPORTED_LOCALES=en,es
-  LOCALE_COOKIE_NAME=locale
-  ```
+```properties
+I18N_ENABLED=true
+DEFAULT_LOCALE=en
+SUPPORTED_LOCALES=en,es
+LOCALE_COOKIE_NAME=locale
+```
 
 - **Server-Sent Events (SSE)**: Push real-time updates to browsers over standard HTTP with a built-in, zero-dependency SSE broker.
 
@@ -589,39 +589,39 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // Broadcast a JSON event to every connected browser
-  _ = app.SSEBroadcastJSON("notification", map[string]string{
-      "message": "Hello, world!",
-  })
+```go
+// Broadcast a JSON event to every connected browser
+_ = app.SSEBroadcastJSON("notification", map[string]string{
+	"message": "Hello, world!",
+})
 
-  // Or build an event manually and broadcast it
-  app.SSE.Broadcast(regius.SSEEvent{
-      Event: "notification",
-      Data:  []byte(`{"message":"Hello, world!"}`),
-  })
+// Or build an event manually and broadcast it
+app.SSE.Broadcast(regius.SSEEvent{
+	Event: "notification",
+	Data:  []byte(`{"message":"Hello, world!"}`),
+})
 
-  // Stream events from a handler
-  r.Get("/sse/stream", app.SSE.Handler())
-  ```
+// Stream events from a handler
+r.Get("/sse/stream", app.SSE.Handler())
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.SSEEvent{
-      ID:    "1",                       // Optional event id for the Last-Event-ID header
-      Event: "update",                  // Event name listeners can subscribe to
-      Data:  []byte(`{"ok":true}`),     // Raw event payload
-      Retry: 3000,                      // Optional reconnection time in milliseconds
-  }
-  ```
+```go
+config := regius.SSEEvent{
+    ID:    "1",                   // Optional event id for the Last-Event-ID header
+    Event: "update",              // Event name listeners can subscribe to
+    Data:  []byte(`{"ok":true}`), // Raw event payload
+    Retry: 3000,                  // Optional reconnection time in milliseconds
+}
+```
 
   **Environment Variables:**
 
-  ```env
-  # Disable the demo heartbeat in generated apps (enabled by default)
-  SSE_DEMO_HEARTBEAT=false
-  ```
+```properties
+# Disable the demo heartbeat in generated apps (enabled by default)
+SSE_DEMO_HEARTBEAT=false
+```
 
 ## 🚀 Getting Started
 
@@ -629,19 +629,19 @@ regius migrate --help
 
 The easiest way to install Regius on macOS or Linux is with [Homebrew](https://brew.sh):
 
-```bash
+```sh
 brew install hbarral/tap/regius
 ```
 
 Verify the installation:
 
-```bash
+```sh
 regius help
 ```
 
 To upgrade to the latest release later on:
 
-```bash
+```sh
 brew upgrade regius
 ```
 
@@ -658,22 +658,22 @@ Download the suitable binary for your operating system from the links below:
 
 1. Clone the repository:
 
-   ```bash
-    git clone https://github.com/hbarral/regius.git
-   cd regius
-   ```
+```sh
+git clone https://github.com/hbarral/regius.git
+cd regius
+```
 
 2. Build the project for your operating system:
 
-   ```bash
-   go build -o regius ./cmd/cli
-   ```
+```sh
+go build -o regius ./cmd/cli
+```
 
 3. Run the binary:
 
-   ```bash
-   ./regius help
-   ```
+```sh
+./regius help
+```
 
 </details>
 
@@ -708,7 +708,7 @@ DATABASE_HOST=
 <details>
   <summary>See the full .env example</summary>
 
-```plaintext
+```properties
 # Application name, without spaces
 APP_NAME=testapp
 APP_URL="http://localhost:4000"
@@ -889,7 +889,7 @@ MYSQL_ROOT_PASSWORD=
 
 After creating a new application, a `.env` file is generated with the following database variables:
 
-```
+```properties
 # database configuration
 # supported types: postgres, postgresql, mysql, mariadb, sqlite, sqlite3
 DATABASE_TYPE=postgres
@@ -915,7 +915,7 @@ Fill in these values with your database connection details. Migrations, seeds, a
 
 Regius provides a centralized password hashing utility accessible via `App.Hash`, supporting `bcrypt` (default), `scrypt`, and `argon2id`. The algorithm and its parameters are configured through environment variables:
 
-```
+```properties
 HASH_ALGORITHM=bcrypt
 HASH_COST=12
 ```
@@ -938,9 +938,9 @@ Each command has different options and parameters. Here are some basic usage exa
 
 - **Create a new application:**
 
-  ```bash
-  ./regius new myapp
-  ```
+```sh
+./regius new myapp
+```
 
   The scaffold defaults to the **templ** renderer (`github.com/a-h/templ` +
   [templui](https://github.com/templui/templui) + Tailwind v4) and the
@@ -948,11 +948,11 @@ Each command has different options and parameters. Here are some basic usage exa
   in/up/forgot/reset-password). After `regius new`, run the auth migration
   (`./regius migrate`) and `./regius migrate` then `go run .`:
 
-  ```bash
-  cd myapp
-  ./regius migrate        # creates users/tokens/remember_tokens on sqlite
-  go run .                # http://localhost:4000  (/ , /auth/signin)
-  ```
+```sh
+cd myapp
+./regius migrate        # creates users/tokens/remember_tokens on sqlite
+go run .                # http://localhost:4000  (/ , /auth/signin)
+```
 
   Optional flags:
 
@@ -971,69 +971,70 @@ Each command has different options and parameters. Here are some basic usage exa
   - `-v`, `--verbose`: stream `go get` / `go mod tidy` output live instead of
     capturing it (the captured output is shown only on failure by default).
 
-  ```bash
-  ./regius new myapp --db postgres -v
-  ./regius new jetapp --renderer jet
-  ./regius new goapp --renderer go
-  ```
+```sh
+./regius new myapp --db postgres -v
+./regius new jetapp --renderer jet
+./regius new goapp --renderer go
+```
 
 - Show help commands:
 
-  ```bash
-  ./regius help
-  ```
+```sh
+./regius help
+```
 
 - Run a migration:
 
-  ```bash
-  ./regius migration
-  ```
+```sh
+./regius migration
+```
 
 - Create a migration:
 
-  ```bash
-  ./regius make migration create_users_table
-  ```
+```sh
+./regius make migration create_users_table
+```
 
 - Create a seed file and run it:
 
-  ```bash
-  ./regius make seed default_users
-  ./regius db:seed
-  ```
+```sh
+./regius make seed default_users
+./regius db:seed
+```
 
 - Check current migration version:
 
-  ```bash
-  ./regius migrate version
-  ```
+```sh
+./regius migrate version
+```
 
 - Create a model:
 
-  ```bash
-  ./regius make model User
-  ```
+```sh
+./regius make model User
+```
 
 - Create a GORM model:
 
-  ```bash
-  ./regius make gorm-model User
-  ```
+```sh
+./regius make gorm-model User
+```
 
 - Put the server in maintenance mode:
 
-  ```bash
-  ./regius down
-  ```
+```sh
+./regius down
+```
 
 - Bring the server back from maintenance mode:
-  ```bash
-  ./regius up
-  ```
+
+```sh
+./regius up
+```
 
 For more details about usage and commands, refer to the CLI help:
 
-```bash
+```sh
 ./regius help
 ```
 
@@ -1086,7 +1087,7 @@ your views.
 
 To customize styles you need the **Tailwind CSS CLI** installed:
 
-```bash
+```sh
 # Rebuild once
 make tailwind
 
