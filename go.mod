@@ -2,6 +2,8 @@ module github.com/hbarral/regius
 
 go 1.25.0
 
+replace github.com/hbarral/regius/cli => ./cli
+
 require (
 	github.com/hbarral/regius/cli v0.0.0
 	github.com/joho/godotenv v1.5.1
