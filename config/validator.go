@@ -83,7 +83,7 @@ func DefaultValidator() *Validator {
 	v.AddRule(ValidationRule{
 		Key:         "SESSION_TYPE",
 		Description: "session store backend",
-		Validate:    OneOf("redis", "mysql", "postgres", "postgresql", "mariadb"),
+		Validate:    OneOf("cookie", "redis", "mysql", "postgres", "postgresql", "mariadb"),
 	})
 
 	v.AddRule(ValidationRule{

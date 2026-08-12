@@ -159,7 +159,7 @@ func TestDefaultValidator_AllValid(t *testing.T) {
 	t.Setenv("PORT", "8080")
 	t.Setenv("DATABASE_TYPE", "postgres")
 	t.Setenv("CACHE", "redis")
-	t.Setenv("SESSION_TYPE", "redis")
+	t.Setenv("SESSION_TYPE", "cookie")
 	t.Setenv("HASH_ALGORITHM", "bcrypt")
 	t.Setenv("SECURE", "true")
 	t.Setenv("DEBUG", "true")
