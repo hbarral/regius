@@ -59,8 +59,7 @@ func LoadFileWithProfile(path, profile string) error {
 		}
 	}
 
-	setEnvIfNotExists(values)
-	return nil
+	return setEnvIfNotExists(values)
 }
 
 // LoadDirWithProfile loads all supported config files from a directory and,
@@ -147,8 +146,7 @@ func LoadDirWithProfile(dir, profile string) error {
 		}
 	}
 
-	setEnvIfNotExists(values)
-	return nil
+	return setEnvIfNotExists(values)
 }
 
 // GetProfile reads the active profile from the APP_PROFILE environment

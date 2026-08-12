@@ -162,7 +162,12 @@ func (w *Watcher) reload() {
 		}
 	}
 
-	changes := globalTracker.reload(values)
+	processed, err := processValues(values)
+	if err != nil {
+		return
+	}
+
+	changes := globalTracker.reload(processed)
 	if callback != nil && len(changes) > 0 {
 		callback(changes)
 	}

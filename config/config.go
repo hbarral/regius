@@ -58,8 +58,7 @@ func LoadFile(path string) error {
 	if err := loadIntoMap(path, values); err != nil {
 		return err
 	}
-	setEnvIfNotExists(values)
-	return nil
+	return setEnvIfNotExists(values)
 }
 
 // loadIntoMap parses a config file and merges its values into target.
@@ -117,8 +116,7 @@ func LoadDir(dir string) error {
 		}
 	}
 
-	setEnvIfNotExists(values)
-	return nil
+	return setEnvIfNotExists(values)
 }
 
 // parse dispatches to the appropriate parser based on format.
@@ -140,18 +138,17 @@ func parse(data []byte, format Format) (map[string]string, error) {
 // setEnvIfNotExists sets environment variables only when they are not already
 // defined. This preserves the standard precedence: OS env vars > config files.
 // Each set is tracked so the hot-reload watcher can safely update config-sourced
-// values without touching OS env vars. If a secrets resolver is configured,
-// secret:// references in values are resolved before setting env vars.
-func setEnvIfNotExists(values map[string]string) {
-	if defaultSecretsResolver != nil && defaultSecretsResolver.HasProviders() {
-		resolved, err := defaultSecretsResolver.Resolve(values)
-		if err == nil {
-			values = resolved
-		}
+// values without touching OS env vars. Secret references (secret://) and
+// encrypted values (ENC(...)) are resolved before setting env vars.
+func setEnvIfNotExists(values map[string]string) error {
+	processed, err := processValues(values)
+	if err != nil {
+		return err
 	}
-	for key, val := range values {
+	for key, val := range processed {
 		globalTracker.setIfNotOS(key, val)
 	}
+	return nil
 }
 
 // flatten converts a nested map[string]interface{} into a flat map[string]string
