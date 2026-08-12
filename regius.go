@@ -457,10 +457,17 @@ func (r *Regius) checkDotEnv(path string) error {
 // loadConfig loads configuration from .env and any supported config files
 // (config.yaml, config.json, config.toml) in the root path. It also loads
 // files from a config/ subdirectory if it exists.
+//
+// If the APP_PROFILE environment variable is set (e.g., "dev", "staging",
+// "prod"), profile-specific files are loaded after their base counterparts
+// and take precedence (e.g., .env.dev overrides .env, config.dev.yaml
+// overrides config.yaml).
 func (r *Regius) loadConfig(rootPath string) error {
+	profile := cfg.GetProfile()
+
 	envPath := filepath.Join(rootPath, ".env")
 	if _, err := os.Stat(envPath); err == nil {
-		if err := cfg.LoadFile(envPath); err != nil {
+		if err := cfg.LoadFileWithProfile(envPath, profile); err != nil {
 			return fmt.Errorf("failed to load .env: %w", err)
 		}
 	}
@@ -468,7 +475,7 @@ func (r *Regius) loadConfig(rootPath string) error {
 	for _, name := range []string{"config.yaml", "config.yml", "config.json", "config.toml"} {
 		p := filepath.Join(rootPath, name)
 		if _, err := os.Stat(p); err == nil {
-			if err := cfg.LoadFile(p); err != nil {
+			if err := cfg.LoadFileWithProfile(p, profile); err != nil {
 				return fmt.Errorf("failed to load %s: %w", name, err)
 			}
 		}
@@ -476,7 +483,7 @@ func (r *Regius) loadConfig(rootPath string) error {
 
 	configDir := filepath.Join(rootPath, "config")
 	if info, err := os.Stat(configDir); err == nil && info.IsDir() {
-		if err := cfg.LoadDir(configDir); err != nil {
+		if err := cfg.LoadDirWithProfile(configDir, profile); err != nil {
 			return fmt.Errorf("failed to load config directory: %w", err)
 		}
 	}

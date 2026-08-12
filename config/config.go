@@ -36,10 +36,11 @@ func SupportedExtensions() []string {
 }
 
 // DetectFormat determines the config format from a file path extension.
-// Returns FormatEnv for files named ".env" or ending in ".env".
+// Returns FormatEnv for files named ".env", ending in ".env", or matching
+// the ".env.{profile}" pattern (e.g., ".env.dev").
 func DetectFormat(path string) (Format, error) {
 	base := filepath.Base(path)
-	if base == ".env" || strings.HasSuffix(base, ".env") {
+	if base == ".env" || strings.HasPrefix(base, ".env.") || strings.HasSuffix(base, ".env") {
 		return FormatEnv, nil
 	}
 	ext := filepath.Ext(path)
@@ -53,6 +54,18 @@ func DetectFormat(path string) (Format, error) {
 // LoadFile loads a single configuration file and populates os.Environ.
 // Existing environment variables are NOT overridden by values from the file.
 func LoadFile(path string) error {
+	values := make(map[string]string)
+	if err := loadIntoMap(path, values); err != nil {
+		return err
+	}
+	setEnvIfNotExists(values)
+	return nil
+}
+
+// loadIntoMap parses a config file and merges its values into target.
+// Later values overwrite earlier ones, allowing callers to layer base
+// and profile configs before calling setEnvIfNotExists.
+func loadIntoMap(path string, target map[string]string) error {
 	format, err := DetectFormat(path)
 	if err != nil {
 		return err
@@ -68,7 +81,9 @@ func LoadFile(path string) error {
 		return fmt.Errorf("config: failed to parse %s: %w", path, err)
 	}
 
-	setEnvIfNotExists(values)
+	for k, v := range values {
+		target[k] = v
+	}
 	return nil
 }
 
@@ -81,39 +96,28 @@ func LoadDir(dir string) error {
 		return fmt.Errorf("config: failed to read directory %s: %w", dir, err)
 	}
 
-	type fileInfo struct {
-		path   string
-		format Format
-	}
+	values := make(map[string]string)
 
-	var files []fileInfo
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
 		name := entry.Name()
 		if name == ".env" || strings.HasSuffix(name, ".env") {
-			files = append(files, fileInfo{filepath.Join(dir, name), FormatEnv})
+			if err := loadIntoMap(filepath.Join(dir, name), values); err != nil {
+				return err
+			}
 			continue
 		}
 		ext := filepath.Ext(name)
-		if format, ok := supportedExtensions[ext]; ok {
-			files = append(files, fileInfo{filepath.Join(dir, name), format})
+		if _, ok := supportedExtensions[ext]; ok {
+			if err := loadIntoMap(filepath.Join(dir, name), values); err != nil {
+				return err
+			}
 		}
 	}
 
-	for _, f := range files {
-		data, err := os.ReadFile(f.path)
-		if err != nil {
-			return fmt.Errorf("config: failed to read %s: %w", f.path, err)
-		}
-		values, err := parse(data, f.format)
-		if err != nil {
-			return fmt.Errorf("config: failed to parse %s: %w", f.path, err)
-		}
-		setEnvIfNotExists(values)
-	}
-
+	setEnvIfNotExists(values)
 	return nil
 }
 
