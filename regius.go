@@ -569,6 +569,60 @@ func (r *Regius) StopConfigWatch() {
 	}
 }
 
+// SetupSecrets configures a secrets resolver for the application. When set,
+// config values containing secret:// references are automatically resolved
+// from the registered providers during config loading.
+//
+// The resolver is registered before config files are loaded, so secrets
+// are resolved on the first load. If this method is called after New(),
+// call ReloadConfig to re-resolve secrets.
+//
+// Environment variables for provider configuration:
+//   - SECRETS_PROVIDER: comma-separated list of providers to enable
+//     (e.g., "env", "aws", "vault")
+//   - AWS_REGION: region for AWS Secrets Manager (defaults to us-east-1)
+//   - VAULT_ADDR: address for HashiCorp Vault (e.g., http://vault:8200)
+//   - VAULT_TOKEN: token for Vault authentication
+func (r *Regius) SetupSecrets() (*cfg.SecretsResolver, error) {
+	resolver := cfg.NewSecretsResolver()
+
+	providerStr := os.Getenv("SECRETS_PROVIDER")
+	if providerStr == "" {
+		return resolver, nil
+	}
+
+	providers := strings.Split(providerStr, ",")
+	for _, p := range providers {
+		p = strings.TrimSpace(strings.ToLower(p))
+		switch p {
+		case "env":
+			resolver.RegisterProvider("env", cfg.NewEnvSecretProvider())
+		case "aws":
+			region := os.Getenv("AWS_REGION")
+			if region == "" {
+				region = "us-east-1"
+			}
+			provider, err := cfg.NewAWSSecretsManagerProvider(region)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create AWS Secrets Manager provider: %w", err)
+			}
+			resolver.RegisterProvider("aws", provider)
+		case "vault":
+			addr := os.Getenv("VAULT_ADDR")
+			token := os.Getenv("VAULT_TOKEN")
+			if addr == "" || token == "" {
+				return nil, fmt.Errorf("vault provider requires VAULT_ADDR and VAULT_TOKEN")
+			}
+			resolver.RegisterProvider("vault", cfg.NewVaultProvider(addr, token))
+		default:
+			return nil, fmt.Errorf("unknown secrets provider: %s", p)
+		}
+	}
+
+	cfg.SetSecretsResolver(resolver)
+	return resolver, nil
+}
+
 func (r *Regius) startLoggers() (*log.Logger, *log.Logger) {
 	var infoLog *log.Logger
 	var errorLog *log.Logger
