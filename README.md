@@ -623,6 +623,132 @@ config := regius.SSEEvent{
 SSE_DEMO_HEARTBEAT=false
 ```
 
+- **Configuration Management**: Beyond `.env`, Regius supports multiple config file formats, config profiles, startup validation, hot-reload, secrets management, and encrypted values.
+
+  - **Multiple file formats**: `.env`, `.yaml`/`.yml`, `.json`, and `.toml` are auto-discovered in the app root and `config/` subdirectory. Nested keys are flattened to env-var convention (e.g. `database.type` becomes `DATABASE_TYPE`). Lists become comma-separated strings. Existing OS env vars always take precedence.
+  - **Config profiles**: Set `APP_PROFILE=dev` (or `staging`, `prod`) to load profile-specific files that override base values. Profile files follow the naming convention `.env.dev`, `config.dev.yaml`, etc. Profile subdirectories (`config/dev/`) are also supported.
+  - **Startup validation**: `config.DefaultValidator()` checks standard env vars (PORT, DATABASE_TYPE, CACHE, SESSION_TYPE, HASH_ALGORITHM, booleans, numeric fields) on startup. All failures are collected into a single error. Extend with custom rules via `Validator.AddRule()`.
+  - **Hot-reload**: `app.WatchConfig(callback)` watches config files with fsnotify and reloads them on change. A tracker distinguishes config-set vars from OS env vars so only config-sourced values are updated. Changes are debounced and reported via callback with `ValueChange` entries (added/modified/removed).
+  - **Secrets management**: Use `secret://{provider}/{path}` references in config values to fetch secrets from external providers at load time. Built-in providers: `env` (env vars, for dev), `aws` (AWS Secrets Manager), `vault` (HashiCorp Vault via REST API). Enable with `SECRETS_PROVIDER=env,aws,vault` and `app.SetupSecrets()`.
+  - **Encrypted values**: Wrap sensitive values in `ENC(...)` to encrypt them at rest. Decryption uses AES-CFB with the `CONFIG_ENCRYPTION_KEY` env var (32 bytes, raw or base64). Use `config.EncryptValue()` to generate encrypted values. Compatible with the framework's `Encryption` type.
+
+  **Multiple Config File Formats:**
+
+```yaml
+# config.yaml - nested keys become env vars
+app_name: myapp
+port: "8080"
+debug: true
+
+database:
+  type: postgres
+  host: localhost
+  port: 5432
+
+cors:
+  allowed_origins:
+    - http://localhost:3000
+    - http://example.com
+```
+
+```toml
+# config.toml - same structure, different format
+app_name = "myapp"
+port = "8080"
+debug = true
+
+[database]
+type = "postgres"
+host = "localhost"
+port = 5432
+```
+
+  **Config Profiles:**
+
+```sh
+# Set the active profile via env var
+export APP_PROFILE=dev
+
+# Base file: config.yaml (always loaded)
+# Profile file: config.dev.yaml (overrides base values)
+# Profile subdirectory: config/dev/ (also loaded, overrides base)
+```
+
+```yaml
+# config.yaml (base)
+debug: false
+port: "8080"
+
+# config.dev.yaml (dev profile overrides)
+debug: true
+port: "3000"
+```
+
+  **Hot-Reload:**
+
+```go
+// Start watching config files for changes
+watcher, err := app.WatchConfig(func(changes []cfg.ValueChange) {
+    for _, c := range changes {
+        app.InfoLog.Printf("config %s: %s (old: %q, new: %q)",
+            c.Type, c.Key, c.OldValue, c.NewValue)
+    }
+})
+if err != nil {
+    log.Fatal(err)
+}
+defer watcher.Stop()
+```
+
+  **Secrets Management:**
+
+```yaml
+# config.yaml with secret references
+database:
+  pass: secret://aws/myapp/db-password
+redis:
+  password: secret://vault/secret/data/myapp/redis
+api_token: secret://env/API_TOKEN
+```
+
+```go
+// Enable secrets resolution before calling app.New()
+// Set SECRETS_PROVIDER=env,aws,vault in .env or OS env
+resolver, err := app.SetupSecrets()
+if err != nil {
+    log.Fatal(err)
+}
+// Now call app.New() - secret:// references are resolved automatically
+```
+
+```properties
+# Environment variables for secrets providers
+SECRETS_PROVIDER=env,aws,vault
+AWS_REGION=us-east-1
+VAULT_ADDR=http://vault:8200
+VAULT_TOKEN=s.hbr3xxx
+```
+
+  **Encrypted Values:**
+
+```go
+// Generate an encrypted value (run once, store the result in config)
+key := []byte("01234567890123456789012345678901") // 32 bytes
+encrypted, _ := config.EncryptValue("my_secret_password", key)
+fmt.Println(encrypted) // ENC(Vx4nK9...==)
+```
+
+```yaml
+# config.yaml with encrypted value
+database:
+  pass: ENC(Vx4nK9mJb2Q...==)
+```
+
+```properties
+# Set the decryption key (32 bytes, raw or base64-encoded)
+CONFIG_ENCRYPTION_KEY=01234567890123456789012345678901
+```
+
 ## 🚀 Getting Started
 
 ### Homebrew (macOS & Linux)
