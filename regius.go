@@ -63,6 +63,7 @@ type Regius struct {
 	WebDAV        filesystems.FS
 	Minio         filesystems.FS
 	handler       http.Handler
+	configWatcher *cfg.Watcher
 }
 
 type Server struct {
@@ -489,6 +490,83 @@ func (r *Regius) loadConfig(rootPath string) error {
 	}
 
 	return nil
+}
+
+// WatchConfig starts a hot-reload watcher on the application's config files.
+// When a config file changes, the watcher re-parses it, updates environment
+// variables, and calls the provided callback with the list of changed values.
+// The callback is optional; pass nil to ignore changes.
+//
+// The watcher is automatically stopped when StopConfigWatch is called or
+// when the application shuts down via ListenAndServe's context cancellation.
+//
+// Example:
+//
+//	w, err := app.WatchConfig(func(changes []cfg.ValueChange) {
+//	    for _, c := range changes {
+//	        app.InfoLog.Printf("config changed: %s %s", c.Key, c.Type)
+//	    }
+//	})
+//	defer w.Stop()
+func (r *Regius) WatchConfig(onChange func([]cfg.ValueChange)) (*cfg.Watcher, error) {
+	profile := cfg.GetProfile()
+
+	var paths []string
+	envPath := filepath.Join(r.RootPath, ".env")
+	if _, err := os.Stat(envPath); err == nil {
+		paths = append(paths, envPath)
+		if profile != "" {
+			profilePath := cfg.ProfileFilename(envPath, profile)
+			if _, err := os.Stat(profilePath); err == nil {
+				paths = append(paths, profilePath)
+			}
+		}
+	}
+
+	for _, name := range []string{"config.yaml", "config.yml", "config.json", "config.toml"} {
+		p := filepath.Join(r.RootPath, name)
+		if _, err := os.Stat(p); err == nil {
+			paths = append(paths, p)
+			if profile != "" {
+				profilePath := cfg.ProfileFilename(p, profile)
+				if _, err := os.Stat(profilePath); err == nil {
+					paths = append(paths, profilePath)
+				}
+			}
+		}
+	}
+
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no config files found to watch")
+	}
+
+	watcher, err := cfg.NewWatcher(paths...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create config watcher: %w", err)
+	}
+
+	if profile != "" {
+		watcher.WithProfile(profile)
+	}
+	if onChange != nil {
+		watcher.OnChange(onChange)
+	}
+
+	if err := watcher.Start(); err != nil {
+		watcher.Stop()
+		return nil, fmt.Errorf("failed to start config watcher: %w", err)
+	}
+
+	r.configWatcher = watcher
+	return watcher, nil
+}
+
+// StopConfigWatch stops the config hot-reload watcher if one is active.
+func (r *Regius) StopConfigWatch() {
+	if r.configWatcher != nil {
+		_ = r.configWatcher.Stop()
+		r.configWatcher = nil
+	}
 }
 
 func (r *Regius) startLoggers() (*log.Logger, *log.Logger) {

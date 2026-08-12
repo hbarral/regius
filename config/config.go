@@ -139,11 +139,11 @@ func parse(data []byte, format Format) (map[string]string, error) {
 
 // setEnvIfNotExists sets environment variables only when they are not already
 // defined. This preserves the standard precedence: OS env vars > config files.
+// Each set is tracked so the hot-reload watcher can safely update config-sourced
+// values without touching OS env vars.
 func setEnvIfNotExists(values map[string]string) {
 	for key, val := range values {
-		if _, exists := os.LookupEnv(key); !exists {
-			_ = os.Setenv(key, val)
-		}
+		globalTracker.setIfNotOS(key, val)
 	}
 }
 
