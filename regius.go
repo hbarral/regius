@@ -17,10 +17,10 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/go-chi/chi/v5"
 	"github.com/gomodule/redigo/redis"
-	"github.com/joho/godotenv"
 	"github.com/robfig/cron/v3"
 
 	"github.com/hbarral/regius/cache"
+	cfg "github.com/hbarral/regius/config"
 	"github.com/hbarral/regius/filesystems"
 	"github.com/hbarral/regius/hash"
 	"github.com/hbarral/regius/mailer"
@@ -117,10 +117,10 @@ func (r *Regius) New(rootPath string) error {
 
 	err = r.checkDotEnv(rootPath)
 	if err != nil {
-		return nil
+		return err
 	}
 
-	err = godotenv.Load(rootPath + "/.env")
+	err = r.loadConfig(rootPath)
 	if err != nil {
 		return err
 	}
@@ -445,6 +445,36 @@ func (r *Regius) checkDotEnv(path string) error {
 	err := r.CreateFileIfNotExists(fmt.Sprintf("%s/.env", path))
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// loadConfig loads configuration from .env and any supported config files
+// (config.yaml, config.json, config.toml) in the root path. It also loads
+// files from a config/ subdirectory if it exists.
+func (r *Regius) loadConfig(rootPath string) error {
+	envPath := filepath.Join(rootPath, ".env")
+	if _, err := os.Stat(envPath); err == nil {
+		if err := cfg.LoadFile(envPath); err != nil {
+			return fmt.Errorf("failed to load .env: %w", err)
+		}
+	}
+
+	for _, name := range []string{"config.yaml", "config.yml", "config.json", "config.toml"} {
+		p := filepath.Join(rootPath, name)
+		if _, err := os.Stat(p); err == nil {
+			if err := cfg.LoadFile(p); err != nil {
+				return fmt.Errorf("failed to load %s: %w", name, err)
+			}
+		}
+	}
+
+	configDir := filepath.Join(rootPath, "config")
+	if info, err := os.Stat(configDir); err == nil && info.IsDir() {
+		if err := cfg.LoadDir(configDir); err != nil {
+			return fmt.Errorf("failed to load config directory: %w", err)
+		}
 	}
 
 	return nil
