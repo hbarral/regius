@@ -125,6 +125,10 @@ func (r *Regius) New(rootPath string) error {
 		return err
 	}
 
+	if err := cfg.DefaultValidator().Validate(); err != nil {
+		return err
+	}
+
 	infoLog, errorLog := r.startLoggers()
 	setQueryLogLogger(infoLog)
 
