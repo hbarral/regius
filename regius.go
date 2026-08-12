@@ -17,10 +17,10 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/go-chi/chi/v5"
 	"github.com/gomodule/redigo/redis"
-	"github.com/joho/godotenv"
 	"github.com/robfig/cron/v3"
 
 	"github.com/hbarral/regius/cache"
+	cfg "github.com/hbarral/regius/config"
 	"github.com/hbarral/regius/filesystems"
 	"github.com/hbarral/regius/hash"
 	"github.com/hbarral/regius/mailer"
@@ -63,6 +63,7 @@ type Regius struct {
 	WebDAV        filesystems.FS
 	Minio         filesystems.FS
 	handler       http.Handler
+	configWatcher *cfg.Watcher
 }
 
 type Server struct {
@@ -117,11 +118,15 @@ func (r *Regius) New(rootPath string) error {
 
 	err = r.checkDotEnv(rootPath)
 	if err != nil {
-		return nil
+		return err
 	}
 
-	err = godotenv.Load(rootPath + "/.env")
+	err = r.loadConfig(rootPath)
 	if err != nil {
+		return err
+	}
+
+	if err := cfg.DefaultValidator().Validate(); err != nil {
 		return err
 	}
 
@@ -448,6 +453,174 @@ func (r *Regius) checkDotEnv(path string) error {
 	}
 
 	return nil
+}
+
+// loadConfig loads configuration from .env and any supported config files
+// (config.yaml, config.json, config.toml) in the root path. It also loads
+// files from a config/ subdirectory if it exists.
+//
+// If the APP_PROFILE environment variable is set (e.g., "dev", "staging",
+// "prod"), profile-specific files are loaded after their base counterparts
+// and take precedence (e.g., .env.dev overrides .env, config.dev.yaml
+// overrides config.yaml).
+func (r *Regius) loadConfig(rootPath string) error {
+	profile := cfg.GetProfile()
+
+	envPath := filepath.Join(rootPath, ".env")
+	if _, err := os.Stat(envPath); err == nil {
+		if err := cfg.LoadFileWithProfile(envPath, profile); err != nil {
+			return fmt.Errorf("failed to load .env: %w", err)
+		}
+	}
+
+	for _, name := range []string{"config.yaml", "config.yml", "config.json", "config.toml"} {
+		p := filepath.Join(rootPath, name)
+		if _, err := os.Stat(p); err == nil {
+			if err := cfg.LoadFileWithProfile(p, profile); err != nil {
+				return fmt.Errorf("failed to load %s: %w", name, err)
+			}
+		}
+	}
+
+	configDir := filepath.Join(rootPath, "config")
+	if info, err := os.Stat(configDir); err == nil && info.IsDir() {
+		if err := cfg.LoadDirWithProfile(configDir, profile); err != nil {
+			return fmt.Errorf("failed to load config directory: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// WatchConfig starts a hot-reload watcher on the application's config files.
+// When a config file changes, the watcher re-parses it, updates environment
+// variables, and calls the provided callback with the list of changed values.
+// The callback is optional; pass nil to ignore changes.
+//
+// The watcher is automatically stopped when StopConfigWatch is called or
+// when the application shuts down via ListenAndServe's context cancellation.
+//
+// Example:
+//
+//	w, err := app.WatchConfig(func(changes []cfg.ValueChange) {
+//	    for _, c := range changes {
+//	        app.InfoLog.Printf("config changed: %s %s", c.Key, c.Type)
+//	    }
+//	})
+//	defer w.Stop()
+func (r *Regius) WatchConfig(onChange func([]cfg.ValueChange)) (*cfg.Watcher, error) {
+	profile := cfg.GetProfile()
+
+	var paths []string
+	envPath := filepath.Join(r.RootPath, ".env")
+	if _, err := os.Stat(envPath); err == nil {
+		paths = append(paths, envPath)
+		if profile != "" {
+			profilePath := cfg.ProfileFilename(envPath, profile)
+			if _, err := os.Stat(profilePath); err == nil {
+				paths = append(paths, profilePath)
+			}
+		}
+	}
+
+	for _, name := range []string{"config.yaml", "config.yml", "config.json", "config.toml"} {
+		p := filepath.Join(r.RootPath, name)
+		if _, err := os.Stat(p); err == nil {
+			paths = append(paths, p)
+			if profile != "" {
+				profilePath := cfg.ProfileFilename(p, profile)
+				if _, err := os.Stat(profilePath); err == nil {
+					paths = append(paths, profilePath)
+				}
+			}
+		}
+	}
+
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no config files found to watch")
+	}
+
+	watcher, err := cfg.NewWatcher(paths...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create config watcher: %w", err)
+	}
+
+	if profile != "" {
+		watcher.WithProfile(profile)
+	}
+	if onChange != nil {
+		watcher.OnChange(onChange)
+	}
+
+	if err := watcher.Start(); err != nil {
+		watcher.Stop()
+		return nil, fmt.Errorf("failed to start config watcher: %w", err)
+	}
+
+	r.configWatcher = watcher
+	return watcher, nil
+}
+
+// StopConfigWatch stops the config hot-reload watcher if one is active.
+func (r *Regius) StopConfigWatch() {
+	if r.configWatcher != nil {
+		_ = r.configWatcher.Stop()
+		r.configWatcher = nil
+	}
+}
+
+// SetupSecrets configures a secrets resolver for the application. When set,
+// config values containing secret:// references are automatically resolved
+// from the registered providers during config loading.
+//
+// The resolver is registered before config files are loaded, so secrets
+// are resolved on the first load. If this method is called after New(),
+// call ReloadConfig to re-resolve secrets.
+//
+// Environment variables for provider configuration:
+//   - SECRETS_PROVIDER: comma-separated list of providers to enable
+//     (e.g., "env", "aws", "vault")
+//   - AWS_REGION: region for AWS Secrets Manager (defaults to us-east-1)
+//   - VAULT_ADDR: address for HashiCorp Vault (e.g., http://vault:8200)
+//   - VAULT_TOKEN: token for Vault authentication
+func (r *Regius) SetupSecrets() (*cfg.SecretsResolver, error) {
+	resolver := cfg.NewSecretsResolver()
+
+	providerStr := os.Getenv("SECRETS_PROVIDER")
+	if providerStr == "" {
+		return resolver, nil
+	}
+
+	providers := strings.Split(providerStr, ",")
+	for _, p := range providers {
+		p = strings.TrimSpace(strings.ToLower(p))
+		switch p {
+		case "env":
+			resolver.RegisterProvider("env", cfg.NewEnvSecretProvider())
+		case "aws":
+			region := os.Getenv("AWS_REGION")
+			if region == "" {
+				region = "us-east-1"
+			}
+			provider, err := cfg.NewAWSSecretsManagerProvider(region)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create AWS Secrets Manager provider: %w", err)
+			}
+			resolver.RegisterProvider("aws", provider)
+		case "vault":
+			addr := os.Getenv("VAULT_ADDR")
+			token := os.Getenv("VAULT_TOKEN")
+			if addr == "" || token == "" {
+				return nil, fmt.Errorf("vault provider requires VAULT_ADDR and VAULT_TOKEN")
+			}
+			resolver.RegisterProvider("vault", cfg.NewVaultProvider(addr, token))
+		default:
+			return nil, fmt.Errorf("unknown secrets provider: %s", p)
+		}
+	}
+
+	cfg.SetSecretsResolver(resolver)
+	return resolver, nil
 }
 
 func (r *Regius) startLoggers() (*log.Logger, *log.Logger) {
