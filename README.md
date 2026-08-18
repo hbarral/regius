@@ -6,13 +6,246 @@
 
 Regius is a CLI application for building web pages, inspired by Laravel but built with Go. It offers tools for database migrations and code generation, providing an agile and organized development experience.
 
-## 🌍 Repository
+## Table of Contents
+
+- [**`Getting Started`**](#getting-started)
+  - [_`Repository`_](#repository)
+- [**`Documentation`**](#documentation)
+  - [_`Usage`_](#usage)
+  - [_`Database Features`_](#database-features)
+- [**`Features`**](#features)
+  - [_`Basic Commands`_](#basic-commands)
+  - [_`Migration Commands`_](#migration-commands)
+  - [_`Seeding`_](#seeding)
+  - [_`Code Generation Commands`_](#code-generation-commands)
+  - [_`CLI Features`_](#cli-features)
+  - [_`Database Features`_](#database-features)
+  - [_`Configuration Options`_](#configuration-options)
+  - [_`Usage Example in Your App`_](#usage-example-in-your-app)
+  - [_`Rate Limiting Middleware`_](#rate-limiting-middleware)
+  - [_`CORS Middleware`_](#cors-middleware)
+  - [_`API Key Authentication Middleware`_](#api-key-authentication-middleware)
+  - [_`Request ID Tracing Middleware`_](#request-id-tracing-middleware)
+  - [_`Request Sanitization Middleware`_](#request-sanitization-middleware)
+  - [_`IP Whitelist/Blacklist Middleware`_](#ip-whitelistblacklist-middleware)
+  - [_`Internationalization (i18n)`_](#internationalization-i18n)
+  - [_`Server-Sent Events (SSE)`_](#server-sent-events-sse)
+  - [_`Configuration Management`_](#configuration-management)
+  - [_`Hot-Reload`_](#hot-reload)
+  - [_`Secrets Management`_](#secrets-management)
+  - [_`Encrypted Values`_](#encrypted-values)
+  - [_`Environment Variables`_](#environment-variables)
+  - [_`Database Configuration`_](#database-configuration)
+  - [_`Rendering Templates`_](#rendering-templates)
+- [**`Contributing`**](#contributing)
+- [**`License`**](#license)
+
+## Getting Started
+
+### Homebrew (macOS & Linux)
+
+The easiest way to install Regius on macOS or Linux is with [Homebrew](https://brew.sh):
+
+```sh
+brew install hbarral/tap/regius
+```
+
+Verify the installation:
+
+```sh
+regius help
+```
+
+To upgrade to the latest release later on:
+
+```sh
+brew upgrade regius
+```
+
+### Download Binaries
+
+Download the suitable binary for your operating system from the links below:
+
+- [Linux](https://github.com/hbarral/regius/releases/download/v1.9.2/regius_Linux_x86_64.tar.gz)
+- [Windows](https://github.com/hbarral/regius/releases/download/v1.9.2/regius_Windows_x86_64.zip)
+- [Mac](https://github.com/hbarral/regius/releases/download/v1.9.2/regius_Darwin_x86_64.tar.gz)
+
+<details>
+    <summary>Build from Source</summary>
+
+1. Clone the repository:
+
+```sh
+git clone https://github.com/hbarral/regius.git
+cd regius
+```
+
+2. Build the project for your operating system:
+
+```sh
+go build -o regius ./cmd/cli
+```
+
+3. Run the binary:
+
+```sh
+regius help
+```
+
+</details>
+
+## Repository
 
 Visit the official repository at [Regius on GitHub](https://github.com/hbarral/regius).
 
-## 📋 Features
+## Documentation
 
-### Basic Commands
+The official documentation can be found at [regius.pro](https://regius.pro)
+
+### Usage
+
+<details>
+    <summary>Create a new application</summary>
+
+Each command has different options and parameters. Here are some basic usage examples:
+
+```sh
+regius new myapp
+```
+
+  The scaffold defaults to the **templ** renderer (`github.com/a-h/templ` +
+  [templui](https://github.com/templui/templui) + Tailwind v4) and the
+  **sqlite** database, and ships a runnable auth scaffold (navbar, sign
+  in/up/forgot/reset-password). After `regius new`, run the auth migration
+  (`regius migrate`) and `regius migrate` then `go run .`:
+
+```sh
+cd myapp
+regius migrate          # creates users/tokens/remember_tokens on sqlite
+go run .                # http://localhost:4000  (/ , /auth/signin)
+```
+
+  Optional flags:
+
+- `--db <type>`: pre-fill `DATABASE_TYPE` in the generated `.env`
+  (`postgres`|`postgresql`|`mysql`|`mariadb`|`sqlite`|`sqlite3`).
+  Defaults to `sqlite` (a local file at `data/<name>.db`, no server needed).
+  - `--renderer <engine>`: template engine to scaffold — `templ` (default) |
+  `jet` (`github.com/CloudyKit/jet/v6`, `*.jet` views with shared
+  `views/layouts/*.jet` layouts, Tailwind v4 + Alpine.js for the same modern
+  UI as the templ skeleton) |
+  `go` (built-in `html/template`, `*.page.template` views with a shared
+  `views/layouts/*.layout.template` layout system, Tailwind v4 + Alpine.js
+  for the same modern UI as the templ skeleton). `regius make auth` and
+  `regius make handler` also accept `--renderer`, falling back to the
+  `RENDERER` env var then `templ`.
+  - `-v`, `--verbose`: stream `go get` / `go mod tidy` output live instead of
+  capturing it (the captured output is shown only on failure by default).
+
+```sh
+regius new myapp --db postgres -v
+regius new jetapp --renderer jet
+regius new goapp --renderer go
+```
+
+</details>
+
+<details>
+    <summary>Show help commands</summary>
+
+```sh
+regius help
+```
+
+</details>
+
+<details>
+    <summary>Run a migration</summary>
+
+```sh
+regius migration
+```
+
+</details>
+
+<details>
+    <summary>Create a migration</summary>
+
+```sh
+regius make migration create_users_table
+```
+
+</details>
+
+<details>
+    <summary>Create a seed file and run it</summary>
+
+```sh
+regius make seed default_users
+regius db:seed
+```
+
+</details>
+
+<details>
+    <summary>Check current migration version</summary>
+
+```sh
+regius migrate version
+```
+
+</details>
+
+<details>
+    <summary>Create a model</summary>
+
+```sh
+regius make model User
+```
+
+</details>
+
+<details>
+    <summary>Create a GORM model</summary>
+
+```sh
+regius make gorm-model User
+```
+
+</details>
+
+<details>
+    <summary>Put the server in maintenance mode</summary>
+
+```sh
+regius down
+```
+
+</details>
+
+<details>
+    <summary>Bring the server back from maintenance mode</summary>
+
+```sh
+regius up
+```
+
+</details>
+
+<details>
+    <summary>For more details about usage and commands, refer to the CLI help</summary>
+
+```sh
+regius help
+```
+
+</details>
+
+## Features
+
+<a name="basic-commands"></a>
+<details>
+    <summary>Basic Commands</summary>
 
 - `regius new <app_name>`: Creates a new web application (defaults to `templ` renderer + `sqlite` database, with a runnable auth scaffold; switch with `--renderer jet|go` and/or `--db postgres|mysql|...`).
 - `regius version`: Print application version.
@@ -20,7 +253,11 @@ Visit the official repository at [Regius on GitHub](https://github.com/hbarral/r
 - `regius up`: Bring the server back from maintenance mode.
 - `regius down`: Put the server in maintenance mode.
 
-### Migration Commands
+</details>
+
+<a name="migration-commands"></a>
+<details>
+    <summary>Migration Commands</summary>
 
 - `regius migrate`: Run all pending migrations (defaults to "up").
 - `regius migrate up`: Run all pending migrations.
@@ -28,14 +265,22 @@ Visit the official repository at [Regius on GitHub](https://github.com/hbarral/r
 - `regius migrate reset`: Reset and re-run all migrations.
 - `regius migrate version`: Show the current migration version (uses `golang-migrate`).
 
-### Seeding
+</details>
+
+<a name="seeding"></a>
+<details>
+    <summary>Seeding</summary>
 
 - `regius make seed <name>`: Create a new SQL seed file in `seeds/`.
 - `regius db:seed`: Run all pending seed files in `seeds/` (filename order), tracking executed seeds in the `regius_seeds` table.
 
 Seed files are plain `.sql` files executed in a single transaction, and each is only applied once.
 
-### Code Generation Commands
+</details>
+
+<a name="code-generation-commands"></a>
+<details>
+    <summary>Code Generation Commands</summary>
 
 - `regius make migration <name>`: Create SQL migration files.
 - `regius make auth`: Create authentication system (tables, models, middleware, handlers, views).
@@ -47,15 +292,22 @@ Seed files are plain `.sql` files executed in a single transaction, and each is 
 - `regius make mail <name>`: Create mail templates.
 - `regius make locale <code>`: Create a new translation locale file (e.g. `regius make locale fr`).
 
-### CLI Features
+</details>
+
+<a name="cli-features"></a>
+<details>
+    <summary>CLI Features</summary>
 
 - **Automatic help**: `--help` flag on all commands and subcommands
-- **Flag support**: Use `--format=sql` for migration format
 - **Shell completion**: Generate autocompletion scripts for bash, zsh, fish, and PowerShell
 - **Better validation**: Improved argument validation and error messages
 - **Command aliases**: Future support for command shortcuts
 
-### Database Features
+</details>
+
+<a name="database-features"></a>
+<details>
+    <summary>Database Features</summary>
 
 Regius includes a unified database layer that works out of the box with PostgreSQL, MySQL/MariaDB, and SQLite.
 
@@ -68,7 +320,7 @@ Regius includes a unified database layer that works out of the box with PostgreS
 - **GORM integration**: Access a configured `*gorm.DB` via `app.GORM()` or run `app.AutoMigrate(&models...)` for schema management. GORM reuses the framework's existing database pool.
 - **Query logging**: Enable `DATABASE_QUERY_LOGGING=true` to log every SQL statement with timing and error details through a transparent database/sql driver wrapper.
 
-**Configuration Options:**
+### Configuration Options
 
 ```properties
 DATABASE_TYPE=postgres
@@ -88,7 +340,7 @@ DATABASE_CONN_MAX_LIFETIME=15m
 DATABASE_QUERY_LOGGING=true
 ```
 
-**Usage Example in Your App:**
+### Usage Example in Your App
 
 ```go
 // Run a health check
@@ -125,8 +377,8 @@ _ = app.AutoMigrate(&User{}, &Post{})
 ### Examples
 
 ```sh
-# Create migration with sql format
-regius make migration create_users --format=sql
+# Create migration
+regius make migration create_users
 
 # Reverse last 2 migrations
 regius migrate down 2
@@ -139,7 +391,13 @@ regius make migration --help
 regius migrate --help
 ```
 
-- **Rate Limiting Middleware**: Protect your application from abuse and DDoS attacks with flexible rate limiting.
+</details>
+
+<a name="rate-limiting-middleware"></a>
+<details>
+    <summary>Rate Limiting Middleware</summary>
+
+- Protect your application from abuse and DDoS attacks with flexible rate limiting.
 
   - Two algorithms: **Token Bucket** (steady request patterns) and **Sliding Window** (accurate for burst traffic)
   - Multiple storage backends: **In-memory** (fastest), **Redis** (distributed), and **Badger** (embedded distributed)
@@ -178,15 +436,54 @@ config := regius.RateLimiterConfig{
 ```
 
   **Testing:**
-  You can exercise the rate limiter with any HTTP load tool (e.g. `hey`, `wrk`, or a small `curl` loop) against a rate-limited route in your app.
+  You can exercise the rate limiter with any HTTP load tool. The examples below assume the default-ish config above (100 requests / minute) applied to a route like `/api/users` running at `http://localhost:4000`.
 
-  **Documentation:**
+  Once the limit is exceeded the middleware responds with `429 Too Many Requests` and sets `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Window`, and `Retry-After` headers, so you can confirm limiting by watching for `429`s and the remaining counter dropping to `0`.
 
-  - Full documentation: `RATE_LIMITER.md`
-  - Implementation details: `RATE_LIMITER_IMPLEMENTATION.md`
-  - Testing guide and quick start: see the `test-tools/` directory in a generated app
+  **wrk** (sustained load — great for seeing 429s pile up):
 
-- **CORS Middleware**: Handle Cross-Origin Resource Sharing out of the box with flexible configuration.
+```bash
+# 4 threads, 100 concurrent connections, 30s
+wrk -t4 -c100 -d30s http://localhost:4000/api/users
+```
+
+  With a 100 req/min cap, almost every connection after the first burst will get a `429`. To verify the limit headers are being set, add a `Lua` snippet that prints them:
+
+```bash
+wrk -t4 -c100 -d10s -s - <<'LUA' http://localhost:4000/api/users
+  response = function(status, headers)
+    wrk.log(status .. " remaining=" .. (headers["X-RateLimit-Remaining"] or "-"))
+  end
+LUA
+```
+
+  **hey** (fixed request count — easier for quick one-off checks):
+
+```bash
+# 1000 requests across 50 workers
+hey -n 1000 -c 50 http://localhost:4000/api/users
+
+# Pretty-print just the status-code histogram
+hey -n 1000 -c 50 http://localhost:4000/api/users | grep -A20 "Status code distribution"
+```
+
+  **curl** (single-threaded, best for inspecting headers on a rate-limited route):
+
+```bash
+for i in $(seq 1 120); do
+  curl -s -i http://localhost:4000/api/users | grep -iE 'HTTP/|X-RateLimit|Retry-After'
+done
+```
+
+  You should see `X-RateLimit-Remaining` count down to `0`, then `HTTP/1.1 429` responses with a `Retry-After` header (seconds until the window resets).
+
+</details>
+
+<a name="cors-middleware"></a>
+<details>
+    <summary>CORS Middleware</summary>
+
+- Handle Cross-Origin Resource Sharing out of the box with flexible configuration.
 
   - Opt-out by default: CORS is enabled automatically with sensible defaults
   - Configurable origins: Allow specific domains or use wildcards
@@ -280,7 +577,12 @@ config := regius.SecurityHeadersConfig{
 }
 ```
 
-- **API Key Authentication Middleware**: Authenticate API requests with API keys, complementing the existing session/cookie auth used by web routes.
+</details>
+
+<a name="api-key-authentication-middleware"></a>
+<details>
+    <summary>API Key Authentication Middleware</summary>
+- Authenticate API requests with API keys, complementing the existing session/cookie auth used by web routes.
 
   - Opt-in via `API_KEY_AUTH_ENABLED`; apply to API route groups only (not global) so cookie-authed web routes are unaffected
   - Multiple key sources (in order): `Authorization: Bearer <key>` (or configured scheme), `X-API-Key` header, and an opt-in query param (`API_KEY_QUERY_PARAM`, disabled by default since keys in URLs leak via logs/referrers)
@@ -354,7 +656,12 @@ API_KEY_QUERY_PARAM=               # empty = disabled
 API_KEY_REALM=api
 ```
 
-- **Request ID Tracing Middleware**: Stamp every request with a unique correlation ID for log correlation, distributed tracing, and client-side debugging.
+</details>
+
+<a name="request-id-tracing-middleware"></a>
+<details>
+    <summary>Request ID Tracing Middleware</summary>
+-  Stamp every request with a unique correlation ID for log correlation, distributed tracing, and client-side debugging.
 
   - Enabled by default: a request ID is generated for every request
   - Incoming ID reuse: reads an incoming ID from the request header (e.g. from a proxy/gateway) and reuses it verbatim, so a single user action can be correlated across services
@@ -411,7 +718,13 @@ REQUEST_ID_RESPONSE_HEADER=X-Request-ID
 REQUEST_ID_FORMAT=uuid                   # uuid | xid | short | default
 ```
 
-- **Request Sanitization Middleware**: Neutralize XSS at the request boundary by sanitizing query params, form-encoded values, and selected request headers with [bluemonday](https://github.com/microcosm-cc/bluemonday) before downstream handlers ever see them.
+</details>
+
+<a name="request-sanitization-middleware"></a>
+<details>
+    <summary>Request Sanitization Middleware</summary>
+
+- Neutralize XSS at the request boundary by sanitizing query params, form-encoded values, and selected request headers with [bluemonday](https://github.com/microcosm-cc/bluemonday) before downstream handlers ever see them.
 
   - Defense-in-depth: enabled by default in scaffolded apps (`REQUEST_SANITIZATION_ENABLED=true`)
   - Two policies via env: **strict** (default — strips all HTML, returns safe text) and **ugc** (allows a safe HTML subset like `<b>`, `<a>` for comment-style fields)
@@ -467,14 +780,20 @@ regius.BoolPtr(false) // explicitly disable a scope
 
 ```properties
 REQUEST_SANITIZATION_ENABLED=true
-REQUEST_SANITIZATION_POLICY=strict         # strict | ugc
+REQUEST_SANITIZATION_POLICY=strict                  # strict | ugc
 REQUEST_SANITIZATION_QUERY=true
 REQUEST_SANITIZATION_FORM=true
 REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
 REQUEST_SANITIZATION_EXEMPT=/api/.*
 ```
 
-- **IP Whitelist/Blacklist Middleware**: Allow or deny requests based on the client IP, using static lists and optional runtime (cache/DB-backed) decisions for fail2ban-style blocking.
+</details>
+
+<a name="ip-whitelistblacklist-middleware"></a>
+<details>
+    <summary>IP Whitelist/Blacklist Middleware</summary>
+
+- Allow or deny requests based on the client IP, using static lists and optional runtime (cache/DB-backed) decisions for fail2ban-style blocking.
 
   - Opt-in via `IP_FILTER_ENABLED`; applied globally (after RealIP) so denied requests short-circuit before heavier middleware runs
   - Allow/deny lists of IPs **or CIDR ranges** (e.g. `10.0.0.0/8`, `192.168.1.5`, `::1/128`); bare IPs are treated as `/32` (IPv4) or `/128` (IPv6). IPv4 and IPv6 both supported
@@ -544,13 +863,19 @@ IP_FILTER_STATUS_CODE=403
 IP_FILTER_MESSAGE=
 ```
 
-- **Internationalization (i18n)**: Ship multi-language apps out of the box with locale detection, translation file management, and a built-in language selector.
+</details>
+
+<a name="internationalization-i18n"></a>
+<details>
+    <summary>Internationalization (i18n)</summary>
+
+- Ship multi-language apps out of the box with locale detection, translation file management, and a built-in language selector.
 
   - Enabled by default (`I18N_ENABLED=true`); applied globally in `routes.go`
   - Locale resolution order: `LOCALE_COOKIE_NAME` cookie → `Accept-Language` header → `DEFAULT_LOCALE`
   - Default supported locales are **English** (`en`) and **Spanish** (`es`), configurable via `SUPPORTED_LOCALES`
   - Generated apps embed translations under `locales/<code>/<code>.yaml` and load them in `init.regius.go`
-  - Add new locales with `./regius make locale <code>` (e.g. `./regius make locale fr`)
+  - Add new locales with `regius make locale <code>` (e.g. `regius make locale fr`)
 
   **Usage in templ views:**
 
@@ -578,7 +903,13 @@ SUPPORTED_LOCALES=en,es
 LOCALE_COOKIE_NAME=locale
 ```
 
-- **Server-Sent Events (SSE)**: Push real-time updates to browsers over standard HTTP with a built-in, zero-dependency SSE broker.
+</details>
+
+<a name="server-sent-events-sse"></a>
+<details>
+    <summary>Server-Sent Events (SSE)</summary>
+
+- Push real-time updates to browsers over standard HTTP with a built-in, zero-dependency SSE broker.
 
   - Global broker available on every app: `app.SSE`
   - Broadcast to all connected clients or send to a specific client
@@ -623,7 +954,12 @@ config := regius.SSEEvent{
 SSE_DEMO_HEARTBEAT=false
 ```
 
-- **Configuration Management**: Beyond `.env`, Regius supports multiple config file formats, config profiles, startup validation, hot-reload, secrets management, and encrypted values.
+</details>
+
+<a name="configuration-management"></a>
+<details>
+    <summary>Configuration Management</summary>
+- Beyond `.env`, Regius supports multiple config file formats, config profiles, startup validation, hot-reload, secrets management, and encrypted values.
 
   - **Multiple file formats**: `.env`, `.yaml`/`.yml`, `.json`, and `.toml` are auto-discovered in the app root and `config/` subdirectory. Nested keys are flattened to env-var convention (e.g. `database.type` becomes `DATABASE_TYPE`). Lists become comma-separated strings. Existing OS env vars always take precedence.
   - **Config profiles**: Set `APP_PROFILE=dev` (or `staging`, `prod`) to load profile-specific files that override base values. Profile files follow the naming convention `.env.dev`, `config.dev.yaml`, etc. Profile subdirectories (`config/dev/`) are also supported.
@@ -684,7 +1020,11 @@ debug: true
 port: "3000"
 ```
 
-  **Hot-Reload:**
+</details>
+
+<a name="hot-reload"></a>
+<details>
+    <summary>Hot-Reload</summary>
 
 ```go
 // Start watching config files for changes
@@ -700,7 +1040,11 @@ if err != nil {
 defer watcher.Stop()
 ```
 
-  **Secrets Management:**
+</details>
+
+<a name="secrets-management"></a>
+<details>
+    <summary>Secrets Management</summary>
 
 ```yaml
 # config.yaml with secret references
@@ -729,7 +1073,11 @@ VAULT_ADDR=http://vault:8200
 VAULT_TOKEN=s.hbr3xxx
 ```
 
-  **Encrypted Values:**
+</details>
+
+<a name="encrypted-values"></a>
+<details>
+    <summary>Encrypted Values</summary>
 
 ```go
 // Generate an encrypted value (run once, store the result in config)
@@ -749,61 +1097,11 @@ database:
 CONFIG_ENCRYPTION_KEY=01234567890123456789012345678901
 ```
 
-## 🚀 Getting Started
-
-### Homebrew (macOS & Linux)
-
-The easiest way to install Regius on macOS or Linux is with [Homebrew](https://brew.sh):
-
-```sh
-brew install hbarral/tap/regius
-```
-
-Verify the installation:
-
-```sh
-regius help
-```
-
-To upgrade to the latest release later on:
-
-```sh
-brew upgrade regius
-```
-
-### Download Binaries
-
-Download the suitable binary for your operating system from the links below:
-
-- [Linux](https://github.com/hbarral/regius/releases/download/v1.9.2/regius_Linux_x86_64.tar.gz)
-- [Windows](https://github.com/hbarral/regius/releases/download/v1.9.2/regius_Windows_x86_64.zip)
-- [Mac](https://github.com/hbarral/regius/releases/download/v1.9.2/regius_Darwin_x86_64.tar.gz)
-
-<details>
-  <summary>Build from Source</summary>
-
-1. Clone the repository:
-
-```sh
-git clone https://github.com/hbarral/regius.git
-cd regius
-```
-
-2. Build the project for your operating system:
-
-```sh
-go build -o regius ./cmd/cli
-```
-
-3. Run the binary:
-
-```sh
-./regius help
-```
-
 </details>
 
-### Environment Variables
+<a name="environment-variables"></a>
+<details>
+    <summary>Environment Variables</summary>
 
 Upon creating a new application, `regius` generates a `.env` file with default configurations. You only need to fill in the required values. Below is an example of a complete `.env` file:
 
@@ -832,7 +1130,7 @@ DATABASE_HOST=
 ```
 
 <details>
-  <summary>See the full .env example</summary>
+    <summary>See the full .env example</summary>
 
 ```properties
 # Application name, without spaces
@@ -852,14 +1150,80 @@ SERVER_NAME=localhost
 # use https?
 SECURE=false
 
-# database configuration (sqlite is the default; a local file at data/<name>.db)
+# security headers (helmet equivalent). Enabled by default.
+# HSTS (Strict-Transport-Security) is only emitted when SECURE=true.
+SECURITY_HEADERS_ENABLED=true
+CONTENT_SECURITY_POLICY=default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; frame-ancestors 'self'
+HSTS_MAX_AGE=31536000
+HSTS_INCLUDE_SUBDOMAINS=true
+HSTS_PRELOAD=false
+REFERRER_POLICY=strict-origin-when-cross-origin
+X_FRAME_OPTIONS=SAMEORIGIN
+
+# api key authentication (opt-in). Protects API routes (e.g. /api/*).
+# Add valid keys as a comma-separated list. Query param is off by default.
+API_KEY_AUTH_ENABLED=false
+API_KEYS=
+API_KEY_HEADER=Authorization
+API_KEY_SCHEME=Bearer
+API_KEY_ALT_HEADER=X-API-Key
+API_KEY_QUERY_PARAM=
+API_KEY_REALM=api
+
+# request id tracing (enabled by default). Stamps every request with a
+# correlation id: reuses an incoming id from the request header when present
+# (cross-service correlation), otherwise generates one. Echoed on the response.
+REQUEST_ID_ENABLED=true
+REQUEST_ID_HEADER=X-Request-ID
+REQUEST_ID_RESPONSE_HEADER=X-Request-ID
+REQUEST_ID_FORMAT=uuid
+
+# request sanitization for XSS prevention (defense-in-depth, on by default).
+# Sanitizes query params, form-encoded values, and selected request headers
+# using bluemonday. Strict strips all HTML; ugc allows a safe subset.
+# JSON request bodies and /api/* routes are exempt by default.
+REQUEST_SANITIZATION_ENABLED=true
+REQUEST_SANITIZATION_POLICY=strict
+REQUEST_SANITIZATION_QUERY=true
+REQUEST_SANITIZATION_FORM=true
+REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
+REQUEST_SANITIZATION_EXEMPT=/api/.*
+
+# ip whitelist/blacklist (opt-in). Allow/deny lists of IPs or CIDR ranges
+# (e.g. 10.0.0.0/8, 192.168.1.5, ::1/128). Deny always wins over allow.
+# When allow is set, only listed networks may access the app.
+IP_FILTER_ENABLED=false
+IP_FILTER_ALLOW=
+IP_FILTER_DENY=
+IP_FILTER_TRUST_PROXY=false
+IP_FILTER_STATUS_CODE=403
+IP_FILTER_MESSAGE=
+
+# database configuration
+# supported types: postgres, postgresql, mysql, mariadb, sqlite, sqlite3
+# sqlite is the default; it stores a local file at <root>/data/<DATABASE_NAME>.db
+# and needs no host/port/user/password.
 DATABASE_TYPE=sqlite
 DATABASE_HOST=
 DATABASE_PORT=
 DATABASE_USER=
 DATABASE_PASS=
 DATABASE_NAME=regius
+# DATABASE_SSL_MODE (enable | disable)
 DATABASE_SSL_MODE=
+# DATABASE_MAX_OPEN_CONNS=25
+# DATABASE_MAX_IDLE_CONNS=25
+# DATABASE_CONN_MAX_LIFETIME=15m
+# DATABASE_QUERY_LOGGING=true
+
+# read replica configuration (optional). When unset, reads use the main pool.
+# DATABASE_READ_DSN=postgres://reader:secret@read-host/appdb?sslmode=disable
+# DATABASE_READ_HOST=
+# DATABASE_READ_PORT=
+# DATABASE_READ_USER=
+# DATABASE_READ_PASS=
+# DATABASE_READ_NAME=
+# DATABASE_READ_SSL_MODE=
 
 # minio settings
 MINIO_ENDPOINT=
@@ -922,8 +1286,17 @@ MAILER_API=
 MAILER_KEY=
 MAILER_URL=
 
+# internationalization (i18n). Enabled by default.
+# DEFAULT_LOCALE is used when no locale cookie or Accept-Language header is present.
+# SUPPORTED_LOCALES is a comma-separated list of available languages.
+I18N_ENABLED=true
+DEFAULT_LOCALE=en
+SUPPORTED_LOCALES=en,es
+LOCALE_COOKIE_NAME=locale
+
 # Template engine (used by CLI scaffolding only; at runtime each handler
-# picks its engine via render.Jet(), render.Go(), or a templ component)
+# picks its engine via render.Jet(), render.Go(), or a templ component).
+# templ is the default. Options: templ | jet | go
 RENDERER=templ
 
 # encryption key (32 characters long)
@@ -988,6 +1361,7 @@ IP_FILTER_TRUST_PROXY=false
 IP_FILTER_STATUS_CODE=403
 IP_FILTER_MESSAGE=
 
+
 # github oauth
 GITHUB_KEY=
 GITHUB_SECRET=
@@ -1007,11 +1381,20 @@ MYSQL_DATABASE=
 MYSQL_USER=
 MYSQL_PASSWORD=
 MYSQL_ROOT_PASSWORD=
+
+# reset password settings
+RESET_PASSWORD_MAILER_FROM="no-reply@${APP_NAME}.com"
+# support email
+SUPPORT_EMAIL="support@$testapp.com"
 ```
 
 </details>
 
-### Database Configuration
+</details>
+
+<a name="database-configuration"></a>
+<details>
+    <summary>Database Configuration</summary>
 
 After creating a new application, a `.env` file is generated with the following database variables:
 
@@ -1058,125 +1441,27 @@ ok, err := h.App.Hash.Compare(storedHash, plainPassword)
 
 The `make auth` scaffolding uses `App.Hash` directly, so the generated handlers and user model stay hash-agnostic. Defaults preserve the previous behavior (bcrypt at cost 12), so existing password hashes continue to verify.
 
-## 🎯 Usage
+</details>
 
-Each command has different options and parameters. Here are some basic usage examples:
-
-- **Create a new application:**
-
-```sh
-./regius new myapp
-```
-
-  The scaffold defaults to the **templ** renderer (`github.com/a-h/templ` +
-  [templui](https://github.com/templui/templui) + Tailwind v4) and the
-  **sqlite** database, and ships a runnable auth scaffold (navbar, sign
-  in/up/forgot/reset-password). After `regius new`, run the auth migration
-  (`./regius migrate`) and `./regius migrate` then `go run .`:
-
-```sh
-cd myapp
-./regius migrate        # creates users/tokens/remember_tokens on sqlite
-go run .                # http://localhost:4000  (/ , /auth/signin)
-```
-
-  Optional flags:
-
-  - `--db <type>`: pre-fill `DATABASE_TYPE` in the generated `.env`
-    (`postgres`|`postgresql`|`mysql`|`mariadb`|`sqlite`|`sqlite3`).
-    Defaults to `sqlite` (a local file at `data/<name>.db`, no server needed).
-  - `--renderer <engine>`: template engine to scaffold — `templ` (default) |
-    `jet` (`github.com/CloudyKit/jet/v6`, `*.jet` views with shared
-    `views/layouts/*.jet` layouts, Tailwind v4 + Alpine.js for the same modern
-    UI as the templ skeleton) |
-    `go` (built-in `html/template`, `*.page.template` views with a shared
-    `views/layouts/*.layout.template` layout system, Tailwind v4 + Alpine.js
-    for the same modern UI as the templ skeleton). `regius make auth` and
-    `regius make handler` also accept `--renderer`, falling back to the
-    `RENDERER` env var then `templ`.
-  - `-v`, `--verbose`: stream `go get` / `go mod tidy` output live instead of
-    capturing it (the captured output is shown only on failure by default).
-
-```sh
-./regius new myapp --db postgres -v
-./regius new jetapp --renderer jet
-./regius new goapp --renderer go
-```
-
-- Show help commands:
-
-```sh
-./regius help
-```
-
-- Run a migration:
-
-```sh
-./regius migration
-```
-
-- Create a migration:
-
-```sh
-./regius make migration create_users_table
-```
-
-- Create a seed file and run it:
-
-```sh
-./regius make seed default_users
-./regius db:seed
-```
-
-- Check current migration version:
-
-```sh
-./regius migrate version
-```
-
-- Create a model:
-
-```sh
-./regius make model User
-```
-
-- Create a GORM model:
-
-```sh
-./regius make gorm-model User
-```
-
-- Put the server in maintenance mode:
-
-```sh
-./regius down
-```
-
-- Bring the server back from maintenance mode:
-
-```sh
-./regius up
-```
-
-For more details about usage and commands, refer to the CLI help:
-
-```sh
-./regius help
-```
-
-## 🎨 Rendering Templates
+<a name="rendering-templates"></a>
+<details>
+    <summary>Rendering Templates</summary>
 
 Regius provides a unified `render.Template` interface for all three template engines: **jet**, **go**, and **templ**. The scaffolded app defaults to **templ** (`regius new --renderer templ`; switch with `--renderer jet|go`). Every handler calls the same `Page()` method — the only difference is how the `Template` is created.
 
 > **templ build step:** templ views (`*.templ`) are compiled to Go (`*_templ.go`) by `templ generate`. The scaffolded `Makefile` runs `templ generate` as part of `build`, and `regius new`/`regius make auth`/`regius make handler` invoke it automatically for templ apps.
 
-### Jet
+<details>
+    <summary>Jet</summary>
 
 ```go
 h.App.Render.Page(w, r, h.App.Render.Jet("home", nil), nil)
 ```
 
-### Go
+</details>
+
+<details>
+    <summary>Go</summary>
 
 ```go
 // Single-file template (no layout)
@@ -1192,7 +1477,10 @@ layout)` must define a `{{define "content"}}...{{end}}` block; the layout in
 `{{template "content" .}}`. Component partials in `views/components/*.page.template`
 are automatically available to every Go template.
 
-### Templ
+</details>
+
+<details>
+    <summary>Templ</summary>
 
 Templ components implement `render.Template` natively — pass them directly with no wrapper and no registration:
 
@@ -1200,11 +1488,13 @@ Templ components implement `render.Template` natively — pass them directly wit
 h.App.Render.Page(w, r, views.Home(), &render.TemplateData{Data: data})
 ```
 
+</details>
+
 ### Mixing Engines
 
 Each handler independently chooses its engine, so you can mix jet, go, and templ in the same application without any global `RENDERER` setting.
 
-## 🎨 Tailwind CSS
+### Tailwind CSS
 
 The `templ`, `go`, and `jet` renderers ship a pre-built stylesheet at
 `public/css/output.css` so generated apps look correct immediately. The source
@@ -1227,7 +1517,9 @@ Scanning by renderer:
 - `jet`: `*.jet`, `*.js`
 - `templ`: `*.templ`, `*.js`, and the `templui` component library
 
-## 🤝 Contributing
+</details>
+
+## Contributing
 
 Contributions are welcome! Please follow the GitHub flow for contributions:
 
@@ -1237,7 +1529,7 @@ Contributions are welcome! Please follow the GitHub flow for contributions:
 4. Push to the branch (`git push origin feature-new-feature`).
 5. Open a Pull Request.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
 
