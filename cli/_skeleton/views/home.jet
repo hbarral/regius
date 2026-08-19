@@ -17,6 +17,7 @@
     </div>
   </div>
 </div>
+{{if .Data.SSEDemo}}
 <div class="card mt-4">
   <div class="card-body">
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -28,7 +29,10 @@
   </div>
 </div>
 {{end}}
+{{end}}
 
 {{block js()}}
+{{if .Data.SSEDemo}}
 <script src="/public/js/sse-demo.js"></script>
+{{end}}
 {{end}}

@@ -52,7 +52,7 @@ func (a *application) listenForShutdown() {
 
 func (a *application) startSSEHeartbeat() {
 	if v := os.Getenv("SSE_DEMO_HEARTBEAT"); v != "" {
-		if disabled, err := strconv.ParseBool(v); err == nil && disabled {
+		if enabled, err := strconv.ParseBool(v); err == nil && !enabled {
 			return
 		}
 	}

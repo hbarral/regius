@@ -252,3 +252,4 @@ RESET_PASSWORD_MAILER_FROM="no-reply@${APP_NAME}.com"
 # support email
 SUPPORT_EMAIL="support@${APP_NAME}.com"
 
+SSE_DEMO_HEARTBEAT=false

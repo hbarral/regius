@@ -950,7 +950,7 @@ config := regius.SSEEvent{
   **Environment Variables:**
 
 ```properties
-# Disable the demo heartbeat in generated apps (enabled by default)
+# Disable the demo heartbeat in generated apps (disabled by default)
 SSE_DEMO_HEARTBEAT=false
 ```
 
