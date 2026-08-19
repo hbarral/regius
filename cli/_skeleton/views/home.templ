@@ -1,0 +1,51 @@
+package views
+
+import (
+	"github.com/hbarral/regius/i18n"
+	"github.com/templui/templui/components/separator"
+	"regius-app/views/layouts"
+	"github.com/templui/templui/components/button"
+)
+
+templ Home() {
+	@layouts.BaseLayout() {
+		<div class="flex h-full items-center justify-center">
+			<div class="flex flex-col items-center gap-6 text-center [&>small]:text-primary">
+				<img src="/public/images/regius.png" alt={ i18n.T(ctx, "app.name") } class="h-auto w-24 select-none"/>
+				<h1 class="text-4xl font-bold tracking-tight select-none">
+					{ i18n.T(ctx, "home.title") }
+				</h1>
+				@separator.Separator(separator.Props{
+					Class: "w-48",
+				})
+				<small class="text-muted-foreground select-none">
+					{ i18n.T(ctx, "home.subtitle") }
+				</small>
+			</div>
+		</div>
+		<div class="container mx-auto px-4 py-8">
+			<div class="mx-auto max-w-md rounded-lg border bg-white p-6 shadow text-gray-900">
+				<div class="mb-4 flex items-center justify-between">
+					<h2 class="text-lg font-semibold">
+						Live Demo
+					</h2>
+					<span id="sse-status" class="rounded-full bg-gray-200 px-3 py-1 text-sm font-medium text-gray-800">
+						connecting
+					</span>
+				</div>
+				@button.Button(button.Props{
+					ID:      "sse-ping",
+					Variant: button.VariantGhost,
+					Class:   "text-sm font-medium transition-colors duration-300 select-none",
+				}) {
+					{ i18n.T(ctx, "home.send_ping") }
+				}
+				<ul
+					id="sse-log"
+					class="h-40 overflow-y-auto rounded border bg-gray-50 p-3 text-sm space-y-1"
+				></ul>
+			</div>
+		</div>
+		<script src="/public/js/sse-demo.js"></script>
+	}
+}

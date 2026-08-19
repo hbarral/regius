@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Regius: {{yield browserTitle()}}</title>
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/public/ico/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/public/ico/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/public/ico/favicon-16x16.png">
+  <link rel="manifest" href="/public/ico/site.webmanifest">
+  <link rel="mask-icon" href="/public/ico/safari-pinned-tab.svg" color="#5bbad5">
+  <link rel="shortcut icon" href="/public/ico/favicon.ico">
+  <meta name="msapplication-TileColor" content="#da532c">
+  <meta name="msapplication-config" content="/public/ico/browserconfig.xml">
+  <meta name="theme-color" content="#ffffff">
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/css/bootstrap.min.css"
+    integrity="sha256-sAcc18zvMnaJZrNT4v8J0T4HqzEUiUTlVFgDIywjQek=" crossorigin="anonymous">
+  <meta name="csrf-token" content="{{.CSRFToken}}">
+
+  {{yield css()}}
+
+</head>
+
+<body>
+
+  <div class="container">
+    <div class="row">
+      <div class="col-md-8 offset-md-2">
+
+        {{yield pageContent()}}
+
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/js/bootstrap.bundle.min.js"
+    integrity="sha256-5aErhPlUPVujIxg3wvJGdWNAWqZqWCtvxACYX4XfSa0=" crossorigin="anonymous">
+    </script>
+
+  {{yield js()}}
+
+</body>
+
+</html>

@@ -1,0 +1,254 @@
+# Application name, without spaces
+APP_NAME=${APP_NAME}
+APP_URL="http://localhost:4000"
+
+# False for production, true for development
+DEBUG=true
+
+# The port should we listen on
+PORT=4000
+RPC_PORT=4001
+
+# Server name, e.g, www.example.com
+SERVER_NAME=localhost
+
+# use https?
+SECURE=false
+
+# security headers (helmet equivalent). Enabled by default.
+# HSTS (Strict-Transport-Security) is only emitted when SECURE=true.
+SECURITY_HEADERS_ENABLED=true
+CONTENT_SECURITY_POLICY=default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; frame-ancestors 'self'
+HSTS_MAX_AGE=31536000
+HSTS_INCLUDE_SUBDOMAINS=true
+HSTS_PRELOAD=false
+REFERRER_POLICY=strict-origin-when-cross-origin
+X_FRAME_OPTIONS=SAMEORIGIN
+
+# api key authentication (opt-in). Protects API routes (e.g. /api/*).
+# Add valid keys as a comma-separated list. Query param is off by default.
+API_KEY_AUTH_ENABLED=false
+API_KEYS=
+API_KEY_HEADER=Authorization
+API_KEY_SCHEME=Bearer
+API_KEY_ALT_HEADER=X-API-Key
+API_KEY_QUERY_PARAM=
+API_KEY_REALM=api
+
+# request id tracing (enabled by default). Stamps every request with a
+# correlation id: reuses an incoming id from the request header when present
+# (cross-service correlation), otherwise generates one. Echoed on the response.
+REQUEST_ID_ENABLED=true
+REQUEST_ID_HEADER=X-Request-ID
+REQUEST_ID_RESPONSE_HEADER=X-Request-ID
+REQUEST_ID_FORMAT=uuid
+
+# request sanitization for XSS prevention (defense-in-depth, on by default).
+# Sanitizes query params, form-encoded values, and selected request headers
+# using bluemonday. Strict strips all HTML; ugc allows a safe subset.
+# JSON request bodies and /api/* routes are exempt by default.
+REQUEST_SANITIZATION_ENABLED=true
+REQUEST_SANITIZATION_POLICY=strict
+REQUEST_SANITIZATION_QUERY=true
+REQUEST_SANITIZATION_FORM=true
+REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
+REQUEST_SANITIZATION_EXEMPT=/api/.*
+
+# ip whitelist/blacklist (opt-in). Allow/deny lists of IPs or CIDR ranges
+# (e.g. 10.0.0.0/8, 192.168.1.5, ::1/128). Deny always wins over allow.
+# When allow is set, only listed networks may access the app.
+IP_FILTER_ENABLED=false
+IP_FILTER_ALLOW=
+IP_FILTER_DENY=
+IP_FILTER_TRUST_PROXY=false
+IP_FILTER_STATUS_CODE=403
+IP_FILTER_MESSAGE=
+
+# database configuration
+# supported types: postgres, postgresql, mysql, mariadb, sqlite, sqlite3
+# sqlite is the default; it stores a local file at <root>/data/<DATABASE_NAME>.db
+# and needs no host/port/user/password.
+DATABASE_TYPE=sqlite
+DATABASE_HOST=
+DATABASE_PORT=
+DATABASE_USER=
+DATABASE_PASS=
+DATABASE_NAME=regius
+# DATABASE_SSL_MODE (enable | disable)
+DATABASE_SSL_MODE=
+# DATABASE_MAX_OPEN_CONNS=25
+# DATABASE_MAX_IDLE_CONNS=25
+# DATABASE_CONN_MAX_LIFETIME=15m
+# DATABASE_QUERY_LOGGING=true
+
+# read replica configuration (optional). When unset, reads use the main pool.
+# DATABASE_READ_DSN=postgres://reader:secret@read-host/appdb?sslmode=disable
+# DATABASE_READ_HOST=
+# DATABASE_READ_PORT=
+# DATABASE_READ_USER=
+# DATABASE_READ_PASS=
+# DATABASE_READ_NAME=
+# DATABASE_READ_SSL_MODE=
+
+# minio settings
+MINIO_ENDPOINT=
+MINIO_KEY=
+MINIO_SECRET=
+MINIO_USESSL=
+MINIO_REGION=
+MINIO_BUCKET=
+
+# sftp settings
+SFTP_HOST=
+SFTP_PORT=
+SFTP_USER=
+SFTP_PASS=
+
+# webdav settings
+WEBDAV_HOST=
+WEBDAV_PORT=
+WEBDAV_USER=
+WEBDAV_PASS=
+WEBDAV_USESSL=
+
+# s3 settings
+S3_KEY=
+S3_SECRET=
+S3_REGION=
+S3_BUCKET=
+S3_ENDPOINT=
+
+# redis settings
+REDIS_HOST=
+REDIS_PASSWORD=
+REDIS_PREFIX=${APP_NAME}
+
+# cache config redis or badger
+CACHE=
+
+# cookie settings
+COOKIE_NAME=${APP_NAME}
+COOKIE_LIFETIME=1440
+COOKIE_PERSISTS=true
+COOKIE_SECURE=false
+COOKIE_DOMAIN=localhost
+
+# session store: cookie, mysql, mariadb, postgres or redis
+SESSION_TYPE=cookie
+
+# mail settings (SMTP_ENCRYPTION=tls | ssl | none)
+SMTP_HOST=localhost
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_PORT=1025
+SMTP_ENCRYPTION=none
+MAIL_DOMAIN=${APP_NAME}.com
+FROM_NAME=${APP_NAME}
+FROM_ADDRESS=no-reply@${APP_NAME}.com
+
+# mail settings for api services
+MAILER_API=
+MAILER_KEY=
+MAILER_URL=
+
+# internationalization (i18n). Enabled by default.
+# DEFAULT_LOCALE is used when no locale cookie or Accept-Language header is present.
+# SUPPORTED_LOCALES is a comma-separated list of available languages.
+I18N_ENABLED=true
+DEFAULT_LOCALE=en
+SUPPORTED_LOCALES=en,es
+LOCALE_COOKIE_NAME=locale
+
+# Template engine (used by CLI scaffolding only; at runtime each handler
+# picks its engine via render.Jet(), render.Go(), or a templ component).
+# templ is the default. Options: templ | jet | go
+RENDERER=templ
+
+# encryption key (32 characthers long)
+KEY=${KEY}
+
+# password hashing (algorithm: bcrypt | scrypt | argon2)
+HASH_ALGORITHM=bcrypt
+# bcrypt cost (4-31, default 12)
+HASH_COST=12
+# scrypt parameters
+HASH_SCRYPT_N=32768
+HASH_SCRYPT_R=8
+HASH_SCRYPT_P=1
+# argon2id parameters
+HASH_ARGON2_MEMORY=65536
+HASH_ARGON2_ITERATIONS=3
+HASH_ARGON2_PARALLELISM=2
+
+# types of files allowed to upload
+ALLOWED_FILETYPES="image/png,image/jpeg,image/gif,application/pdf"
+# 5MB
+MAX_FILESIZE=5242880
+
+# CORS configuration (enabled by default)
+CORS_ENABLED=true
+CORS_ALLOWED_ORIGINS="*"
+CORS_ALLOWED_METHODS="GET,POST,PUT,DELETE,OPTIONS,PATCH,HEAD"
+CORS_ALLOWED_HEADERS="Accept,Authorization,Content-Type,X-CSRF-Token"
+CORS_EXPOSED_HEADERS=""
+CORS_ALLOW_CREDENTIALS=true
+CORS_MAX_AGE=300
+
+# security headers (helmet equivalent, disabled by default).
+# HSTS is only emitted when SECURE=true.
+SECURITY_HEADERS_ENABLED=false
+CONTENT_SECURITY_POLICY=default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; frame-ancestors 'self'
+HSTS_MAX_AGE=31536000
+HSTS_INCLUDE_SUBDOMAINS=true
+HSTS_PRELOAD=false
+REFERRER_POLICY=strict-origin-when-cross-origin
+X_FRAME_OPTIONS=SAMEORIGIN
+
+# request id tracing (enabled by default)
+REQUEST_ID_ENABLED=true
+REQUEST_ID_HEADER=X-Request-ID
+REQUEST_ID_RESPONSE_HEADER=X-Request-ID
+REQUEST_ID_FORMAT=uuid
+
+# request sanitization for XSS prevention (on by default)
+REQUEST_SANITIZATION_ENABLED=true
+REQUEST_SANITIZATION_POLICY=strict
+REQUEST_SANITIZATION_QUERY=true
+REQUEST_SANITIZATION_FORM=true
+REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
+REQUEST_SANITIZATION_EXEMPT=/api/.*
+
+# ip whitelist/blacklist (opt-in). Deny always wins over allow.
+IP_FILTER_ENABLED=false
+IP_FILTER_ALLOW=
+IP_FILTER_DENY=
+IP_FILTER_TRUST_PROXY=false
+IP_FILTER_STATUS_CODE=403
+IP_FILTER_MESSAGE=
+
+
+# github oauth
+GITHUB_KEY=
+GITHUB_SECRET=
+GITHUB_CALLBACK=
+
+# google oauth
+GOOGLE_KEY=
+GOOGLE_SECRET=
+GOOGLE_CALLBACK=
+
+# docker compose
+POSTGRES_DB=
+POSTGRES_USER=
+POSTGRES_PASSWORD=
+
+MYSQL_DATABASE=
+MYSQL_USER=
+MYSQL_PASSWORD=
+MYSQL_ROOT_PASSWORD=
+
+# reset password settings
+RESET_PASSWORD_MAILER_FROM="no-reply@${APP_NAME}.com"
+# support email
+SUPPORT_EMAIL="support@${APP_NAME}.com"
+

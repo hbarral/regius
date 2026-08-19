@@ -11,14 +11,4 @@ test.db
 *.db
 # stray build outputs at repo root (real builds go to dist/ via -o)
 /regius
-/cli
-# embedded skeleton runtime artifacts (the skeleton itself is tracked, these are not)
-cmd/cli/_skeleton/vendor/
-cmd/cli/_skeleton/.env
-cmd/cli/_skeleton/tmp/
-cmd/cli/_skeleton/.db-data/
-# embedded skeleton runtime artifacts (the skeleton itself is tracked, these are not)
-cmd/cli/_skeleton/vendor/
-cmd/cli/_skeleton/.env
-cmd/cli/_skeleton/tmp/
-cmd/cli/_skeleton/.db-data/
+ignored/
