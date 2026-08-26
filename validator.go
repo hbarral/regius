@@ -1,11 +1,16 @@
 package regius
 
 import (
+	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/asaskevich/govalidator"
 )
@@ -83,5 +88,109 @@ func (v *Validation) IsDateISO(field, value string) {
 func (v *Validation) NoSpaces(field, value string) {
 	if govalidator.HasWhitespace(value) {
 		v.AddError(field, "No spaces allowed")
+	}
+}
+
+var (
+	uuidRegex  = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	phoneRegex = regexp.MustCompile(`^\+?[0-9]{7,15}$`)
+)
+
+func (v *Validation) IsURL(field, value string) {
+	u, err := url.Parse(value)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		v.AddError(field, "This field must be a valid URL")
+	}
+}
+
+func (v *Validation) IsUUID(field, value string) {
+	if !uuidRegex.MatchString(value) {
+		v.AddError(field, "This field must be a valid UUID")
+	}
+}
+
+func (v *Validation) IsPhone(field, value string) {
+	if !phoneRegex.MatchString(value) {
+		v.AddError(field, "This field must be a valid phone number")
+	}
+}
+
+func (v *Validation) IsCreditCard(field, value string) {
+	if !govalidator.IsCreditCard(value) {
+		v.AddError(field, "This field must be a valid credit card number")
+	}
+}
+
+func (v *Validation) IsAlpha(field, value string) {
+	if !govalidator.IsAlpha(value) {
+		v.AddError(field, "This field must contain only letters")
+	}
+}
+
+func (v *Validation) IsAlphanumeric(field, value string) {
+	if !govalidator.IsAlphanumeric(value) {
+		v.AddError(field, "This field must contain only letters and numbers")
+	}
+}
+
+func (v *Validation) IsNumeric(field, value string) {
+	if !govalidator.IsNumeric(value) {
+		v.AddError(field, "This field must contain only digits")
+	}
+}
+
+func (v *Validation) IsMinLength(field, value string, min int) {
+	if utf8.RuneCountInString(value) < min {
+		v.AddError(field, fmt.Sprintf("This field must be at least %d characters long", min))
+	}
+}
+
+func (v *Validation) IsMaxLength(field, value string, max int) {
+	if utf8.RuneCountInString(value) > max {
+		v.AddError(field, fmt.Sprintf("This field must be at most %d characters long", max))
+	}
+}
+
+func (v *Validation) IsLength(field, value string, n int) {
+	if utf8.RuneCountInString(value) != n {
+		v.AddError(field, fmt.Sprintf("This field must be exactly %d characters long", n))
+	}
+}
+
+func (v *Validation) IsRange(field, value string, min, max int) {
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		v.AddError(field, "This field must be an integer")
+		return
+	}
+	if n < min || n > max {
+		v.AddError(field, fmt.Sprintf("This field must be between %d and %d", min, max))
+	}
+}
+
+func (v *Validation) IsJSON(field, value string) {
+	if !json.Valid([]byte(value)) {
+		v.AddError(field, "This field must be valid JSON")
+	}
+}
+
+func (v *Validation) IsIP(field, value string) {
+	if net.ParseIP(value) == nil {
+		v.AddError(field, "This field must be a valid IP address")
+	}
+}
+
+func (v *Validation) IsBoolean(field, value string) {
+	switch strings.ToLower(value) {
+	case "true", "false", "1", "0", "yes", "no":
+		return
+	default:
+		v.AddError(field, "This field must be a boolean value")
+	}
+}
+
+func (v *Validation) MatchesPattern(field, value string, re *regexp.Regexp) {
+	if !re.MatchString(value) {
+		v.AddError(field, "This field has an invalid format")
 	}
 }
