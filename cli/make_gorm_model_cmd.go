@@ -10,10 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	makeCmd.AddCommand(makeGormModelCmd)
-}
-
 var makeGormModelCmd = &cobra.Command{
 	Use:   "gorm-model [name]",
 	Short: "Create a new GORM model",
