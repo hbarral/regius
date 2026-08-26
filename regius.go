@@ -57,6 +57,7 @@ type Regius struct {
 	Server        Server
 	I18n          I18nConfig
 	SSE           *SSEBroker
+	Scalar        ScalarConfig
 	FileSystems   map[string]interface{}
 	S3            filesystems.FS
 	SFTP          filesystems.FS
@@ -88,6 +89,7 @@ type config struct {
 	ipFilter         IPFilterConfig
 	i18n             I18nConfig
 	hash             hashConfig
+	scalar           ScalarConfig
 }
 
 type uploadConfig struct {
@@ -291,6 +293,32 @@ func (r *Regius) New(rootPath string) error {
 		localeCookieName = "locale"
 	}
 
+	scalarEnabled := false
+	if os.Getenv("SCALAR_ENABLED") != "" {
+		scalarEnabled, _ = strconv.ParseBool(os.Getenv("SCALAR_ENABLED"))
+	}
+	scalarDocsPath := os.Getenv("SCALAR_DOCS_PATH")
+	if scalarDocsPath == "" {
+		scalarDocsPath = "/docs"
+	}
+	scalarSpecPath := os.Getenv("SCALAR_SPEC_PATH")
+	if scalarSpecPath == "" {
+		scalarSpecPath = "/openapi.json"
+	}
+	scalarTitle := os.Getenv("SCALAR_TITLE")
+	if scalarTitle == "" {
+		scalarTitle = "API Reference"
+	}
+	scalarCDNURL := os.Getenv("SCALAR_CDN_URL")
+	if scalarCDNURL == "" {
+		scalarCDNURL = "https://cdn.jsdelivr.net/npm/@scalar/api-reference"
+	}
+	scalarTheme := os.Getenv("SCALAR_THEME")
+	if scalarTheme == "" {
+		scalarTheme = "default"
+	}
+	scalarShowClients := os.Getenv("SCALAR_SHOW_CLIENTS")
+
 	r.config = config{
 		port: os.Getenv("PORT"),
 		cookie: cookieConfig{
@@ -375,10 +403,21 @@ func (r *Regius) New(rootPath string) error {
 			CookieName:       localeCookieName,
 		},
 		hash: r.createHashConfig(),
+		scalar: ScalarConfig{
+			Enabled:     scalarEnabled,
+			DocsPath:    scalarDocsPath,
+			SpecPath:    scalarSpecPath,
+			Title:       scalarTitle,
+			CDNURL:      scalarCDNURL,
+			SpecFile:    os.Getenv("SCALAR_SPEC_FILE"),
+			Theme:       scalarTheme,
+			ShowClients: scalarShowClients,
+		},
 	}
 
 	r.I18n = r.config.i18n
 	r.SSE = NewSSEBroker()
+	r.Scalar = r.config.scalar
 
 	r.Routes = r.routes().(*chi.Mux)
 

@@ -269,6 +269,17 @@ The scaffolded app defaults to **templ** (`github.com/a-h/templ`) with the [temp
 - Request sanitization middleware (`r.RequestSanitizer`) — XSS prevention via [bluemonday](https://github.com/microcosm-cc/bluemonday); sanitizes query params, form values, and a header allowlist; opt-in via `REQUEST_SANITIZATION_ENABLED` (enabled in scaffolded apps); JSON bodies and `/api/*` exempt by default; wired globally in `routes.go`
 - IP whitelist/blacklist middleware (`r.IPFilter`) — allow/deny lists of IPs & CIDR ranges (IPv4/IPv6); deny-wins; pluggable `IPChecker` (e.g. `CacheIPChecker` for runtime fail2ban-style blocking); opt-in via `IP_FILTER_ENABLED`; wired globally in `routes.go` (after `RealIP`)
 - Internationalization middleware (`r.Language`) — detects locale from the `LOCALE_COOKIE_NAME` cookie, then the `Accept-Language` header, then `DEFAULT_LOCALE`; enabled by default (`I18N_ENABLED=true`); wired globally in `routes.go`; the resolved locale is available via `i18n.Locale(ctx)` and `i18n.T(ctx, "key")`
+- Scalar API Reference (`r.Scalar`) — serves an interactive API reference UI from [Scalar](https://github.com/scalar/scalar) backed by an OpenAPI 3.1 document; opt-in via `SCALAR_ENABLED`; registers two routes: the docs UI (`SCALAR_DOCS_PATH`, default `/docs`) and the spec endpoint (`SCALAR_SPEC_PATH`, default `/openapi.json`); hybrid spec source: build programmatically via `api.Document` (set on `r.Scalar.Spec` or via `SetAPIDocument()`) or serve a static file (`SCALAR_SPEC_FILE`); configurable CDN URL (`SCALAR_CDN_URL`) for air-gapped use; wired in `routes.go` when enabled
+
+### API Support
+
+#### Scalar API Reference
+- `r.Scalar` (type `ScalarConfig`) — serves the [Scalar](https://github.com/scalar/scalar) API reference UI from an OpenAPI 3.1 document; opt-in via `SCALAR_ENABLED`; wired in `routes.go` when enabled
+- The `api/` subpackage provides: `api.Document` (OpenAPI 3.1 builder with fluent API), `api.Schema` (JSON Schema helpers + Go struct reflection), `api.Response` (standardized `{data, error, meta}` envelope), `api.OffsetPagination` / `api.CursorPagination` (query-param parsing + metadata generation)
+- Response helpers on `Regius`: `WriteAPIResponse(w, status, data, meta...)` and `WriteAPIError(w, status, code, message, details...)` wrap the envelope and call `WriteJSON`
+- CLI: `regius make api <name>` scaffolds a CRUD handler (`handlers/api_<name>.go`) with pagination, envelope, and routes-api.go mounting; also generates `handlers/api_<name>_doc.go` with an OpenAPI document builder (`<Name>APIDocument`) and auto-wires `a.App.Scalar.Spec` in `routes-api.go` (first handler sets the spec, subsequent handlers merge via `Spec.MergePaths`)
+- `SCALAR_SHOW_CLIENTS` controls which client library code examples are shown in the Scalar UI; accepts a raw JS expression: `true` (show all), `["curl","fetch"]` (show only those), or `{"js":true,"shell":["curl"]}` (per-language); empty = show all (default); converted to Scalar's `hiddenClients` at runtime
+- Configured via env vars in `regius.go` `New()`: `SCALAR_ENABLED`, `SCALAR_DOCS_PATH`, `SCALAR_SPEC_PATH`, `SCALAR_TITLE`, `SCALAR_CDN_URL`, `SCALAR_SPEC_FILE`, `SCALAR_THEME`, `SCALAR_SHOW_CLIENTS`
 
 ### Internationalization
 
@@ -372,6 +383,7 @@ The scaffolded app defaults to **templ** (`github.com/a-h/templ`) with the [temp
 ./regius make gorm-model <name>  # Create GORM model
 ./regius make session            # Create session table
 ./regius make mail <name>        # Create mail templates
+./regius make api <name>         # Create CRUD API handler with pagination + envelope
 ./regius make locale <code>      # Create a new translation locale (e.g. fr)
 ./regius down                    # Maintenance mode on
 ./regius up                      # Maintenance mode off

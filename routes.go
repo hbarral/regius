@@ -41,6 +41,10 @@ func (r *Regius) routes() http.Handler {
 		mux.Get("/sse/stream", r.SSE.Handler())
 	}
 
+	if r.Scalar.Enabled {
+		r.registerScalarRoutes(mux)
+	}
+
 	mux.Mount("/", appRoutes)
 
 	r.handler = mux

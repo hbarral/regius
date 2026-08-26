@@ -1,0 +1,90 @@
+package handlers
+
+import (
+	"github.com/hbarral/regius/api"
+)
+
+// $HANDLER_NAME is a placeholder schema for the resource.
+// Replace with data.$HANDLER_NAME{} (and import "${APP_NAME}/data") when you create the model.
+type $HANDLER_NAME struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// $HANDLER_NAMEInput represents the payload for create/update operations.
+type $HANDLER_NAMEInput struct {
+	Name string `json:"name"`
+}
+
+func (h *Handlers) $HANDLER_NAMEAPIDocument(serverURL string) *api.Document {
+	doc := api.NewDocument("${APP_NAME} Management API", "1.0.0").
+		Description("A simple API to manage ${APP_NAME} $resource_name resources.").
+		License("MIT", "https://opensource.org/licenses/MIT").
+		Server(serverURL, "API server")
+
+	resourceSchema := api.SchemaFromStruct($HANDLER_NAME{})
+	inputSchema := api.SchemaFromStruct($HANDLER_NAMEInput{})
+
+	doc.AddSchema("$HANDLER_NAME", resourceSchema)
+	doc.AddSchema("$HANDLER_NAMEInput", inputSchema)
+
+	// --- GET / (list) ---
+	listOp := api.NewOperation("$HANDLER_NAME", "List $resource_name resources").
+		WithDescription("Returns a paginated list of $resource_name resources.").
+		WithOperationID("list$HANDLER_NAME").
+		Param("page", "query", "Page number (1-based).", false, api.IntSchema()).
+		Param("per_page", "query", "Items per page (max 100).", false, api.IntSchema()).
+		JSONResponse(200, "A paginated list of $resource_name resources", api.ArraySchema(api.RefSchema("$HANDLER_NAME"))).
+		PlainResponse(500, "Internal server error")
+
+	// --- GET /{id} (get) ---
+	getOp := api.NewOperation("$HANDLER_NAME", "Get a $resource_name resource").
+		WithDescription("Returns a single $resource_name resource by ID.").
+		WithOperationID("get$HANDLER_NAME").
+		Param("id", "path", "The $resource_name resource ID.", true, api.StringSchema()).
+		JSONResponse(200, "The requested $resource_name resource", api.RefSchema("$HANDLER_NAME")).
+		PlainResponse(404, "$resource_name not found").
+		PlainResponse(500, "Internal server error")
+
+	// --- POST / (create) ---
+	createOp := api.NewOperation("$HANDLER_NAME", "Create a $resource_name resource").
+		WithDescription("Creates a new $resource_name resource from the submitted JSON payload.").
+		WithOperationID("create$HANDLER_NAME").
+		JSONBody("$resource_name data to create", true, api.RefSchema("$HANDLER_NAMEInput")).
+		JSONResponse(201, "The created $resource_name resource", api.RefSchema("$HANDLER_NAME")).
+		PlainResponse(400, "Invalid request body").
+		PlainResponse(500, "Failed to persist the new $resource_name")
+
+	// --- PUT /{id} (update) ---
+	updateOp := api.NewOperation("$HANDLER_NAME", "Update a $resource_name resource").
+		WithDescription("Updates an existing $resource_name resource by ID from the submitted JSON payload.").
+		WithOperationID("update$HANDLER_NAME").
+		Param("id", "path", "The $resource_name resource ID.", true, api.StringSchema()).
+		JSONBody("$resource_name data to update", true, api.RefSchema("$HANDLER_NAMEInput")).
+		JSONResponse(200, "The updated $resource_name resource", api.RefSchema("$HANDLER_NAME")).
+		PlainResponse(400, "Invalid request body").
+		PlainResponse(404, "$resource_name not found").
+		PlainResponse(500, "Failed to update the $resource_name")
+
+	// --- DELETE /{id} (delete) ---
+	deleteOp := api.NewOperation("$HANDLER_NAME", "Delete a $resource_name resource").
+		WithDescription("Deletes a $resource_name resource by ID.").
+		WithOperationID("delete$HANDLER_NAME").
+		Param("id", "path", "The $resource_name resource ID.", true, api.StringSchema()).
+		PlainResponse(204, "$resource_name deleted successfully").
+		PlainResponse(404, "$resource_name not found").
+		PlainResponse(500, "Failed to delete the $resource_name")
+
+	doc.Path("/api/$resource_name", api.NewPathItem().
+		WithGet(listOp).
+		WithPost(createOp),
+	)
+
+	doc.Path("/api/$resource_name/{id}", api.NewPathItem().
+		WithGet(getOp).
+		WithPut(updateOp).
+		WithDelete(deleteOp),
+	)
+
+	return doc
+}

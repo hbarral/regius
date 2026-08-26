@@ -253,3 +253,13 @@ RESET_PASSWORD_MAILER_FROM="no-reply@${APP_NAME}.com"
 SUPPORT_EMAIL="support@${APP_NAME}.com"
 
 SSE_DEMO_HEARTBEAT=false
+
+# Scalar API Reference (opt-in)
+SCALAR_ENABLED=false
+#SCALAR_DOCS_PATH=/docs
+#SCALAR_SPEC_PATH=/openapi.json
+#SCALAR_TITLE=API Reference
+#SCALAR_CDN_URL=https://cdn.jsdelivr.net/npm/@scalar/api-reference
+#SCALAR_SPEC_FILE=
+#SCALAR_THEME=default
+#SCALAR_SHOW_CLIENTS=["curl","fetch"]

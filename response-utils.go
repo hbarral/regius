@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+
+	"github.com/hbarral/regius/api"
 )
 
 func (e *Regius) ReadJSON(w http.ResponseWriter, r *http.Request, data interface{}) error {
@@ -100,4 +102,20 @@ func (c *Regius) ErrorForbidden(w http.ResponseWriter, r *http.Request) {
 
 func (r *Regius) ErrorStatus(w http.ResponseWriter, status int) {
 	http.Error(w, http.StatusText(status), status)
+}
+
+func (r *Regius) WriteAPIResponse(w http.ResponseWriter, status int, data interface{}, meta ...*api.Meta) error {
+	resp := api.NewResponse(data)
+	if len(meta) > 0 && meta[0] != nil {
+		resp.WithMeta(meta[0])
+	}
+	return r.WriteJSON(w, status, resp)
+}
+
+func (r *Regius) WriteAPIError(w http.ResponseWriter, status int, code, message string, details ...interface{}) error {
+	resp := api.NewErrorResponse(code, message)
+	if len(details) > 0 && details[0] != nil {
+		resp.Error.Details = details[0]
+	}
+	return r.WriteJSON(w, status, resp)
 }

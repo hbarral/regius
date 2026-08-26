@@ -28,6 +28,7 @@ Regius is a CLI application for building web pages, inspired by Laravel but buil
   - [_`Request ID Tracing Middleware`_](#request-id-tracing-middleware)
   - [_`Request Sanitization Middleware`_](#request-sanitization-middleware)
   - [_`IP Whitelist/Blacklist Middleware`_](#ip-whitelistblacklist-middleware)
+  - [_`Scalar API Reference`_](#scalar-api-reference)
   - [_`Internationalization (i18n)`_](#internationalization-i18n)
   - [_`Server-Sent Events (SSE)`_](#server-sent-events-sse)
   - [_`Configuration Management`_](#configuration-management)
@@ -290,6 +291,7 @@ Seed files are plain `.sql` files executed in a single transaction, and each is 
 - `regius make session`: Create session table in database.
 - `regius make key`: Generate 32-character encryption key.
 - `regius make mail <name>`: Create mail templates.
+- `regius make api <name>`: Create a CRUD API handler with pagination + response envelope, mounted in routes-api.go.
 - `regius make locale <code>`: Create a new translation locale file (e.g. `regius make locale fr`).
 
 </details>
@@ -861,6 +863,131 @@ IP_FILTER_DENY=                           # comma-separated IPs/CIDRs to block (
 IP_FILTER_TRUST_PROXY=false               # read X-Forwarded-For/X-Real-IP
 IP_FILTER_STATUS_CODE=403
 IP_FILTER_MESSAGE=
+```
+
+</details>
+
+<a name="scalar-api-reference"></a>
+<details>
+    <summary>Scalar API Reference</summary>
+
+- Serve an interactive API reference UI powered by [Scalar](https://github.com/scalar/scalar) from an OpenAPI 3.1 document.
+
+  - Opt-in via `SCALAR_ENABLED`; when enabled, two routes are registered: the docs UI (`/docs` by default) and the OpenAPI spec endpoint (`/openapi.json` by default)
+  - **Hybrid spec source**: build the OpenAPI document programmatically with the `api.Document` builder, or serve a static `openapi.yaml`/`openapi.json` file from disk (`SCALAR_SPEC_FILE`); when both are set, the static file takes precedence
+  - **Configurable CDN**: the Scalar JS bundle is loaded from jsDelivr by default; set `SCALAR_CDN_URL` to a local URL for air-gapped/offline use
+  - **Client library filtering**: control which code example tabs (curl, fetch, axios, etc.) appear in the docs UI via `SCALAR_SHOW_CLIENTS` (see below)
+  - API response envelope helpers: `WriteAPIResponse` / `WriteAPIError` produce a standardized `{data, error, meta}` JSON envelope
+  - Pagination helpers: offset-based (`api.ParseOffsetPagination`) and cursor-based (`api.ParseCursorPagination`) with metadata generation
+  - Scaffolding: `regius make api <name>` generates a CRUD handler (`handlers/api_<name>.go`) with the response envelope, pagination, and routes-api.go wiring; also generates an OpenAPI document builder (`handlers/api_<name>_doc.go`) and auto-wires `a.App.Scalar.Spec` in `routes-api.go` (first handler sets the spec, subsequent handlers merge via `Spec.MergePaths`)
+
+  **Programmatic spec example:**
+
+```go
+import "github.com/hbarral/regius/api"
+
+doc := api.NewDocument("My API", "1.0.0").
+    Description("A sample API").
+    Server("https://api.example.com", "Production")
+
+doc.Path("/users/{id}", api.NewPathItem().WithGet(
+    api.NewOperation("Users", "Get a user").
+        WithOperationID("getUser").
+        Param("id", "path", "User ID", true, api.IntSchema()).
+        JSONResponse(200, "User found", api.ObjectSchema()).
+        PlainResponse(404, "User not found"),
+))
+
+a.App.Scalar.Spec = doc
+```
+
+  **Static spec example:**
+
+```properties
+SCALAR_ENABLED=true
+SCALAR_SPEC_FILE=./openapi.yaml
+```
+
+  **Client library filtering (`SCALAR_SHOW_CLIENTS`):**
+
+  The Scalar UI generates code examples for many HTTP clients (curl, fetch, axios, Python requests, Go, etc.). Use `SCALAR_SHOW_CLIENTS` to control which are shown. The value is injected as a raw JavaScript expression and converted to Scalar's `hiddenClients` option at runtime.
+
+  | Value | Effect |
+  |-------|--------|
+  | *(empty / commented out)* | Show all clients (default) |
+  | `true` | Show all clients (explicit) |
+  | `["fetch","curl"]` | Show only the listed clients |
+  | `{"js":true,"shell":["curl"]}` | Per-language: show all JS clients + only curl from shell |
+
+  Available client names (by language):
+
+  | Language | Clients |
+  |----------|---------|
+  | C | `libcurl` |
+  | C# | `httpclient`, `restsharp` |
+  | Clojure | `clj_http` |
+  | Dart | `http` |
+  | F# | `httpclient` |
+  | Go | `native` |
+  | HTTP | `http1.1` |
+  | Java | `asynchttp`, `nethttp`, `okhttp`, `unirest` |
+  | JavaScript | `axios`, `fetch`, `jquery`, `ofetch`, `xhr` |
+  | Julia | `http` |
+  | Kotlin | `okhttp` |
+  | Node.js | `axios`, `fetch`, `ofetch`, `undici` |
+  | Objective-C | `nsurlsession` |
+  | OCaml | `cohttp` |
+  | PHP | `curl`, `guzzle`, `laravel` |
+  | PowerShell | `restmethod`, `webrequest` |
+  | Python | `aiohttp`, `httpx_async`, `httpx_sync`, `python3`, `requests` |
+  | R | `httr2` |
+  | Ruby | `native` |
+  | Rust | `reqwest` |
+  | Shell | `curl`, `httpie`, `wget` |
+  | Swift | `nsurlsession` |
+
+  Examples:
+
+```properties
+# Show only curl and fetch
+SCALAR_SHOW_CLIENTS=["curl","fetch"]
+```
+
+```properties
+# Show all JavaScript and Node.js clients, plus curl from shell
+SCALAR_SHOW_CLIENTS={"js":true,"node":true,"shell":["curl"]}
+```
+
+```properties
+# Show all clients (explicit)
+SCALAR_SHOW_CLIENTS=true
+```
+
+  **API response envelope:**
+
+```go
+// Success with pagination
+p := api.ParseOffsetPagination(r, 20, 100)
+// ... fetch items ...
+h.App.WriteAPIResponse(w, http.StatusOK, items, &api.Meta{
+    Pagination: p.Meta(total),
+})
+
+// Error
+h.App.WriteAPIError(w, http.StatusNotFound, "not_found", "user not found")
+```
+
+  **Environment Variables:**
+
+```properties
+SCALAR_ENABLED=false
+#SCALAR_DOCS_PATH=/docs
+#SCALAR_SPEC_PATH=/openapi.json
+#SCALAR_TITLE=API Reference
+#SCALAR_CDN_URL=https://cdn.jsdelivr.net/npm/@scalar/api-reference
+#SCALAR_SPEC_FILE=
+#SCALAR_THEME=default
+#SCALAR_SHOW_CLIENTS={"go":["native"],"java":true,"curl","fetch"}
 ```
 
 </details>

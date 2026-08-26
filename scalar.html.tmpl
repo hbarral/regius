@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>{{.Title}}</title>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+	<div id="app"></div>
+	<script src="{{.CDNURL}}"></script>
+	<script>
+		Scalar.createApiReference('#app', {
+			url: '{{.SpecURL}}',
+			theme: '{{.Theme}}',
+			{{if .ShowClients}}hiddenClients: (function(){
+				var show = {{.ShowClients}};
+				var all = {c:['libcurl'],clojure:['clj_http'],csharp:['httpclient','restsharp'],dart:['http'],fsharp:['httpclient'],go:['native'],http:['http1.1'],java:['asynchttp','nethttp','okhttp','unirest'],js:['axios','fetch','jquery','ofetch','xhr'],julia:['http'],kotlin:['okhttp'],node:['axios','fetch','ofetch','undici'],objc:['nsurlsession'],ocaml:['cohttp'],php:['curl','guzzle','laravel'],powershell:['restmethod','webrequest'],python:['aiohttp','httpx_async','httpx_sync','python3','requests'],r:['httr2'],ruby:['native'],rust:['reqwest'],shell:['curl','httpie','wget'],swift:['nsurlsession']};
+				if (show === true) return [];
+				if (Array.isArray(show)) {
+					var h = {};
+					for (var lang in all) h[lang] = all[lang].filter(function(c){return show.indexOf(c)===-1;});
+					return h;
+				}
+				if (typeof show === 'object') {
+					var h = {};
+					for (var lang in all) {
+						if (!(lang in show) || show[lang] === false) h[lang] = true;
+						else if (show[lang] === true) h[lang] = false;
+						else if (Array.isArray(show[lang])) h[lang] = all[lang].filter(function(c){return show[lang].indexOf(c)===-1;});
+						else h[lang] = true;
+					}
+					return h;
+				}
+				return undefined;
+			})(),
+			{{end}}})
+	</script>
+</body>
+</html>
