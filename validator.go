@@ -15,15 +15,18 @@ import (
 	"github.com/asaskevich/govalidator"
 )
 
+type ValidationFunc func(value string) bool
 type Validation struct {
 	Data   url.Values
 	Errors map[string]string
+	regius *Regius
 }
 
 func (r *Regius) Validator(data url.Values) *Validation {
 	return &Validation{
 		Errors: make(map[string]string),
 		Data:   data,
+		regius: r,
 	}
 }
 
@@ -192,5 +195,69 @@ func (v *Validation) IsBoolean(field, value string) {
 func (v *Validation) MatchesPattern(field, value string, re *regexp.Regexp) {
 	if !re.MatchString(value) {
 		v.AddError(field, "This field has an invalid format")
+	}
+}
+
+var defaultValidationRules = map[string]ValidationFunc{
+	"email":        govalidator.IsEmail,
+	"url":          func(val string) bool { u, err := url.Parse(val); return err == nil && u.Scheme != "" && u.Host != "" },
+	"uuid":         uuidRegex.MatchString,
+	"phone":        phoneRegex.MatchString,
+	"creditcard":   govalidator.IsCreditCard,
+	"alpha":        govalidator.IsAlpha,
+	"alphanumeric": govalidator.IsAlphanumeric,
+	"numeric":      govalidator.IsNumeric,
+	"int":          func(val string) bool { _, err := strconv.Atoi(val); return err == nil },
+	"float":        func(val string) bool { _, err := strconv.ParseFloat(val, 64); return err == nil },
+	"dateiso":      func(val string) bool { _, err := time.Parse("2006-01-02", val); return err == nil },
+	"json":         func(val string) bool { return json.Valid([]byte(val)) },
+	"ip":           func(val string) bool { return net.ParseIP(val) != nil },
+	"boolean": func(val string) bool {
+		switch strings.ToLower(val) {
+		case "true", "false", "1", "0", "yes", "no":
+			return true
+		}
+		return false
+	},
+	"nospaces": func(val string) bool { return !govalidator.HasWhitespace(val) },
+}
+
+func (r *Regius) RegisterValidation(name string, fn ValidationFunc) {
+	if r.validationRules == nil {
+		r.validationRules = make(map[string]ValidationFunc, len(defaultValidationRules))
+		for k, v := range defaultValidationRules {
+			r.validationRules[k] = v
+		}
+	}
+	r.validationRules[name] = fn
+}
+
+func (r *Regius) HasValidation(name string) bool {
+	if r.validationRules != nil {
+		if _, ok := r.validationRules[name]; ok {
+			return true
+		}
+	}
+	_, ok := defaultValidationRules[name]
+	return ok
+}
+
+func (v *Validation) Rule(name, field, value string, message ...string) {
+	var fn ValidationFunc
+	if v.regius != nil && v.regius.validationRules != nil {
+		fn = v.regius.validationRules[name]
+	}
+	if fn == nil {
+		fn = defaultValidationRules[name]
+	}
+	if fn == nil {
+		panic(fmt.Sprintf("regius: unknown validation rule %q", name))
+	}
+	if !fn(value) {
+		msg := fmt.Sprintf("Validation failed for %s", field)
+		if len(message) > 0 {
+			msg = message[0]
+		}
+		v.AddError(field, msg)
 	}
 }

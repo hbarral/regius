@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -733,4 +734,122 @@ func TestValidation_MatchesPattern(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRegius_RegisterValidation(t *testing.T) {
+	r := &Regius{}
+
+	r.RegisterValidation("even", func(val string) bool {
+		n, err := strconv.Atoi(val)
+		return err == nil && n%2 == 0
+	})
+
+	assert.True(t, r.HasValidation("even"))
+	assert.True(t, r.HasValidation("email"))
+	assert.False(t, r.HasValidation("nonexistent"))
+}
+
+func TestValidation_Rule_BuiltIn(t *testing.T) {
+	tests := []struct {
+		name    string
+		rule    string
+		value   string
+		wantErr bool
+	}{
+		{"email valid", "email", "user@example.com", false},
+		{"email invalid", "email", "not-an-email", true},
+		{"uuid valid", "uuid", "550e8400-e29b-41d4-a716-446655440000", false},
+		{"uuid invalid", "uuid", "nope", true},
+		{"url valid", "url", "https://example.com", false},
+		{"url invalid", "url", "not-a-url", true},
+		{"int valid", "int", "42", false},
+		{"int invalid", "int", "abc", true},
+		{"boolean valid", "boolean", "true", false},
+		{"boolean invalid", "boolean", "maybe", true},
+		{"json valid", "json", `{"k":"v"}`, false},
+		{"json invalid", "json", "{bad", true},
+		{"alpha valid", "alpha", "hello", false},
+		{"alpha invalid", "alpha", "hello123", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Regius{}
+			v := r.Validator(url.Values{})
+
+			v.Rule(tt.rule, "field", tt.value)
+
+			if tt.wantErr {
+				assert.Contains(t, v.Errors, "field")
+			} else {
+				assert.NotContains(t, v.Errors, "field")
+			}
+		})
+	}
+}
+
+func TestValidation_Rule_Custom(t *testing.T) {
+	r := &Regius{}
+	r.RegisterValidation("even", func(val string) bool {
+		n, err := strconv.Atoi(val)
+		return err == nil && n%2 == 0
+	})
+
+	t.Run("valid custom rule", func(t *testing.T) {
+		v := r.Validator(url.Values{})
+		v.Rule("even", "num", "42")
+		assert.NotContains(t, v.Errors, "num")
+	})
+
+	t.Run("invalid custom rule", func(t *testing.T) {
+		v := r.Validator(url.Values{})
+		v.Rule("even", "num", "43")
+		assert.Contains(t, v.Errors, "num")
+		assert.Equal(t, "Validation failed for num", v.Errors["num"])
+	})
+}
+
+func TestValidation_Rule_CustomMessage(t *testing.T) {
+	r := &Regius{}
+	v := r.Validator(url.Values{})
+
+	v.Rule("email", "addr", "bad", "Please enter a valid email address")
+
+	assert.Contains(t, v.Errors, "addr")
+	assert.Equal(t, "Please enter a valid email address", v.Errors["addr"])
+}
+
+func TestValidation_Rule_UnknownPanics(t *testing.T) {
+	r := &Regius{}
+	v := r.Validator(url.Values{})
+
+	assert.PanicsWithValue(t, `regius: unknown validation rule "nonexistent"`, func() {
+		v.Rule("nonexistent", "field", "value")
+	})
+}
+
+func TestValidation_Rule_OverridesBuiltIn(t *testing.T) {
+	r := &Regius{}
+	r.RegisterValidation("email", func(val string) bool {
+		return val == "admin@test.com"
+	})
+
+	v := r.Validator(url.Values{})
+	v.Rule("email", "addr", "user@example.com")
+	assert.Contains(t, v.Errors, "addr", "overridden rule should reject non-admin email")
+
+	v2 := r.Validator(url.Values{})
+	v2.Rule("email", "addr", "admin@test.com")
+	assert.NotContains(t, v2.Errors, "addr", "overridden rule should accept admin email")
+}
+
+func TestRegius_HasValidation(t *testing.T) {
+	r := &Regius{}
+
+	assert.True(t, r.HasValidation("email"), "built-in should exist without registration")
+	assert.True(t, r.HasValidation("uuid"), "built-in should exist without registration")
+	assert.False(t, r.HasValidation("custom"), "unregistered should not exist")
+
+	r.RegisterValidation("custom", func(val string) bool { return true })
+	assert.True(t, r.HasValidation("custom"), "registered custom should exist")
 }
