@@ -94,6 +94,20 @@ func BenchmarkValidation_IsURL(b *testing.B) {
 	}
 }
 
+func BenchmarkValidation_ValidateStruct(b *testing.B) {
+	r := &Regius{}
+	type user struct {
+		Name  string `validate:"required,min=2,max=50"`
+		Email string `validate:"required,email"`
+		Age   int    `validate:"min=18,max=120"`
+	}
+	u := user{Name: "Alice", Email: "alice@example.com", Age: 30}
+	v := r.Validator(url.Values{})
+	for i := 0; i < b.N; i++ {
+		v.ValidateStruct(u)
+	}
+}
+
 func BenchmarkSanitize_Strict(b *testing.B) {
 	input := "<p>Hello <script>alert('xss')</script>world</p>"
 	for i := 0; i < b.N; i++ {
