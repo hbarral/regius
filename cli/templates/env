@@ -263,3 +263,10 @@ SCALAR_ENABLED=false
 #SCALAR_SPEC_FILE=
 #SCALAR_THEME=default
 #SCALAR_SHOW_CLIENTS=["curl","fetch"]
+
+# webhook signing secrets. One per endpoint, created by
+# `regius make webhook <name>` (e.g. `regius make webhook stripe-payment
+# --provider stripe` writes WEBHOOK_STRIPE_PAYMENT_SECRET below).
+# Never commit real secrets; rotate by appending the new secret in the
+# handler's preset call (any-match semantics) and removing the old one later.
+#WEBHOOK_<NAME>_SECRET=

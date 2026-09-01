@@ -30,6 +30,7 @@ Regius is a CLI application for building web pages, inspired by Laravel but buil
   - [_`IP Whitelist/Blacklist Middleware`_](#ip-whitelistblacklist-middleware)
   - [_`Validation`_](#validation)
   - [_`Scalar API Reference`_](#scalar-api-reference)
+  - [_`Webhooks`_](#webhooks)
   - [_`Internationalization (i18n)`_](#internationalization-i18n)
   - [_`Server-Sent Events (SSE)`_](#server-sent-events-sse)
   - [_`Configuration Management`_](#configuration-management)
@@ -293,6 +294,7 @@ Seed files are plain `.sql` files executed in a single transaction, and each is 
 - `regius make key`: Generate 32-character encryption key.
 - `regius make mail <name>`: Create mail templates.
 - `regius make api <name>`: Create a CRUD API handler with pagination + response envelope, mounted in routes-api.go.
+- `regius make webhook <name>`: Create a signed inbound webhook endpoint (providers: generic, github, stripe) mounted at /api/webhooks/<name>.
 - `regius make locale <code>`: Create a new translation locale file (e.g. `regius make locale fr`).
 
 </details>
@@ -1047,6 +1049,59 @@ SCALAR_ENABLED=false
 #SCALAR_SPEC_FILE=
 #SCALAR_THEME=default
 #SCALAR_SHOW_CLIENTS={"go":["native"],"java":true,"curl","fetch"}
+```
+
+</details>
+
+<a name="webhooks"></a>
+<details>
+    <summary>Webhooks</summary>
+
+Receive signed webhooks from Stripe, GitHub, or any HMAC-based provider with one command:
+
+```sh
+regius make webhook stripe-payment --provider stripe
+```
+
+- Creates `handlers/webhook_<name>.go`: a POST-only endpoint that verifies the payload's HMAC signature with the `github.com/hbarral/regius/webhook` package **before** the body is parsed, then decodes it
+- Mounts the route in `routes-api.go` at `/api/webhooks/<name>` — under `/api` so the endpoint reuses the existing CSRF and sanitizer exemptions (signature verification needs the byte-exact raw body)
+- Appends `WEBHOOK_<NAME>_SECRET` to `.env` with a generated 32-character secret; existing values are never overwritten, so re-runs stay idempotent
+- Hyphenated names become valid Go identifiers: `stripe-payment` → `StripePaymentWebhook`
+
+Provider presets (`--provider`):
+
+| Provider | Header | Notes |
+|----------|--------|-------|
+| `generic` (default) | `X-Signature` | plain HMAC-SHA256 digest of the body, hex-encoded |
+| `github` | `X-Hub-Signature-256` | `sha256=<hex>` prefix; legacy sha1 available via `Options.Hash` |
+| `stripe` | `Stripe-Signature` | `t=<unix>,v1=<sig>` signed payload with 5-minute replay tolerance |
+
+Security notes:
+
+- All signature comparisons are constant time (`hmac.Equal`), mirroring the API key middleware
+- Multiple secrets are supported for rotation: pass extras to the preset call in the generated handler (any-match semantics), then drop the old one once the provider has rotated
+- Stale Stripe timestamps are rejected to blunt replay attacks; tune or disable via `Options.TimestampTolerance`
+- The generated handler never logs the unverified payload; errors map to responses: 500 unconfigured secret, 401 bad signature, 400 missing header / stale timestamp
+- It responds 2xx fast and leaves TODO markers for typed payloads and idempotent processing (providers retry on any non-2xx)
+
+**Manual verification (framework package):**
+
+```go
+import "github.com/hbarral/regius/webhook"
+
+opts := webhook.Stripe(os.Getenv("WEBHOOK_STRIPE_PAYMENT_SECRET"))
+payload, err := webhook.Verify(r, opts)
+if err != nil {
+    // webhook.ErrNoSecret / ErrMissingHeader / ErrBadSignature / ErrBadTimestamp
+}
+```
+
+On success `r.Body` is restored, so downstream code can re-read the payload (e.g. `ReadJSON`).
+
+**Environment variables (one per endpoint, appended by the CLI):**
+
+```properties
+#WEBHOOK_STRIPE_PAYMENT_SECRET=
 ```
 
 </details>
