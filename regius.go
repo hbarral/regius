@@ -38,33 +38,34 @@ var (
 var maintenanceMode bool
 
 type Regius struct {
-	AppName       string
-	Debug         bool
-	ErrorLog      *log.Logger
-	InfoLog       *log.Logger
-	RootPath      string
-	Routes        *chi.Mux
-	Render        *render.Render
-	JetViews      *jet.Set
-	config        config
-	Session       *scs.SessionManager
-	DB            Database
-	EncryptionKey string
-	Cache         cache.Cache
-	Hash          hash.Hasher
-	Scheduler     *cron.Cron
-	Mail          mailer.Mail
-	Server        Server
-	I18n          I18nConfig
-	SSE           *SSEBroker
-	Scalar        ScalarConfig
-	FileSystems   map[string]interface{}
-	S3            filesystems.FS
-	SFTP          filesystems.FS
-	WebDAV        filesystems.FS
-	Minio         filesystems.FS
-	handler       http.Handler
-	configWatcher *cfg.Watcher
+	AppName         string
+	Debug           bool
+	ErrorLog        *log.Logger
+	InfoLog         *log.Logger
+	RootPath        string
+	Routes          *chi.Mux
+	Render          *render.Render
+	JetViews        *jet.Set
+	config          config
+	Session         *scs.SessionManager
+	DB              Database
+	EncryptionKey   string
+	Cache           cache.Cache
+	Hash            hash.Hasher
+	Scheduler       *cron.Cron
+	Mail            mailer.Mail
+	Server          Server
+	I18n            I18nConfig
+	SSE             *SSEBroker
+	Scalar          ScalarConfig
+	FileSystems     map[string]interface{}
+	S3              filesystems.FS
+	SFTP            filesystems.FS
+	WebDAV          filesystems.FS
+	Minio           filesystems.FS
+	handler         http.Handler
+	configWatcher   *cfg.Watcher
+	validationRules map[string]ValidationFunc
 }
 
 type Server struct {

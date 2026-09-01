@@ -28,6 +28,7 @@ Regius is a CLI application for building web pages, inspired by Laravel but buil
   - [_`Request ID Tracing Middleware`_](#request-id-tracing-middleware)
   - [_`Request Sanitization Middleware`_](#request-sanitization-middleware)
   - [_`IP Whitelist/Blacklist Middleware`_](#ip-whitelistblacklist-middleware)
+  - [_`Validation`_](#validation)
   - [_`Scalar API Reference`_](#scalar-api-reference)
   - [_`Internationalization (i18n)`_](#internationalization-i18n)
   - [_`Server-Sent Events (SSE)`_](#server-sent-events-sse)
@@ -863,6 +864,64 @@ IP_FILTER_DENY=                           # comma-separated IPs/CIDRs to block (
 IP_FILTER_TRUST_PROXY=false               # read X-Forwarded-For/X-Real-IP
 IP_FILTER_STATUS_CODE=403
 IP_FILTER_MESSAGE=
+```
+
+</details>
+
+<a name="validation"></a>
+<details>
+    <summary>Validation</summary>
+
+- Validate incoming request bodies and form input with a rich rule set, custom rules, struct-tag validation, localized error messages, and a request-validation middleware.
+
+  - **Built-in rules**: `Required`, `IsEmail`, `IsURL`, `IsUUID`, `IsPhone`, `IsCreditCard`, `IsAlpha`, `IsAlphanumeric`, `IsNumeric`, `IsInt`, `IsFloat`, `IsDateISO`, `IsJSON`, `IsIP`, `IsBoolean`, `IsMinLength`, `IsMaxLength`, `IsLength`, `IsRange`, `NoSpaces`, and `MatchesPattern`
+  - **Custom rules**: register reusable rules with `app.RegisterValidation("name", func(value string) bool)` and invoke any rule by name via `v.Rule("name", field, value)`. Built-in rules are pre-registered and can be overridden
+  - **Struct validation**: `v.ValidateStruct(s)` validates any struct via `validate` tags, recursing into nested structs, pointers, and slices (`nested`) with dot-path error keys (`Address.City`, `Items.0.Name`). Supported tags: `required`, `nested`, `field=name`, `min=N`, `max=N`, `len=N`, `range=N:M`, `oneof=a b c`, `regex=PATTERN`, plus any registered rule name. Optional rules skip empty values
+  - **Localized errors**: rule failures record an i18n key + params in `v.Details`; `v.LocalizedErrors(r.Context())` translates them for the request locale (via the `Language` middleware), falling back to English. 25 `validation.*` keys ship in the scaffolded `en`/`es` locale files
+  - **Request validation middleware**: `app.ValidateRequest(regius.ValidationConfig{...})` decodes JSON bodies into a struct (validating its tags) or validates form bodies field by field, then stores the validated struct in the request context (`regius.ValidatedFromContext[*MyInput](r.Context())`). On failure it responds with the API error envelope (field errors as details) or, in `ErrorFormat: "form"` mode, stores localized errors in the session (`app.PopValidationErrors`) and redirects back with 303
+
+  **Usage Example in Your App:**
+
+```go
+  type SignupInput struct {
+      Name  string `validate:"required,min=2"`
+      Email string `validate:"required,email"`
+      Age   int    `validate:"min=18"`
+  }
+
+  // In routes.go / routes-api.go - apply to specific routes
+  r.Post("/signup", app.ValidateRequest(regius.ValidationConfig{
+      StructType: SignupInput{},
+  })(a.Handlers.PostSignup))
+
+  // In the handler - the decoded, validated input is in the context
+  func (h *Handlers) PostSignup(w http.ResponseWriter, r *http.Request) {
+      input, ok := regius.ValidatedFromContext[*SignupInput](r.Context())
+      if !ok {
+          h.App.ErrorStatus(w, http.StatusBadRequest)
+          return
+      }
+      // input.Name, input.Email, input.Age are validated...
+  }
+
+  // Form validation with a browser redirect flow
+  r.Post("/login", app.ValidateRequest(regius.ValidationConfig{
+      Rules: map[string]string{
+          "email":    "required,email",
+          "password": "required,min=8",
+      },
+      ErrorFormat: "form", // store errors in session + redirect to Referer
+  })(a.Handlers.PostLogin))
+
+  // Manual validation in any handler
+  v := app.Validator(r.PostForm)
+  v.Required(r, "email", "password")
+  v.IsEmail("email", r.Form.Get("email"))
+  v.IsMinLength("password", r.Form.Get("password"), 8)
+  if !v.Valid() {
+      errors := v.LocalizedErrors(r.Context())
+      // render the form again with errors...
+  }
 ```
 
 </details>

@@ -307,8 +307,12 @@ The scaffolded app defaults to **templ** (`github.com/a-h/templ`) with the [temp
 - Random string generation using crypto/rand
 
 #### Input Validation
-- Uses `github.com/asaskevich/govalidator`
-- Custom validation struct with error collection
+- `Validation` struct (`validator.go`, `validator_struct.go`, `validator_i18n.go`, `validator_middleware.go`) with error collection (`Errors` map + structured `Details`)
+- Built-in rules: `Required`, `Check`, `IsEmail`, `IsURL`, `IsUUID`, `IsPhone`, `IsCreditCard`, `IsAlpha`, `IsAlphanumeric`, `IsNumeric`, `IsInt`, `IsFloat`, `IsDateISO`, `IsJSON`, `IsIP`, `IsBoolean`, `IsMinLength`, `IsMaxLength`, `IsLength`, `IsRange`, `NoSpaces`, `MatchesPattern`; uses `github.com/asaskevich/govalidator` + stdlib
+- Custom rules: `Regius.RegisterValidation(name, fn)` registers reusable `ValidationFunc`s (built-ins pre-registered, overridable); invoke by name via `Validation.Rule(name, field, value, message...)`
+- Struct validation: `Validation.ValidateStruct(s)` walks `validate` struct tags via reflection (`required`, `nested`, `field=`, `min=`, `max=`, `len=`, `range=N:M`, `oneof=`, `regex=`, registry rule names); nested structs/pointers/slices produce dot-path error keys (`Address.City`, `Items.0.Name`); optional rules skip empty values
+- Localization: rule failures record i18n keys + params in `Details`; `LocalizedErrors(ctx)` translates via the `i18n` package for the request locale, falling back to English; 25 `validation.*` keys ship in the scaffolded locale files (`en`/`es`) and `cli/templates/locales/locale.yaml`
+- Request validation middleware: `r.ValidateRequest(ValidationConfig{StructType, Rules, ErrorFormat, RedirectTo})` — JSON bodies decoded into `StructType` and tag-validated (retrievable via `regius.ValidatedFromContext[*T](ctx)`); form bodies validated field-by-field against `Rules`; failures respond with the API error envelope (default) or session flash + 303 redirect (`ErrorFormat: "form"`, errors readable via `PopValidationErrors`); gob-registers `map[string]string` for session storage; per-route middleware (not global)
 
 #### CSRF Protection
 - Automatic CSRF token generation and validation
