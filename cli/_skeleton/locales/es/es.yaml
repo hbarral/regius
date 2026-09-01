@@ -49,3 +49,30 @@ es:
     sign_in_link: Inicia sesión
     back: Volver
     passwords_mismatch: ¡Las contraseñas no coinciden!
+
+  validation:
+    required: Este campo no puede estar vacío
+    email: Correo electrónico inválido
+    integer: Este campo debe ser un número entero
+    float: Este campo debe ser un número decimal
+    date_iso: Este campo debe ser una fecha en formato AAAA-MM-DD
+    no_spaces: No se permiten espacios
+    url: Este campo debe ser una URL válida
+    uuid: Este campo debe ser un UUID válido
+    phone: Este campo debe ser un número de teléfono válido
+    credit_card: Este campo debe ser un número de tarjeta de crédito válido
+    alpha: Este campo solo puede contener letras
+    alphanumeric: Este campo solo puede contener letras y números
+    numeric: Este campo solo puede contener dígitos
+    min_length: Este campo debe tener al menos %{min} caracteres
+    max_length: Este campo debe tener como máximo %{max} caracteres
+    length: Este campo debe tener exactamente %{count} caracteres
+    range: Este campo debe estar entre %{min} y %{max}
+    min: Este campo debe ser al menos %{min}
+    max: Este campo debe ser como máximo %{max}
+    json: Este campo debe ser JSON válido
+    ip: Este campo debe ser una dirección IP válida
+    boolean: Este campo debe ser un valor booleano
+    pattern: Este campo tiene un formato inválido
+    one_of: "Este campo debe ser uno de: %{values}"
+    failed: Validación fallida para %{field}

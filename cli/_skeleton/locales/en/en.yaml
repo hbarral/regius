@@ -49,3 +49,30 @@ en:
     sign_in_link: Sign in
     back: Back
     passwords_mismatch: Passwords do not match!
+
+  validation:
+    required: This field cannot be blank
+    email: Invalid email address
+    integer: This field must be an integer
+    float: This field must be a floating point number
+    date_iso: This field must be a date in the form of YYYY-MM-DD
+    no_spaces: No spaces allowed
+    url: This field must be a valid URL
+    uuid: This field must be a valid UUID
+    phone: This field must be a valid phone number
+    credit_card: This field must be a valid credit card number
+    alpha: This field must contain only letters
+    alphanumeric: This field must contain only letters and numbers
+    numeric: This field must contain only digits
+    min_length: This field must be at least %{min} characters long
+    max_length: This field must be at most %{max} characters long
+    length: This field must be exactly %{count} characters long
+    range: This field must be between %{min} and %{max}
+    min: This field must be at least %{min}
+    max: This field must be at most %{max}
+    json: This field must be valid JSON
+    ip: This field must be a valid IP address
+    boolean: This field must be a boolean value
+    pattern: This field has an invalid format
+    one_of: "This field must be one of: %{values}"
+    failed: Validation failed for %{field}

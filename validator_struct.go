@@ -96,7 +96,7 @@ func (v *Validation) applyTagRules(fv reflect.Value, tag, path, name string) {
 	}
 
 	if required && v.isZeroValue(fv) {
-		v.AddError(key, "This field cannot be blank")
+		v.addError(key, "validation.required", "This field cannot be blank", nil)
 		return
 	}
 
@@ -155,7 +155,9 @@ func (v *Validation) applyRules(tokens []string, tag string, fv reflect.Value, k
 			n := tagInt(tok, tag)
 			if hasNum {
 				if num < float64(n) {
-					v.AddError(key, fmt.Sprintf("This field must be at least %d", n))
+					v.addError(key, "validation.min",
+						fmt.Sprintf("This field must be at least %d", n),
+						map[string]string{"min": strconv.Itoa(n)})
 				}
 			} else {
 				v.IsMinLength(key, str, n)
@@ -165,7 +167,9 @@ func (v *Validation) applyRules(tokens []string, tag string, fv reflect.Value, k
 			n := tagInt(tok, tag)
 			if hasNum {
 				if num > float64(n) {
-					v.AddError(key, fmt.Sprintf("This field must be at most %d", n))
+					v.addError(key, "validation.max",
+						fmt.Sprintf("This field must be at most %d", n),
+						map[string]string{"max": strconv.Itoa(n)})
 				}
 			} else {
 				v.IsMaxLength(key, str, n)
@@ -181,7 +185,9 @@ func (v *Validation) applyRules(tokens []string, tag string, fv reflect.Value, k
 			}
 			if hasNum {
 				if num < float64(lo) || num > float64(hi) {
-					v.AddError(key, fmt.Sprintf("This field must be between %d and %d", lo, hi))
+					v.addError(key, "validation.range",
+						fmt.Sprintf("This field must be between %d and %d", lo, hi),
+						map[string]string{"min": strconv.Itoa(lo), "max": strconv.Itoa(hi)})
 				}
 			} else {
 				v.IsRange(key, str, lo, hi)
@@ -197,7 +203,9 @@ func (v *Validation) applyRules(tokens []string, tag string, fv reflect.Value, k
 				}
 			}
 			if !found {
-				v.AddError(key, fmt.Sprintf("This field must be one of: %s", strings.Join(allowed, ", ")))
+				v.addError(key, "validation.one_of",
+					fmt.Sprintf("This field must be one of: %s", strings.Join(allowed, ", ")),
+					map[string]string{"values": strings.Join(allowed, ", ")})
 			}
 
 		case strings.HasPrefix(tok, "regex="):
