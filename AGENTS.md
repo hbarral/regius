@@ -281,6 +281,13 @@ The scaffolded app defaults to **templ** (`github.com/a-h/templ`) with the [temp
 - `SCALAR_SHOW_CLIENTS` controls which client library code examples are shown in the Scalar UI; accepts a raw JS expression: `true` (show all), `["curl","fetch"]` (show only those), or `{"js":true,"shell":["curl"]}` (per-language); empty = show all (default); converted to Scalar's `hiddenClients` at runtime
 - Configured via env vars in `regius.go` `New()`: `SCALAR_ENABLED`, `SCALAR_DOCS_PATH`, `SCALAR_SPEC_PATH`, `SCALAR_TITLE`, `SCALAR_CDN_URL`, `SCALAR_SPEC_FILE`, `SCALAR_THEME`, `SCALAR_SHOW_CLIENTS`
 
+#### Webhook Scaffolding
+
+- CLI: `regius make webhook <name> [--provider generic|stripe|github]` generates `handlers/webhook_<name>.go`: a POST-only endpoint that verifies the HMAC signature via the framework's `github.com/hbarral/regius/webhook` package **before** the body is parsed, then decodes the payload; hyphenated names become valid Go identifiers (`stripe-payment` → `StripePaymentWebhook`)
+- The route is mounted in `routes-api.go` at `/api/webhooks/<name>`, under `/api` so it reuses the existing NoSurf (`/api/.*`) and sanitizer exemptions — verification needs the byte-exact raw body
+- `WEBHOOK_<NAME>_SECRET` is appended to `.env` with a generated 32-char secret (`appendEnvVar` in `cli/helpers.go`; never overwrites, so re-runs are idempotent)
+- The `webhook` package supports generic `X-Signature` (hex/base64), GitHub `X-Hub-Signature-256` (+ legacy sha1 via `Options.Hash`), and Stripe `t=,v1=` signed payloads with timestamp tolerance; multiple secrets for rotation (any-match); constant-time compares; typed errors (`ErrNoSecret`, `ErrMissingHeader`, `ErrBadSignature`, `ErrBadTimestamp`); `Verify` restores `r.Body` so downstream code can re-read it
+
 ### Internationalization
 
 #### Locale Detection & Middleware
@@ -388,6 +395,8 @@ The scaffolded app defaults to **templ** (`github.com/a-h/templ`) with the [temp
 ./regius make session            # Create session table
 ./regius make mail <name>        # Create mail templates
 ./regius make api <name>         # Create CRUD API handler with pagination + envelope
+./regius make webhook <name>     # Create signed inbound webhook endpoint
+                                 #   --provider <generic|stripe|github> (generic is default)
 ./regius make locale <code>      # Create a new translation locale (e.g. fr)
 ./regius down                    # Maintenance mode on
 ./regius up                      # Maintenance mode off

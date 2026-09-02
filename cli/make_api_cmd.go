@@ -84,35 +84,14 @@ func doMakeAPI(name string) error {
 	routesStr := string(routesData)
 	mountLine := fmt.Sprintf(`r.Mount("/%s", a.Handlers.%sRoutes())`, lower, title)
 
-	if strings.Contains(routesStr, mountLine) {
-		return nil
-	}
-
-	if strings.Contains(routesStr, "func(_ chi.Router)") {
-		routesStr = strings.Replace(routesStr, "func(_ chi.Router)", "func(r chi.Router)", 1)
-	}
-
 	docCall := fmt.Sprintf(`a.Handlers.%sAPIDocument(a.App.Server.URL)`, title)
-	var specLine string
+	specLine := fmt.Sprintf("\t\ta.App.Scalar.Spec = %s", docCall)
 	if strings.Contains(routesStr, "a.App.Scalar.Spec = a.Handlers.") {
 		specLine = fmt.Sprintf("\t\ta.App.Scalar.Spec.MergePaths(%s)", docCall)
-	} else {
-		specLine = fmt.Sprintf("\t\ta.App.Scalar.Spec = %s", docCall)
 	}
 
-	insertBlock := mountLine + "\n" + specLine
-
-	marker := "// add any API route here"
-	if strings.Contains(routesStr, marker) {
-		routesStr = strings.Replace(routesStr, marker, insertBlock+"\n\n\t\t"+marker, 1)
-	} else {
-		openBrace := `r.Route("/api", func(r chi.Router) {`
-		replacement := openBrace + "\n\t\t" + insertBlock
-		routesStr = strings.Replace(routesStr, openBrace, replacement, 1)
-	}
-
-	if err := os.WriteFile(routesAPIPath, []byte(routesStr), 0644); err != nil {
-		return fmt.Errorf("failed to write routes-api.go: %w", err)
+	if err := insertRoutesBlock(routesAPIPath, mountLine+"\n"+specLine); err != nil {
+		return err
 	}
 
 	color.Yellow("  - Created handlers/api_%s.go with CRUD endpoints", lower)

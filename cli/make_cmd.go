@@ -23,6 +23,7 @@ func init() {
 	makeCmd.AddCommand(makeGormModelCmd)
 	makeCmd.AddCommand(makeLocaleCmd)
 	makeCmd.AddCommand(makeAPICmd)
+	makeCmd.AddCommand(makeWebhookCmd)
 }
 
 var makeCmd = &cobra.Command{
