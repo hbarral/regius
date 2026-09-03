@@ -23,6 +23,7 @@ import (
 	cfg "github.com/hbarral/regius/config"
 	"github.com/hbarral/regius/filesystems"
 	"github.com/hbarral/regius/hash"
+	"github.com/hbarral/regius/jobs"
 	"github.com/hbarral/regius/mailer"
 	"github.com/hbarral/regius/render"
 	"github.com/hbarral/regius/session"
@@ -38,21 +39,31 @@ var (
 var maintenanceMode bool
 
 type Regius struct {
-	AppName         string
-	Debug           bool
-	ErrorLog        *log.Logger
-	InfoLog         *log.Logger
-	RootPath        string
-	Routes          *chi.Mux
-	Render          *render.Render
-	JetViews        *jet.Set
-	config          config
-	Session         *scs.SessionManager
-	DB              Database
-	EncryptionKey   string
-	Cache           cache.Cache
-	Hash            hash.Hasher
-	Scheduler       *cron.Cron
+	AppName       string
+	Debug         bool
+	ErrorLog      *log.Logger
+	InfoLog       *log.Logger
+	RootPath      string
+	Routes        *chi.Mux
+	Render        *render.Render
+	JetViews      *jet.Set
+	config        config
+	Session       *scs.SessionManager
+	DB            Database
+	EncryptionKey string
+	Cache         cache.Cache
+	Hash          hash.Hasher
+	// Scheduler runs raw cron jobs registered via AddFunc. Deprecated: use
+	// Jobs (MustRegister + Cron/Every) instead — registered jobs get
+	// retries, backoff, persistence, and monitoring. The field stays for
+	// compatibility; New now starts it, so previously dead registrations
+	// finally run.
+	Scheduler *cron.Cron
+	// Jobs is the background job queue (see the jobs package). New always
+	// constructs it (memory backend by default) so Enqueue works everywhere;
+	// workers and the scheduler run only while enabled (JOBS_ENABLED) and
+	// started — ListenAndServe does both when enabled.
+	Jobs            *jobs.Manager
 	Mail            mailer.Mail
 	Server          Server
 	I18n            I18nConfig
@@ -90,6 +101,7 @@ type config struct {
 	ipFilter         IPFilterConfig
 	i18n             I18nConfig
 	hash             hashConfig
+	jobs             jobsConfig
 	scalar           ScalarConfig
 }
 
@@ -194,6 +206,13 @@ func (r *Regius) New(rootPath string) error {
 			return err
 		}
 	}
+
+	// The scheduler was historically created but never started, leaving any
+	// registered jobs (the Badger value-log GC above) dead. Start it; the
+	// GC stays here rather than on r.Jobs because it is machine-local and
+	// must run on every process with a badger cache, whereas jobs schedules
+	// are cross-process single-fire.
+	r.Scheduler.Start()
 
 	r.InfoLog = infoLog
 	r.ErrorLog = errorLog
@@ -404,6 +423,7 @@ func (r *Regius) New(rootPath string) error {
 			CookieName:       localeCookieName,
 		},
 		hash: r.createHashConfig(),
+		jobs: r.createJobsConfig(),
 		scalar: ScalarConfig{
 			Enabled:     scalarEnabled,
 			DocsPath:    scalarDocsPath,
@@ -419,6 +439,12 @@ func (r *Regius) New(rootPath string) error {
 	r.I18n = r.config.i18n
 	r.SSE = NewSSEBroker()
 	r.Scalar = r.config.scalar
+
+	jobsManager, err := r.createJobsManager()
+	if err != nil {
+		return fmt.Errorf("failed to create jobs manager: %w", err)
+	}
+	r.Jobs = jobsManager
 
 	r.Routes = r.routes().(*chi.Mux)
 
