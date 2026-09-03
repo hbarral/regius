@@ -24,6 +24,7 @@ func init() {
 	makeCmd.AddCommand(makeLocaleCmd)
 	makeCmd.AddCommand(makeAPICmd)
 	makeCmd.AddCommand(makeWebhookCmd)
+	makeCmd.AddCommand(makeJobCmd)
 }
 
 var makeCmd = &cobra.Command{

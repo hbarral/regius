@@ -1,0 +1,39 @@
+package workers
+
+import (
+	"context"
+
+	"github.com/hbarral/regius/jobs"
+)
+
+// $HANDLER_NAMEPayload is the JSON payload for the "$JOB_NAME" job.
+// Adjust the fields to the data this job needs.
+type $HANDLER_NAMEPayload struct {
+	UserID int    `json:"user_id"`
+	Email  string `json:"email"`
+}
+
+// $HANDLER_NAME processes the "$JOB_NAME" background job.
+//
+// Delivery is at-least-once: the job may run again after a crash or
+// interrupted shutdown, so keep the handler idempotent.
+func $HANDLER_NAME(ctx context.Context, j *jobs.Job) error {
+	var p $HANDLER_NAMEPayload
+	if err := j.Decode(&p); err != nil {
+		return err
+	}
+
+	// TODO: replace the sample payload above with real fields and do the
+	// actual work here (send the email, generate the report, call out to
+	// a service, ...).
+
+	return nil
+}
+
+// Enqueue$HANDLER_NAME schedules a "$JOB_NAME" job from a handler,
+// middleware, or anywhere with access to the app's job manager:
+//
+//	workers.Enqueue$HANDLER_NAME(r.Context(), h.App.Jobs, payload)
+func Enqueue$HANDLER_NAME(ctx context.Context, m *jobs.Manager, p $HANDLER_NAMEPayload) (*jobs.Job, error) {
+	return m.Enqueue(ctx, "$JOB_NAME", p)
+}
