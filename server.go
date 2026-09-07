@@ -46,6 +46,22 @@ func (r *Regius) ListenAndServe() error {
 		}()
 	}
 
+	// Jobs workers and the scheduler run in this process only when enabled;
+	// app code has already registered its handlers by the time the app
+	// serves. When ListenAndServe returns, workers are drained (in-flight
+	// attempts cancelled and their jobs requeued) within the graceful
+	// timeout.
+	if r.Jobs != nil && r.config.jobs.enabled {
+		r.Jobs.Start(context.Background())
+		defer func() {
+			stopCtx, cancel := context.WithTimeout(context.Background(), r.config.jobs.gracefulTimeout)
+			defer cancel()
+			if err := r.Jobs.Stop(stopCtx); err != nil {
+				r.ErrorLog.Printf("jobs: %v", err)
+			}
+		}()
+	}
+
 	r.InfoLog.Printf("Listening on port %s", os.Getenv("PORT"))
 
 	return srv.ListenAndServe()

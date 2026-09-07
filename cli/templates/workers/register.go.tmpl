@@ -1,0 +1,18 @@
+// Package workers holds the application's background job handlers.
+// RegisterAll is called from init.regius.go during boot, before the job
+// workers start (see JOBS_ENABLED in .env).
+package workers
+
+import (
+	"github.com/hbarral/regius/jobs"
+)
+
+// RegisterAll registers every background job handler with the app's job
+// manager. The `regius make job` command appends one entry per job.
+func RegisterAll(m *jobs.Manager) {
+	m.MustRegister("$JOB_NAME", $HANDLER_NAME, jobs.Options{
+		MaxAttempts: 3, // TODO: tune per job
+	})
+
+	// additional jobs are registered here
+}
