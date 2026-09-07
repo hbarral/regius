@@ -412,6 +412,8 @@ The scaffolded app defaults to **templ** (`github.com/a-h/templ`) with the [temp
                                  #   register.go hub + init.regius.go wiring + regius_jobs
                                  #   table migration on first run)
 ./regius make locale <code>      # Create a new translation locale (e.g. fr)
+./regius dev                     # Start the app with hot-reload (watch + rebuild + restart;
+                                 #   runs templ generate + tailwind watcher alongside)
 ./regius down                    # Maintenance mode on
 ./regius up                      # Maintenance mode off
 ```
@@ -436,6 +438,14 @@ DATABASE_PASS=password
 ```
 
 ### Development Workflow
+
+#### Hot-Reload Development
+
+`regius dev` (implemented in `cli/dev_cmd.go`, `cli/dev_watcher.go`, `cli/dev_runner.go` + the per-platform `cli/dev_proc_{unix,windows}.go`) watches the app for changes to restart-worthy files (`.go`, `.templ`, `.jet`, `*.template`, `.env`/config, locale YAML), debounces events, rebuilds, and restarts the child process gracefully (SIGTERM to the process group on Unix, `taskkill /T` on Windows — build-tag separated helpers). Build failures keep the old process serving. `.templ` changes run `templ generate` first; a `tailwindcss --watch=always` subprocess (with `NODE_OPTIONS` cleared — it can carry flags that break the CLI) keeps the stylesheet fresh and its output is prefixed `[tailwind]`. This added `github.com/fsnotify/fsnotify` as a direct dependency of the CLI module (vendored in `cli/vendor/`).
+
+Config via flags (`--port`, `--build-delay`, `--no-tailwind`, `--no-templ`, `--exit`, `--ignore`, `--watch`, `-v`) and env vars (`DEV_BUILD_DELAY`, `DEV_EXIT_ON_FAILURE`, `DEV_BINARY`; flags win).
+
+The **Taskfile is gone**: the scaffolded app ships only a Makefile. `make dev` calls `regius dev`; `make tailwind` / `make tailwind-watch` / `make build-css` handle the stylesheet (`tailwind` regenerates `assets/css/sources.generated.css` with templui paths for the templ renderer via `rendererTailwindTargets()` in `cli/new_cmd.go`; jet/go rely on the static sources file written at scaffold time by `patchCSSSources()` in `cli/renderer.go`).
 
 #### Creating New Features
 1. Use CLI commands to scaffold code (`make handler`, `make model`, etc.)

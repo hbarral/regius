@@ -155,6 +155,40 @@ regius new goapp --renderer go
 </details>
 
 <details>
+    <summary>Develop with hot-reload</summary>
+
+`regius dev` starts your app and watches the project for changes. When you
+save a Go file, template, or config file, the app is rebuilt and restarted
+automatically (`.templ` changes run `templ generate` first, and a
+`tailwindcss --watch` subprocess keeps the stylesheet fresh). If a rebuild
+fails, the previously started process keeps serving until the next
+successful build. No external tools required.
+
+```sh
+cd myapp
+regius dev              # or: make dev
+```
+
+Optional flags:
+
+- `--port <n>`: override the `PORT` from `.env`
+- `--build-delay <dur>`: debounce delay after the last change (default `500ms`)
+- `--no-tailwind`: disable the Tailwind CSS watcher
+- `--no-templ`: disable automatic `templ generate`
+- `--exit`: exit on build failure instead of keeping the old process alive
+- `--ignore <paths>`: comma-separated extra paths to ignore
+- `--watch <paths>`: comma-separated extra paths to watch
+- `-v`, `--verbose`: stream build output live
+
+The related env vars (in `.env`) are `DEV_BUILD_DELAY` (default `500ms`) and
+`DEV_EXIT_ON_FAILURE` (default `false`); flags win over env vars.
+
+For stylesheet-only work, `make tailwind-watch` rebuilds CSS on template
+changes, and `make tailwind` builds it once.
+
+</details>
+
+<details>
     <summary>Show help commands</summary>
 
 ```sh
@@ -252,6 +286,7 @@ regius help
     <summary>Basic Commands</summary>
 
 - `regius new <app_name>`: Creates a new web application (defaults to `templ` renderer + `sqlite` database, with a runnable auth scaffold; switch with `--renderer jet|go` and/or `--db postgres|mysql|...`).
+- `regius dev`: Start the app with hot-reload in development (rebuild + restart on file changes; runs `templ generate` and the Tailwind watcher alongside).
 - `regius version`: Print application version.
 - `regius help`: Show help for any command.
 - `regius up`: Bring the server back from maintenance mode.
@@ -1939,8 +1974,11 @@ To customize styles you need the **Tailwind CSS CLI** installed:
 # Rebuild once
 make tailwind
 
-# Or watch for changes (requires go-task)
-go-task tailwind
+# Or watch for changes
+make tailwind-watch
+
+# Or use hot-reload development (watches Go + templates + CSS)
+make dev
 ```
 
 Scanning by renderer:

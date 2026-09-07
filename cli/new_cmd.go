@@ -118,8 +118,8 @@ func doNew(appName string) {
 	mk = strings.ReplaceAll(mk, "${BINARY_APP_NAME}", binaryName)
 	if renderer == "templ" {
 		mk = strings.Replace(mk, "@go mod vendor\n", "@go mod vendor\n\t@templ generate\n", 1)
-		mk += "\n" + templMakefileTargets()
 	}
+	mk += "\n" + rendererTailwindTargets(renderer)
 	if err := copyDataToFile([]byte(mk), fmt.Sprintf("./%s/Makefile", appName)); err != nil {
 		exitGracefully(err)
 	}
@@ -164,12 +164,19 @@ func doNew(appName string) {
 
 	color.Green("  ✓ Done — %s is ready", appURL)
 	color.Green("  Go build something real!")
+	color.Cyan("\n  Next steps:")
+	color.Cyan("    cd %s", appName)
+	color.Cyan("    regius dev    # start the app with hot-reload")
 }
 
-// templMakefileTargets returns the templ/tailwind recipes appended to the
-// scaffolded Makefile for templ-based apps.
-func templMakefileTargets() string {
-	return `templ:
+// rendererTailwindTargets returns the Tailwind CSS recipes appended to the
+// scaffolded Makefile. The templ variant regenerates
+// assets/css/sources.generated.css with `go list` so the templui component
+// library sources are picked up; jet/go rely on the static sources file
+// written at scaffold time (and refreshed by `regius dev`).
+func rendererTailwindTargets(renderer string) string {
+	if renderer == "templ" {
+		return `templ:
 	@templ generate
 
 tailwind:
@@ -181,6 +188,30 @@ tailwind:
 	   "@source \"$$TEMPLUI_PATH/components/**/*.js\";" \
 	   > ./assets/css/sources.generated.css && \
 	tailwindcss -i ./assets/css/input.css -o ./public/css/output.css
+
+build-css: tailwind
+
+tailwind-watch:
+	@TEMPLUI_PATH="$$(go list -mod=mod -m -f '{{.Dir}}' github.com/templui/templui)" && \
+	 printf '%s\n' \
+	   '@source "./**/*.templ";' \
+	   '@source "./**/*.js";' \
+	   "@source \"$$TEMPLUI_PATH/components/**/*.templ\";" \
+	   "@source \"$$TEMPLUI_PATH/components/**/*.js\";" \
+	   > ./assets/css/sources.generated.css && \
+	tailwindcss -i ./assets/css/input.css -o ./public/css/output.css --watch
+`
+	}
+
+	return `# Build the Tailwind CSS stylesheet. The @source directives live in
+# assets/css/sources.generated.css (written at scaffold time / by "regius dev").
+tailwind:
+	@tailwindcss -i ./assets/css/input.css -o ./public/css/output.css
+
+build-css: tailwind
+
+tailwind-watch:
+	@tailwindcss -i ./assets/css/input.css -o ./public/css/output.css --watch
 `
 }
 

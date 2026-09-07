@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/fatih/color v1.16.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gertd/go-pluralize v0.2.1
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
