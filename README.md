@@ -28,6 +28,7 @@ Regius is a CLI application for building web pages, inspired by Laravel but buil
   - [_`Request ID Tracing Middleware`_](#request-id-tracing-middleware)
   - [_`Request Sanitization Middleware`_](#request-sanitization-middleware)
   - [_`IP Whitelist/Blacklist Middleware`_](#ip-whitelistblacklist-middleware)
+  - [_`Browser Live-Reload (DevReload)`_](#browser-live-reload-devreload)
   - [_`Validation`_](#validation)
   - [_`Scalar API Reference`_](#scalar-api-reference)
   - [_`Webhooks`_](#webhooks)
@@ -164,6 +165,11 @@ automatically (`.templ` changes run `templ generate` first, and a
 fails, the previously started process keeps serving until the next
 successful build. No external tools required.
 
+Open browser tabs reload automatically after every restart and after
+CSS-only rebuilds (the `r.DevReload` middleware is enabled for the dev
+process; tabs reconnect and pick up the new app). Disable with
+`--no-browser-reload`.
+
 ```sh
 cd myapp
 regius dev              # or: make dev
@@ -175,13 +181,16 @@ Optional flags:
 - `--build-delay <dur>`: debounce delay after the last change (default `500ms`)
 - `--no-tailwind`: disable the Tailwind CSS watcher
 - `--no-templ`: disable automatic `templ generate`
+- `--no-browser-reload`: disable automatic browser reload
 - `--exit`: exit on build failure instead of keeping the old process alive
 - `--ignore <paths>`: comma-separated extra paths to ignore
 - `--watch <paths>`: comma-separated extra paths to watch
 - `-v`, `--verbose`: stream build output live
 
-The related env vars (in `.env`) are `DEV_BUILD_DELAY` (default `500ms`) and
-`DEV_EXIT_ON_FAILURE` (default `false`); flags win over env vars.
+The related env vars (in `.env`) are `DEV_BUILD_DELAY` (default `500ms`),
+`DEV_EXIT_ON_FAILURE` (default `false`), and `DEV_RELOAD_ENABLED` (set
+automatically by `regius dev`; an explicit `false` keeps browser reload
+off); flags win over env vars.
 
 For stylesheet-only work, `make tailwind-watch` rebuilds CSS on template
 changes, and `make tailwind` builds it once.
@@ -286,7 +295,7 @@ regius help
     <summary>Basic Commands</summary>
 
 - `regius new <app_name>`: Creates a new web application (defaults to `templ` renderer + `sqlite` database, with a runnable auth scaffold; switch with `--renderer jet|go` and/or `--db postgres|mysql|...`).
-- `regius dev`: Start the app with hot-reload in development (rebuild + restart on file changes; runs `templ generate` and the Tailwind watcher alongside).
+- `regius dev`: Start the app with hot-reload in development (rebuild + restart on file changes; runs `templ generate` and the Tailwind watcher alongside; open tabs reload automatically).
 - `regius version`: Print application version.
 - `regius help`: Show help for any command.
 - `regius up`: Bring the server back from maintenance mode.
@@ -903,6 +912,30 @@ IP_FILTER_DENY=                           # comma-separated IPs/CIDRs to block (
 IP_FILTER_TRUST_PROXY=false               # read X-Forwarded-For/X-Real-IP
 IP_FILTER_STATUS_CODE=403
 IP_FILTER_MESSAGE=
+```
+
+</details>
+
+<a name="browser-live-reload-devreload"></a>
+<details>
+    <summary>Browser Live-Reload (DevReload)</summary>
+
+- Development-only middleware that makes open browser tabs reload automatically while running under `regius dev`.
+- Opt-in via `DEV_RELOAD_ENABLED` — `regius dev` sets it automatically for the dev process, so no app code or config is needed.
+- When enabled it mounts three endpoints under `DEV_RELOAD_PATH` (default `/__dev`):
+  - `GET /__dev/reload.js` — the same-origin reload client (no inline scripts, CSP-safe)
+  - `GET /__dev/stream` — an SSE stream announcing a per-process boot ID (tabs reconnect after a restart and reload when the ID changes; a `retry: 500` hint keeps the reconnect fast)
+  - `POST /__dev/notify` — **loopback-only** trigger that pushes a reload event to connected tabs (used by `regius dev` after CSS-only Tailwind rebuilds; requests with proxy headers are rejected so a spoofed `X-Forwarded-For` cannot bypass the check)
+- `<script src="/__dev/reload.js" defer></script>` is injected before the closing `</body>` of HTML responses. Non-HTML responses pass through untouched, HTML fragments without a `</body>` tag are left alone, `Content-Length` is dropped when injecting, and a mid-stream `Flush` gives up injection so streaming handlers keep working. Responses without a `Content-Type` are sniffed with `http.DetectContentType` — the same rule net/http applies — so pages render identically with and without the middleware.
+- When disabled (the default) the middleware is a pure passthrough and nothing is mounted: production behavior is byte-identical.
+
+> **Warning:** never set `DEV_RELOAD_ENABLED=true` in production. The notify endpoint can force connected tabs to reload, and the injected script adds a development-only SSE connection to every page.
+
+**Environment Variables:**
+
+```properties
+DEV_RELOAD_ENABLED=false        # set automatically by `regius dev`
+DEV_RELOAD_PATH=/__dev          # base path for the reload endpoints
 ```
 
 </details>
