@@ -1,9 +1,14 @@
 package cli
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -136,9 +141,91 @@ func TestRunner_PortOverride(t *testing.T) {
 
 func TestRunner_PortZeroKeepsEnv(t *testing.T) {
 	r := newDevRunner(devConfig{port: 0})
-	if len(r.childEnv()) != len(os.Environ()) {
-		t.Fatal("childEnv should be a pass-through when no port override is set")
+	env := r.childEnv()
+
+	// no PORT override: exactly one entry may differ (the always-set
+	// DEV_RELOAD_ENABLED), and no PORT= entry is introduced
+	portSeen := false
+	for _, e := range env {
+		if strings.HasPrefix(e, "PORT=") {
+			if portSeen {
+				t.Fatalf("duplicate PORT entry: %q", e)
+			}
+			if _, ok := os.LookupEnv("PORT"); !ok {
+				t.Fatalf("unexpected PORT entry introduced: %q", e)
+			}
+			portSeen = true
+		}
 	}
+}
+
+func TestRunner_ChildEnvDevReload(t *testing.T) {
+	for _, c := range []struct {
+		name          string
+		browserReload bool
+		want          string
+	}{
+		{"on", true, "DEV_RELOAD_ENABLED=true"},
+		{"off", false, "DEV_RELOAD_ENABLED=false"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := newDevRunner(devConfig{browserReload: c.browserReload})
+			env := r.childEnv()
+
+			count := 0
+			for _, e := range env {
+				if strings.HasPrefix(e, "DEV_RELOAD_ENABLED=") {
+					count++
+					if e != c.want {
+						t.Fatalf("got %q, want %q", e, c.want)
+					}
+				}
+			}
+			if count != 1 {
+				t.Fatalf("expected exactly one DEV_RELOAD_ENABLED entry, got %d", count)
+			}
+		})
+	}
+}
+
+func TestNotifyCSSReload(t *testing.T) {
+	var mu sync.Mutex
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths = append(paths, r.URL.Path)
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	// the notify URL is built from a port; point it at the test server
+	u, _ := url.Parse(srv.URL)
+	port, _ := strconv.Atoi(u.Port())
+	t.Setenv("PORT", strconv.Itoa(port))
+	t.Setenv("DEV_RELOAD_PATH", "/__dev")
+
+	notifyCSSReload(devConfig{})
+	mu.Lock()
+	if len(paths) != 1 || paths[0] != "/__dev/notify" {
+		mu.Unlock()
+		t.Fatalf("expected one POST to /__dev/notify, got %v", paths)
+	}
+	mu.Unlock()
+
+	// a cfg.port override wins over the env var
+	notifyCSSReload(devConfig{port: port})
+	mu.Lock()
+	defer mu.Unlock()
+	if len(paths) != 2 {
+		t.Fatalf("expected a second notify, got %v", paths)
+	}
+}
+
+func TestNotifyCSSReload_ToleratesServerDown(t *testing.T) {
+	t.Setenv("PORT", "1") // nothing listens there
+	t.Setenv("DEV_RELOAD_PATH", "/__dev")
+	notifyCSSReload(devConfig{}) // must not panic or hang
 }
 
 func TestPrefixWriter(t *testing.T) {

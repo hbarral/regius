@@ -89,7 +89,7 @@ func TestWatcher_Debounce(t *testing.T) {
 	}
 
 	select {
-	case <-w.events:
+	case <-w.restarts:
 		// first signal received
 	case <-time.After(3 * time.Second):
 		t.Fatal("no event received after writes")
@@ -97,7 +97,7 @@ func TestWatcher_Debounce(t *testing.T) {
 
 	// No additional events should arrive for the same burst.
 	select {
-	case <-w.events:
+	case <-w.restarts:
 		t.Fatal("unexpected second event for a single burst")
 	case <-time.After(500 * time.Millisecond):
 	}
@@ -123,7 +123,7 @@ func TestWatcher_NewDirectory(t *testing.T) {
 	}
 
 	select {
-	case <-w.events:
+	case <-w.restarts:
 	case <-time.After(3 * time.Second):
 		t.Fatal("no event for a file in a newly created directory")
 	}
@@ -166,4 +166,66 @@ func TestWatcher_Stop(t *testing.T) {
 
 	// A second stop must be a safe no-op.
 	w.stop()
+}
+
+func TestWatcher_CSSRebuildSignal(t *testing.T) {
+	root := t.TempDir()
+	w := newTestWatcher(t, root, 100*time.Millisecond, nil)
+	if err := os.MkdirAll(filepath.Join(root, "public", "css"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "public", "js"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.start(nil); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer w.stop()
+
+	// The compiled stylesheet is the carve-out from the ignored public/ tree.
+	if err := os.WriteFile(filepath.Join(root, "public", "css", "output.css"), []byte("body{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-w.cssReloads:
+	case <-time.After(3 * time.Second):
+		t.Fatal("no css reload signal for output.css")
+	}
+	select {
+	case <-w.restarts:
+		t.Fatal("stylesheet change must not trigger a restart")
+	default:
+	}
+
+	// Other files under public/ stay ignored.
+	if err := os.WriteFile(filepath.Join(root, "public", "js", "app.js"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-w.restarts:
+		t.Fatal("unexpected restart signal for public/js/app.js")
+	case <-w.cssReloads:
+		t.Fatal("unexpected css signal for public/js/app.js")
+	case <-time.After(700 * time.Millisecond):
+	}
+
+	// A mixed burst fires both channels after the debounce.
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "public", "css", "output.css"), []byte("body{color:red}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gotRestart, gotCSS := false, false
+	deadline := time.After(3 * time.Second)
+	for !(gotRestart && gotCSS) {
+		select {
+		case <-w.restarts:
+			gotRestart = true
+		case <-w.cssReloads:
+			gotCSS = true
+		case <-deadline:
+			t.Fatalf("mixed burst: restart=%v css=%v", gotRestart, gotCSS)
+		}
+	}
 }

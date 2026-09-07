@@ -2,10 +2,13 @@ package cli
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -15,15 +18,16 @@ import (
 )
 
 var (
-	devPort        int
-	devBuildDelay  time.Duration
-	devWatchPaths  string
-	devIgnorePaths string
-	devNoTailwind  bool
-	devNoTempl     bool
-	devExitOnFail  bool
-	devBinary      string
-	devVerbose     bool
+	devPort            int
+	devBuildDelay      time.Duration
+	devWatchPaths      string
+	devIgnorePaths     string
+	devNoTailwind      bool
+	devNoTempl         bool
+	devNoBrowserReload bool
+	devExitOnFail      bool
+	devBinary          string
+	devVerbose         bool
 )
 
 func init() {
@@ -35,6 +39,7 @@ func init() {
 	devCmd.Flags().StringVar(&devIgnorePaths, "ignore", "", "comma-separated additional paths to ignore (added to the defaults)")
 	devCmd.Flags().BoolVar(&devNoTailwind, "no-tailwind", false, "disable the automatic Tailwind CSS watcher")
 	devCmd.Flags().BoolVar(&devNoTempl, "no-templ", false, "disable automatic `templ generate` on .templ changes")
+	devCmd.Flags().BoolVar(&devNoBrowserReload, "no-browser-reload", false, "disable automatic browser reload after restarts and CSS rebuilds")
 	devCmd.Flags().BoolVar(&devExitOnFail, "exit", false, "exit on build failure instead of keeping the old process alive")
 	devCmd.Flags().StringVar(&devBinary, "binary", "", "output binary path for dev builds (default tmp/regius-dev)")
 	devCmd.Flags().BoolVarP(&devVerbose, "verbose", "v", false, "stream build output live")
@@ -62,15 +67,16 @@ Run from the application root (the directory with .env and go.mod).`,
 // devConfig resolves the `regius dev` settings from flags, environment
 // variables, and sensible defaults (flag > env > default).
 type devConfig struct {
-	port       int
-	buildDelay time.Duration
-	binaryPath string
-	noTailwind bool
-	noTempl    bool
-	exitOnFail bool
-	verbose    bool
-	rootPath   string
-	renderer   string
+	port          int
+	buildDelay    time.Duration
+	binaryPath    string
+	noTailwind    bool
+	noTempl       bool
+	browserReload bool
+	exitOnFail    bool
+	verbose       bool
+	rootPath      string
+	renderer      string
 }
 
 func runDev() error {
@@ -121,7 +127,11 @@ func runDev() error {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	color.Green("[dev] watching for changes (renderer=%s, delay=%s) — press Ctrl+C to stop", cfg.renderer, cfg.buildDelay)
+	color.Green("[dev] watching for changes (renderer=%s, delay=%s, browser-reload=%s) — press Ctrl+C to stop",
+		cfg.renderer, cfg.buildDelay, boolLabel(cfg.browserReload))
+	if cfg.browserReload {
+		color.Green("[dev] open tabs reload automatically after restarts and CSS rebuilds")
+	}
 
 	for {
 		select {
@@ -137,10 +147,18 @@ func runDev() error {
 			color.Green("[dev] stopped")
 			return nil
 
-		case <-w.events:
+		case <-w.restarts:
 			color.Cyan("[dev] change detected — rebuilding")
 			if err := rebuildAndRestart(runner, cfg); err != nil {
 				return err
+			}
+
+		case <-w.cssReloads:
+			// A tailwind rebuild rewrote the stylesheet without a Go
+			// restart: tell connected tabs to reload. Best effort — if the
+			// app is restarting the boot-ID flow reloads tabs anyway.
+			if cfg.browserReload {
+				notifyCSSReload(cfg)
 			}
 
 		case <-runner.exits:
@@ -186,15 +204,62 @@ func rebuildAndRestart(runner *devRunner, cfg devConfig) error {
 	return nil
 }
 
+// notifyCSSReload POSTs the app's loopback-only dev notify endpoint so the
+// DevReload middleware pushes a reload event to connected tabs. Failures
+// are ignored: when the app is down or restarting, the boot-ID reconnect
+// flow reloads tabs anyway, and older framework versions do not mount the
+// endpoint at all.
+func notifyCSSReload(cfg devConfig) {
+	port := cfg.port
+	if port <= 0 {
+		if v := os.Getenv("PORT"); v != "" {
+			port, _ = strconv.Atoi(v)
+		}
+	}
+	if port <= 0 {
+		return
+	}
+	path := strings.TrimSuffix(os.Getenv("DEV_RELOAD_PATH"), "/")
+	if path == "" {
+		path = "/__dev"
+	}
+
+	url := fmt.Sprintf("http://127.0.0.1:%d%s/notify", port, path)
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Post(url, "application/json", nil)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+}
+
+func boolLabel(b bool) string {
+	if b {
+		return "on"
+	}
+	return "off"
+}
+
 func resolveDevConfig(root string) devConfig {
 	cfg := devConfig{
-		port:       devPort,
-		noTailwind: devNoTailwind,
-		noTempl:    devNoTempl,
-		exitOnFail: devExitOnFail,
-		verbose:    devVerbose,
-		rootPath:   root,
-		renderer:   detectRenderer(),
+		port:          devPort,
+		noTailwind:    devNoTailwind,
+		noTempl:       devNoTempl,
+		browserReload: !devNoBrowserReload,
+		exitOnFail:    devExitOnFail,
+		verbose:       devVerbose,
+		rootPath:      root,
+		renderer:      detectRenderer(),
+	}
+
+	// An explicit DEV_RELOAD_ENABLED=false in .env keeps browser reload
+	// off even without the flag (flag > env > default on).
+	if cfg.browserReload {
+		if v := os.Getenv("DEV_RELOAD_ENABLED"); v != "" {
+			if b, err := strconv.ParseBool(v); err == nil && !b {
+				cfg.browserReload = false
+			}
+		}
 	}
 
 	cfg.buildDelay = devBuildDelay

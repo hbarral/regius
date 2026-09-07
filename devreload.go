@@ -239,7 +239,22 @@ type injectingWriter struct {
 	headerWritten bool
 	status        int
 	buffering     bool
-	buf           bytes.Buffer
+	// sniff is set when the handler left Content-Type unset: net/http
+	// would sniff the body at the connection level, so the decision is
+	// deferred to finish() using the same http.DetectContentType.
+	sniff bool
+	buf   bytes.Buffer
+}
+
+func (w *injectingWriter) decide() {
+	ct := strings.ToLower(strings.TrimSpace(w.Header().Get("Content-Type")))
+	switch {
+	case ct == "":
+		w.buffering = true
+		w.sniff = true
+	case strings.HasPrefix(ct, "text/html"):
+		w.buffering = true
+	}
 }
 
 func (w *injectingWriter) WriteHeader(code int) {
@@ -249,12 +264,10 @@ func (w *injectingWriter) WriteHeader(code int) {
 	w.headerWritten = true
 	w.status = code
 
-	ct := w.Header().Get("Content-Type")
-	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(ct)), "text/html") {
-		w.buffering = true
-		return
+	w.decide()
+	if !w.buffering {
+		w.ResponseWriter.WriteHeader(code)
 	}
-	w.ResponseWriter.WriteHeader(code)
 }
 
 func (w *injectingWriter) Write(b []byte) (int, error) {
@@ -280,10 +293,7 @@ func (w *injectingWriter) Flush() {
 	if !w.headerWritten {
 		w.headerWritten = true
 		w.status = http.StatusOK
-		ct := w.Header().Get("Content-Type")
-		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(ct)), "text/html") {
-			w.buffering = true
-		}
+		w.decide()
 	}
 	if w.buffering {
 		w.buffering = false
@@ -301,7 +311,11 @@ func (w *injectingWriter) Flush() {
 // finish writes out a buffered response, injecting the script tag before
 // the last </body> when the response is a full HTML document. Fragments
 // (no closing body tag) are written through untouched: appending to
-// partial responses would corrupt them.
+// partial responses would corrupt them. When the handler left
+// Content-Type unset, the buffered body is sniffed with
+// http.DetectContentType — the same rule net/http applies at the
+// connection — so HTML pages render identically with and without the
+// middleware.
 func (w *injectingWriter) finish() {
 	if !w.buffering {
 		return
@@ -309,10 +323,19 @@ func (w *injectingWriter) finish() {
 	w.buffering = false
 
 	body := w.buf.Bytes()
-	if injected, ok := injectBeforeBodyEnd(body, w.scriptTag); ok {
-		body = injected
-		// The length changed; let net/http use chunked encoding.
-		w.Header().Del("Content-Length")
+	inject := !w.sniff // explicit text/html: always a candidate
+	if w.sniff {
+		if ct := http.DetectContentType(body); strings.HasPrefix(ct, "text/html") {
+			w.Header().Set("Content-Type", ct)
+			inject = true
+		}
+	}
+	if inject {
+		if injected, ok := injectBeforeBodyEnd(body, w.scriptTag); ok {
+			body = injected
+			// The length changed; let net/http use chunked encoding.
+			w.Header().Del("Content-Length")
+		}
 	}
 
 	w.ResponseWriter.WriteHeader(w.status)

@@ -65,10 +65,18 @@ func TestDevReload_Injection(t *testing.T) {
 			wantScript:  false,
 		},
 		{
-			name:        "no content type",
+			name:        "no content type, plain text",
 			contentType: "",
 			body:        "plain text",
 			wantScript:  false,
+		},
+		{
+			// handlers may leave Content-Type unset (net/http sniffs it
+			// at the connection) — HTML pages must still be injected
+			name:        "no content type, html body",
+			contentType: "",
+			body:        "<html><body>sniffed</body></html>",
+			wantScript:  true,
 		},
 		{
 			name:        "html with explicit content-length",

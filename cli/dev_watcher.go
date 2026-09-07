@@ -12,17 +12,22 @@ import (
 )
 
 // devWatcher watches the project tree for changes to restart-worthy files
-// (Go sources, templates, config) and emits debounced rebuild signals.
-// CSS/JS changes are left to the tailwindcss --watch subprocess.
+// (Go sources, templates, config) and emits debounced rebuild signals on
+// the restarts channel. The compiled stylesheet (public/css/output.css) is
+// a carve-out from the otherwise-ignored public/ tree: changes there emit
+// a cssReloads signal instead (a tailwind rebuild means "tell the browser
+// to reload", not "restart the app"). Other CSS/JS changes are left to
+// the tailwindcss --watch subprocess.
 type devWatcher struct {
 	fsw          *fsnotify.Watcher
 	root         string
 	debounce     time.Duration
 	extraIgnores []string
 
-	events chan struct{}
-	stopCh chan struct{}
-	doneCh chan struct{}
+	restarts   chan struct{}
+	cssReloads chan struct{}
+	stopCh     chan struct{}
+	doneCh     chan struct{}
 
 	mu           sync.Mutex
 	stopped      bool
@@ -67,7 +72,8 @@ func newDevWatcher(root string, debounce time.Duration, extraIgnores []string) (
 		root:         root,
 		debounce:     debounce,
 		extraIgnores: extraIgnores,
-		events:       make(chan struct{}, 1),
+		restarts:     make(chan struct{}, 1),
+		cssReloads:   make(chan struct{}, 1),
 		stopCh:       make(chan struct{}),
 		doneCh:       make(chan struct{}),
 	}, nil
@@ -91,6 +97,10 @@ func (w *devWatcher) start(extraPaths []string) error {
 			}
 		}
 	}
+	// public/ is ignored wholesale, but the compiled stylesheet lives at
+	// public/css/output.css and its (re)creation must be observed so the
+	// browser can be told to reload after a tailwind rebuild.
+	_ = w.fsw.Add(filepath.Join(w.root, "public", "css"))
 	go w.loop()
 	return nil
 }
@@ -220,16 +230,42 @@ func (w *devWatcher) qualifies(path string) bool {
 	return true
 }
 
+// devEventKind classifies what a file change means for the dev loop.
+type devEventKind int
+
+const (
+	devEventNone devEventKind = iota
+	devEventRestart
+	devEventCSS
+)
+
+// classify returns what a change to path means: a restart-worthy change,
+// a compiled-stylesheet change (browser reload only), or nothing.
+func (w *devWatcher) classify(path string) devEventKind {
+	if w.isCSSOutput(path) {
+		return devEventCSS
+	}
+	if w.qualifies(path) {
+		return devEventRestart
+	}
+	return devEventNone
+}
+
+// isCSSOutput reports whether path is the compiled stylesheet carved out
+// of the otherwise-ignored public/ tree.
+func (w *devWatcher) isCSSOutput(path string) bool {
+	rel, err := filepath.Rel(w.root, path)
+	if err != nil {
+		return false
+	}
+	return filepath.ToSlash(rel) == "public/css/output.css"
+}
+
 func (w *devWatcher) loop() {
 	defer close(w.doneCh)
 	var timer *time.Timer
-
-	fire := func() {
-		select {
-		case w.events <- struct{}{}:
-		default:
-		}
-	}
+	var timerC <-chan time.Time
+	var pendingRestart, pendingCSS bool
 
 	for {
 		select {
@@ -263,17 +299,46 @@ func (w *devWatcher) loop() {
 				!event.Has(fsnotify.Remove) && !event.Has(fsnotify.Rename) {
 				continue
 			}
-			if !w.qualifies(event.Name) {
+			switch w.classify(event.Name) {
+			case devEventRestart:
+				pendingRestart = true
+				if strings.HasSuffix(event.Name, ".templ") {
+					w.setTemplChanged()
+				}
+			case devEventCSS:
+				pendingCSS = true
+			case devEventNone:
 				continue
 			}
-			if strings.HasSuffix(event.Name, ".templ") {
-				w.setTemplChanged()
-			}
 
+			// Debounce: reset the window on every qualifying event. The
+			// pendings are only read when the timer channel fires below,
+			// on this same goroutine — no cross-goroutine state (an
+			// AfterFunc callback could race a concurrently-arriving event
+			// and wipe its pending flag).
 			if timer != nil {
 				timer.Stop()
 			}
-			timer = time.AfterFunc(w.debounce, fire)
+			timer = time.NewTimer(w.debounce)
+			timerC = timer.C
+
+		case <-timerC:
+			timerC = nil
+			// Each channel is cap-1 and dropping is correct: a pending
+			// signal of the same kind makes the dropped one redundant.
+			if pendingRestart {
+				select {
+				case w.restarts <- struct{}{}:
+				default:
+				}
+			}
+			if pendingCSS {
+				select {
+				case w.cssReloads <- struct{}{}:
+				default:
+				}
+			}
+			pendingRestart, pendingCSS = false, false
 		}
 	}
 }

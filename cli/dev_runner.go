@@ -153,20 +153,23 @@ func (r *devRunner) start() error {
 }
 
 // childEnv returns the app environment: the current environment (already
-// loaded from .env by the root command) with PORT overridden when set.
+// loaded from .env by the root command) with PORT overridden when set and
+// DEV_RELOAD_ENABLED set explicitly so the DevReload middleware state
+// matches the resolved config (flag > env > default on).
 func (r *devRunner) childEnv() []string {
-	if r.cfg.port <= 0 {
-		return os.Environ()
-	}
 	env := os.Environ()
-	out := make([]string, 0, len(env))
+	out := make([]string, 0, len(env)+2)
 	for _, e := range env {
-		if strings.HasPrefix(e, "PORT=") {
+		if strings.HasPrefix(e, "PORT=") || strings.HasPrefix(e, "DEV_RELOAD_ENABLED=") {
 			continue
 		}
 		out = append(out, e)
 	}
-	return append(out, fmt.Sprintf("PORT=%d", r.cfg.port))
+	if r.cfg.port > 0 {
+		out = append(out, fmt.Sprintf("PORT=%d", r.cfg.port))
+	}
+	out = append(out, fmt.Sprintf("DEV_RELOAD_ENABLED=%t", r.cfg.browserReload))
+	return out
 }
 
 // stop gracefully terminates the running child (SIGTERM to the process
