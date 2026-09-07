@@ -31,6 +31,7 @@ Regius is a CLI application for building web pages, inspired by Laravel but buil
   - [_`Validation`_](#validation)
   - [_`Scalar API Reference`_](#scalar-api-reference)
   - [_`Webhooks`_](#webhooks)
+  - [_`Background Jobs`_](#background-jobs)
   - [_`Internationalization (i18n)`_](#internationalization-i18n)
   - [_`Server-Sent Events (SSE)`_](#server-sent-events-sse)
   - [_`Configuration Management`_](#configuration-management)
@@ -295,6 +296,7 @@ Seed files are plain `.sql` files executed in a single transaction, and each is 
 - `regius make mail <name>`: Create mail templates.
 - `regius make api <name>`: Create a CRUD API handler with pagination + response envelope, mounted in routes-api.go.
 - `regius make webhook <name>`: Create a signed inbound webhook endpoint (providers: generic, github, stripe) mounted at /api/webhooks/<name>.
+- `regius make job <name>`: Create a background job (typed payload, handler, enqueue helper) in the workers directory; on first run it also bootstraps the workers/register.go hub, wires RegisterAll into init.regius.go, and scaffolds the regius_jobs table migration.
 - `regius make locale <code>`: Create a new translation locale file (e.g. `regius make locale fr`).
 
 </details>
@@ -1106,6 +1108,81 @@ On success `r.Body` is restored, so downstream code can re-read the payload (e.g
 
 </details>
 
+<a name="background-jobs"></a>
+<details>
+    <summary>Background Jobs</summary>
+
+Run work outside the request cycle — welcome emails, report generation, outbound webhooks, image processing — with retries, backoff, dead-lettering, and monitoring.
+
+```sh
+regius make job send-welcome-email
+```
+
+- Creates `workers/<name>.go`: a typed payload struct, a handler with TODO markers, and an `Enqueue<Name>` helper that handlers/middleware call to schedule the job through `app.App.Jobs`
+- On the first run it also bootstraps `workers/register.go` (the `RegisterAll` hub), wires `workers.RegisterAll(app.App.Jobs)` into `init.regius.go`, and scaffolds the `regius_jobs`/`regius_locks` table migration for the `DATABASE_TYPE` dialect (delete the migration if `JOBS_BACKEND` stays `memory` or `redis`)
+- Later runs append a `MustRegister` line to `register.go`; duplicate names are refused
+- Hyphenated or underscored names become valid Go identifiers: `send-welcome-email` and `send_welcome_email` both produce the `SendWelcomeEmail` handler and the `send_welcome_email` job name
+
+**Running jobs:**
+
+```go
+app.App.Jobs.MustRegister("send_welcome_email", workers.SendWelcomeEmail, jobs.Options{
+    MaxAttempts: 5,
+})
+// from a handler:
+workers.EnqueueSendWelcomeEmail(r.Context(), h.App.Jobs, payload)
+```
+
+- `app.App.Jobs` is always constructed (memory backend by default), so `Enqueue` works even with workers off
+- Workers and the scheduler run in this process only when `JOBS_ENABLED=true`; `ListenAndServe` starts them and drains them on shutdown within `JOBS_GRACEFUL_TIMEOUT` (in-flight attempts are cancelled and their jobs requeued)
+- `JOBS_BACKEND` picks the store: `memory` (default, no persistence), `redis` (reuses `REDIS_*`), or `sql` (the app's database pool — run `./regius migrate` after `regius make job`)
+
+**Delivery semantics:**
+
+- At-least-once: a crash between claiming and completing a job means it runs again after its lease expires — **handlers must be idempotent**
+- Retries with backoff (`Fixed`/`Linear`/`Exponential` with full jitter); after `MaxAttempts` a job is `dead` and visible in the monitoring endpoints
+- A maintenance loop reclaims expired leases (crash recovery) and prunes completed jobs past `JOBS_RETENTION`
+
+**Scheduling beyond cron:**
+
+```go
+app.App.Jobs.Cron("0 9 * * *", "send_daily_digest", nil)   // robfig/cron 5-field spec
+app.App.Jobs.Every(5*time.Minute, "refresh_cache", nil)
+app.App.Jobs.At(r.Context(), runAt, "one_off_report", payload)
+```
+
+- Recurring schedules enqueue an ordinary job at each tick, so scheduled work shares the same retry/backoff/monitoring pipeline
+- With `JOBS_SCHEDULER_LOCK=true` (default), only one process fires each tick when several run workers; set it false for machine-local schedules that must fire on every process
+
+**Monitoring (opt-in via `JOBS_DASHBOARD_ENABLED=true`):**
+
+| Method | Path | Action |
+|--------|------|--------|
+| `GET` | `/api/jobs/stats` | counts by status (pending/running/completed/dead) |
+| `GET` | `/api/jobs?status=dead&name=…&limit=…` | list jobs (pending/running by run-at, completed/dead newest first; `limit` ≤ 200) |
+| `POST` | `/api/jobs/{id}/retry` | resurrect a dead job (attempts reset) |
+| `DELETE` | `/api/jobs/{id}` | remove a dead job |
+
+These routes live on the outer mux, so they bypass CSRF/sanitizer (no form body). They are **off by default**; layer `APIKeyAuth` or `IPFilter` on them in production.
+
+**Environment variables:**
+
+```properties
+#JOBS_ENABLED=false
+#JOBS_BACKEND=memory
+#JOBS_PREFIX=regius:jobs
+#JOBS_WORKERS=4
+#JOBS_POLL_INTERVAL=1s
+#JOBS_LEASE=5m
+#JOBS_MAX_ATTEMPTS=3
+#JOBS_GRACEFUL_TIMEOUT=30s
+#JOBS_RETENTION=24h
+#JOBS_SCHEDULER_LOCK=true
+#JOBS_DASHBOARD_ENABLED=false
+```
+
+</details>
+
 <a name="internationalization-i18n"></a>
 <details>
     <summary>Internationalization (i18n)</summary>
@@ -1627,6 +1704,23 @@ MYSQL_ROOT_PASSWORD=
 RESET_PASSWORD_MAILER_FROM="no-reply@${APP_NAME}.com"
 # support email
 SUPPORT_EMAIL="support@$testapp.com"
+
+# background jobs (opt-in). Workers and the scheduler run only when
+# JOBS_ENABLED=true; the manager is always constructed so Enqueue works
+# even with workers off. JOBS_BACKEND picks the store: memory (default),
+# redis (reuses REDIS_*), or sql (the app's database pool — run
+# `./regius migrate` after `regius make job` scaffolds regius_jobs).
+#JOBS_ENABLED=false
+#JOBS_BACKEND=memory
+#JOBS_PREFIX=regius:jobs
+#JOBS_WORKERS=4
+#JOBS_POLL_INTERVAL=1s
+#JOBS_LEASE=5m
+#JOBS_MAX_ATTEMPTS=3
+#JOBS_GRACEFUL_TIMEOUT=30s
+#JOBS_RETENTION=24h
+#JOBS_SCHEDULER_LOCK=true
+#JOBS_DASHBOARD_ENABLED=false
 ```
 
 </details>

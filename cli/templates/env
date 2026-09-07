@@ -270,3 +270,24 @@ SCALAR_ENABLED=false
 # Never commit real secrets; rotate by appending the new secret in the
 # handler's preset call (any-match semantics) and removing the old one later.
 #WEBHOOK_<NAME>_SECRET=
+
+# background jobs (opt-in). Workers and the scheduler run in this process
+# only when JOBS_ENABLED=true; the manager is always constructed, so Enqueue
+# works even with workers off. JOBS_BACKEND picks the store: memory (default,
+# no persistence), redis (reuses REDIS_*), or sql (the app's database pool — run
+# `./regius migrate` after `regius make job` scaffolds the regius_jobs table).
+#JOBS_ENABLED=false
+#JOBS_BACKEND=memory
+#JOBS_PREFIX=regius:jobs
+#JOBS_WORKERS=4
+#JOBS_POLL_INTERVAL=1s
+#JOBS_LEASE=5m
+#JOBS_MAX_ATTEMPTS=3
+#JOBS_GRACEFUL_TIMEOUT=30s
+#JOBS_RETENTION=24h
+# Schedules fire on every process when false; leave true (default) so multiple
+# processes with workers don't double-enqueue the same tick.
+#JOBS_SCHEDULER_LOCK=true
+# JSON monitoring endpoints at /api/jobs (stats, list, retry, drop). Default
+# off; layer APIKeyAuth or IPFilter on them — they bypass CSRF/sanitizer.
+#JOBS_DASHBOARD_ENABLED=false

@@ -45,6 +45,10 @@ func (r *Regius) routes() http.Handler {
 		r.registerScalarRoutes(mux)
 	}
 
+	if r.config.jobs.dashboardEnabled {
+		r.registerJobsRoutes(mux)
+	}
+
 	mux.Mount("/", appRoutes)
 
 	r.handler = mux

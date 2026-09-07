@@ -288,6 +288,17 @@ The scaffolded app defaults to **templ** (`github.com/a-h/templ`) with the [temp
 - `WEBHOOK_<NAME>_SECRET` is appended to `.env` with a generated 32-char secret (`appendEnvVar` in `cli/helpers.go`; never overwrites, so re-runs are idempotent)
 - The `webhook` package supports generic `X-Signature` (hex/base64), GitHub `X-Hub-Signature-256` (+ legacy sha1 via `Options.Hash`), and Stripe `t=,v1=` signed payloads with timestamp tolerance; multiple secrets for rotation (any-match); constant-time compares; typed errors (`ErrNoSecret`, `ErrMissingHeader`, `ErrBadSignature`, `ErrBadTimestamp`); `Verify` restores `r.Body` so downstream code can re-read it
 
+#### Background Jobs
+
+- Framework package `github.com/hbarral/regius/jobs`: `Job`/`Status` (pending/running/completed/dead), `Store` interface (memory/redis/sql), `Handler`, `Options` (MaxAttempts, per-attempt Timeout, Backoff), `EnqueueOptions` (RunAt, per-job MaxAttempts), backoff presets (`Fixed`/`Linear`/`Exponential` with full jitter), `Manager` (`Register`/`MustRegister`, `Enqueue`/`EnqueueWithOptions`, `Cron`/`Every`/`At` scheduling, `Start`/`Stop` lifecycle, monitoring `Stats`/`List`/`Get`/`Retry`/`Drop`)
+- Delivery is at-least-once; handlers must be idempotent (a crash between Claim and Complete re-runs the job after its lease expires). A maintenance loop reclaims expired leases and prunes completed jobs past `JOBS_RETENTION`; recurring schedules (`Cron`/`Every`) enqueue ordinary jobs at each tick, with a store-side `TryLock` fire-guard (TTL = time until the next occurrence) so multiple processes don't double-fire; `JOBS_SCHEDULER_LOCK=false` opts out for machine-local schedules
+- `Regius.Jobs` is always constructed in `New()` (memory backend by default, so `Enqueue` works everywhere); workers + scheduler run only when `JOBS_ENABLED=true` — `ListenAndServe` starts them and drains them on shutdown within `JOBS_GRACEFUL_TIMEOUT` (in-flight attempts cancelled and requeued). `New()` also starts the previously-never-started `Regius.Scheduler` (latent-bug fix; the Badger value-log GC now actually runs); `Scheduler` is deprecated in favor of `Jobs`. The Badger GC stays on `Scheduler` deliberately (machine-local, must run on every badger process; jobs schedules are cross-process single-fire)
+- Backend selection: `JOBS_BACKEND=memory` (default) | `redis` (reuses the framework's `REDIS_*` pool wiring, creating one if the cache didn't) | `sql` (wraps the app's `r.DB.Pool` with the `DATABASE_TYPE` dialect). `NewSQLStore` normalizes aliases (postgresql/pgx/mariadb/sqlite3); `jobs.Schema(dialect)` + `jobs.ApplySchema` expose the DDL for tests/dev (the CLI migration templates duplicate it — the CLI module cannot import the root module)
+- `Store.Enqueue` must not alias the caller's `*Job` (copies on insert and read); the manager writes final state (`Complete`/`Fail`) through `context.WithoutCancel` so shutdown cannot lose an earned transition
+- Monitoring endpoints (opt-in `JOBS_DASHBOARD_ENABLED`): `/api/jobs/stats`, `/api/jobs` (status/name/limit query params; `limit` ≤ 200), `POST /api/jobs/{id}/retry`, `DELETE /api/jobs/{id}`; mounted on the outer mux (Scalar/SSE precedent), so they bypass NoSurf/sanitizer/maintenance; default-off — layer `APIKeyAuth` or `IPFilter` on them
+- CLI: `regius make job <name>` generates `workers/<name>.go` (typed payload + handler + `Enqueue<Name>` helper); on first run it also bootstraps `workers/register.go` (the `RegisterAll` hub), wires `workers.RegisterAll(app.App.Jobs)` into `init.regius.go` at the `// register background workers here` marker (fallback before `return app`), and scaffolds the `regius_jobs`/`regius_locks` table migration for the `DATABASE_TYPE` dialect (delete it if `JOBS_BACKEND` stays memory/redis). Later runs append a `MustRegister` line; duplicate names are refused. Hyphenated/underscored names normalize to valid Go identifiers (`send-welcome-email`/`send_welcome_email` → `SendWelcomeEmail`, job name `send_welcome_email`)
+- Configured via env vars in `regius.go` `New()`: `JOBS_ENABLED`, `JOBS_BACKEND`, `JOBS_PREFIX`, `JOBS_WORKERS`, `JOBS_POLL_INTERVAL`, `JOBS_LEASE`, `JOBS_MAX_ATTEMPTS`, `JOBS_GRACEFUL_TIMEOUT`, `JOBS_RETENTION`, `JOBS_SCHEDULER_LOCK`, `JOBS_DASHBOARD_ENABLED` (durations are `time.ParseDuration` strings)
+
 ### Internationalization
 
 #### Locale Detection & Middleware
@@ -397,6 +408,9 @@ The scaffolded app defaults to **templ** (`github.com/a-h/templ`) with the [temp
 ./regius make api <name>         # Create CRUD API handler with pagination + envelope
 ./regius make webhook <name>     # Create signed inbound webhook endpoint
                                  #   --provider <generic|stripe|github> (generic is default)
+./regius make job <name>         # Create a background job (workers/<name>.go +
+                                 #   register.go hub + init.regius.go wiring + regius_jobs
+                                 #   table migration on first run)
 ./regius make locale <code>      # Create a new translation locale (e.g. fr)
 ./regius down                    # Maintenance mode on
 ./regius up                      # Maintenance mode off
