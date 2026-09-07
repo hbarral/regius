@@ -31,6 +31,7 @@ func (r *Regius) routes() http.Handler {
 	}
 
 	mux.Use(r.SecurityHeaders(r.config.securityHeaders))
+	mux.Use(r.DevReload(r.config.devReload))
 	if r.Debug {
 		mux.Use(middleware.Logger)
 	}
