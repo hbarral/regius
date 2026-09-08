@@ -9,6 +9,10 @@ import (
 // env var and then the default (templ).
 var makeRenderer string
 
+// makeMiddlewareGlobal is set by --global on make middleware: also wire the
+// generated middleware into the global chain in routes.go.
+var makeMiddlewareGlobal bool
+
 func init() {
 	rootCmd.AddCommand(makeCmd)
 
@@ -25,6 +29,10 @@ func init() {
 	makeCmd.AddCommand(makeAPICmd)
 	makeCmd.AddCommand(makeWebhookCmd)
 	makeCmd.AddCommand(makeJobCmd)
+	makeCmd.AddCommand(makeMiddlewareCmd)
+	makeCmd.AddCommand(makeServiceCmd)
+	makeCmd.AddCommand(makeResourceCmd)
+	makeCmd.AddCommand(makeCrudCmd)
 }
 
 var makeCmd = &cobra.Command{

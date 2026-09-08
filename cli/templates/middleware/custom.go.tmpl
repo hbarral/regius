@@ -1,0 +1,15 @@
+package middleware
+
+import "net/http"
+
+// $MIDDLEWARE_NAME TODO: describe what this middleware does.
+func (m *Middleware) $MIDDLEWARE_NAME(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// TODO: this runs before the downstream handler; write a response
+		// and return here to short-circuit the chain.
+
+		next.ServeHTTP(w, r)
+
+		// TODO: this runs after the downstream handler.
+	})
+}

@@ -7,19 +7,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
-
-// webhookTitle converts a lowercased webhook name into the exported Go
-// identifier prefix used in the generated handler, e.g. "stripe-payment"
-// becomes "StripePayment" (cases.Title keeps hyphens, which are invalid in
-// Go identifiers, so word separators are normalized to spaces first).
-func webhookTitle(lower string) string {
-	words := strings.NewReplacer("-", " ", "_", " ").Replace(lower)
-	title := cases.Title(language.English, cases.NoLower).String(words)
-	return strings.ReplaceAll(title, " ", "")
-}
 
 // webhookProviders maps the --provider flag value to the webhook preset
 // function baked into the generated handler.
@@ -73,8 +61,8 @@ func doMakeWebhook(name, provider string) error {
 	}
 
 	lower := strings.ToLower(name)
-	title := webhookTitle(lower)
-	secretEnv := "WEBHOOK_" + strings.ToUpper(strings.ReplaceAll(lower, "-", "_")) + "_SECRET"
+	title := pascalIdent(lower)
+	secretEnv := "WEBHOOK_" + envIdent(lower) + "_SECRET"
 
 	fileName := b.RootPath + "/handlers/webhook_" + lower + ".go"
 	if fileExists(fileName) {

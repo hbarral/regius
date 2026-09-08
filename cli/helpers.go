@@ -3,10 +3,74 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"go/format"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+// addImport ensures imp ("module/pkg") is present in src's import block,
+// inserting it right after the anchor import when present and otherwise
+// before the block's closing paren. No-op when already imported.
+func addImport(src, imp, anchor string) string {
+	if strings.Contains(src, imp) {
+		return src
+	}
+
+	if anchor != "" && strings.Contains(src, anchor) {
+		return strings.Replace(src, anchor, anchor+"\n\t"+imp, 1)
+	}
+
+	if i := strings.Index(src, "import ("); i >= 0 {
+		if j := strings.Index(src[i:], "\n)"); j > 0 {
+			pos := i + j
+			return src[:pos] + "\n\t" + imp + src[pos:]
+		}
+	}
+	return src
+}
+
+// insertAfterLine inserts newLine (a full line including its trailing
+// newline) right after the first line containing contains. Returns ok=false
+// when no such line exists.
+func insertAfterLine(content, contains, newLine string) (string, bool) {
+	idx := strings.Index(content, contains)
+	if idx < 0 {
+		return "", false
+	}
+	end := strings.IndexByte(content[idx:], '\n')
+	if end < 0 {
+		return content + newLine, true
+	}
+	pos := idx + end + 1
+	return content[:pos] + newLine + content[pos:], true
+}
+
+// writeFormatted writes content to path, normalizing it with gofmt when it
+// parses (so injected fields align with existing ones); when it does not
+// parse the raw content is written as-is.
+func writeFormatted(path string, content []byte) error {
+	if out, err := format.Source(content); err == nil {
+		content = out
+	}
+
+	if err := os.WriteFile(path, content, 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", filepath.Base(path), err)
+	}
+	return nil
+}
+
+// gofmtFile normalizes an existing file with gofmt, leaving it untouched
+// when it does not parse or cannot be read.
+func gofmtFile(path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	if out, err := format.Source(data); err == nil {
+		_ = os.WriteFile(path, out, 0644)
+	}
+}
 
 // migrationDSN returns a DSN suitable for golang-migrate.
 func migrationDSN() (string, error) {
@@ -124,48 +188,117 @@ func checkForDB() {
 	}
 }
 
-// insertRoutesBlock inserts block (one or more tab-indented lines) into the
-// app's routes-api.go, inside the /api route group. The block is inserted at
-// the "// add any API route here" marker when present, otherwise right after
-// the r.Route("/api", ...) opening line. Idempotent: returns nil without
-// writing when the block is already mounted.
+// insertAtMarker inserts snippet (a full line-oriented block ending in a
+// newline) into the file at path, immediately before the line containing
+// marker, keeping that marker line last. already is the substring used for
+// the idempotency check: when present in the file, nothing is written. When
+// no line contains marker, fallback derives the insertion point from the
+// file contents and returns the modified content, or ok=false when none
+// exists.
+func insertAtMarker(path, marker, snippet, already string, fallback func(content string) (string, bool)) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read %s: %w", filepath.Base(path), err)
+	}
+
+	content := string(data)
+	if already != "" && strings.Contains(content, already) {
+		return nil
+	}
+
+	if line, ok := markerLine(content, marker); ok {
+		content = strings.Replace(content, line, snippet+"\n"+line, 1)
+	} else {
+		if fallback == nil {
+			return fmt.Errorf("no insertion point found in %s (missing %q marker)", filepath.Base(path), marker)
+		}
+		content, ok = fallback(content)
+		if !ok {
+			return fmt.Errorf("no insertion point found in %s (missing %q marker)", filepath.Base(path), marker)
+		}
+	}
+
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", filepath.Base(path), err)
+	}
+
+	return nil
+}
+
+// markerLine returns the whole line containing marker (including its
+// indentation and trailing newline), if marker is present in content.
+func markerLine(content, marker string) (string, bool) {
+	idx := strings.Index(content, marker)
+	if idx < 0 {
+		return "", false
+	}
+	start := strings.LastIndex(content[:idx], "\n") + 1
+	end := strings.IndexByte(content[idx:], '\n')
+	if end < 0 {
+		return content[start:], true
+	}
+	return content[start : idx+end+1], true
+}
+
+// indentLines prefixes every non-empty line of block with indent.
+func indentLines(block, indent string) string {
+	lines := strings.Split(block, "\n")
+	for i, line := range lines {
+		if line != "" {
+			lines[i] = indent + line
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// insertRoutesBlock inserts block (one or more lines, unindented) into the
+// app's routes-api.go, inside the /api route group, with the group's
+// two-tab indentation. The block is inserted at the "// add any API route
+// here" marker when present, otherwise right after the r.Route("/api", ...)
+// opening line. Idempotent: returns nil without writing when the block is
+// already mounted.
 func insertRoutesBlock(routesPath, block string) error {
-	routesData, err := os.ReadFile(routesPath)
+	// generated mount lines reference the chi router param, so make sure the
+	// route-group closure's param is named
+	if err := nameChiRouterParam(routesPath); err != nil {
+		return err
+	}
+
+	snippet := indentLines(block, "\t\t") + "\n"
+	firstLine := strings.SplitN(block, "\n", 2)[0]
+	return insertAtMarker(routesPath, "// add any API route here", snippet, firstLine, func(content string) (string, bool) {
+		// Fallback: insert right after the first r.Route(...) opening line.
+		// The generated skeleton uses r.Route("/", ...) here (it is mounted
+		// at /api from routes.go), so matching a hardcoded path would fail.
+		openIdx := strings.Index(content, "r.Route(")
+		if openIdx < 0 {
+			return "", false
+		}
+		lineEnd := strings.Index(content[openIdx:], "\n")
+		if lineEnd < 0 {
+			return content + "\n" + snippet, true
+		}
+		pos := openIdx + lineEnd
+		return content[:pos] + "\n" + snippet + content[pos:], true
+	})
+}
+
+// nameChiRouterParam rewrites the skeleton's unnamed route-group closure
+// param (func(_ chi.Router)) to a named one so generated mount lines
+// compile. No-op when the param is already named.
+func nameChiRouterParam(routesPath string) error {
+	data, err := os.ReadFile(routesPath)
 	if err != nil {
 		return fmt.Errorf("failed to read routes-api.go: %w", err)
 	}
 
-	routesStr := string(routesData)
-	firstLine := strings.SplitN(block, "\n", 2)[0]
-	if strings.Contains(routesStr, firstLine) {
+	str := string(data)
+	if !strings.Contains(str, "func(_ chi.Router)") {
 		return nil
 	}
 
-	if strings.Contains(routesStr, "func(_ chi.Router)") {
-		routesStr = strings.Replace(routesStr, "func(_ chi.Router)", "func(r chi.Router)", 1)
-	}
-
-	marker := "// add any API route here"
-	if strings.Contains(routesStr, marker) {
-		routesStr = strings.Replace(routesStr, marker, block+"\n\n\t\t"+marker, 1)
-	} else {
-		// Fallback: insert right after the first r.Route(...) opening line.
-		// The generated skeleton uses r.Route("/", ...) here (it is mounted
-		// at /api from routes.go), so matching a hardcoded path would fail.
-		openIdx := strings.Index(routesStr, "r.Route(")
-		if openIdx < 0 {
-			return errors.New("no route insertion point found in routes-api.go")
-		}
-		lineEnd := strings.Index(routesStr[openIdx:], "\n")
-		if lineEnd < 0 {
-			routesStr += "\n\t\t" + block + "\n"
-		} else {
-			pos := openIdx + lineEnd
-			routesStr = routesStr[:pos] + "\n\t\t" + block + routesStr[pos:]
-		}
-	}
-
-	if err := os.WriteFile(routesPath, []byte(routesStr), 0644); err != nil {
+	str = strings.Replace(str, "func(_ chi.Router)", "func(r chi.Router)", 1)
+	if err := os.WriteFile(routesPath, []byte(str), 0644); err != nil {
 		return fmt.Errorf("failed to write routes-api.go: %w", err)
 	}
 

@@ -338,9 +338,13 @@ Seed files are plain `.sql` files executed in a single transaction, and each is 
 - `regius make session`: Create session table in database.
 - `regius make key`: Generate 32-character encryption key.
 - `regius make mail <name>`: Create mail templates.
-- `regius make api <name>`: Create a CRUD API handler with pagination + response envelope, mounted in routes-api.go.
+- `regius make api <name>`: Create a CRUD API handler with pagination + response envelope, mounted in routes-api.go. Pass `--with-resource` to also generate an API resource (JSON transformer).
 - `regius make webhook <name>`: Create a signed inbound webhook endpoint (providers: generic, github, stripe) mounted at /api/webhooks/<name>.
 - `regius make job <name>`: Create a background job (typed payload, handler, enqueue helper) in the workers directory; on first run it also bootstraps the workers/register.go hub, wires RegisterAll into init.regius.go, and scaffolds the regius_jobs table migration.
+- `regius make crud <name>`: Create a full-stack web CRUD slice: model (data/<name>.go), create-table migration, model wiring in data/models.go, resource controller (handlers/<table>_crud.go with list/show/new/create/edit/update/delete), renderer-aware views (views/<table>/), and routes mounted at /<table>s in routes.go. Accepts `--renderer templ|jet|go`.
+- `regius make resource <name>`: Create an API resource (resources/<name>_resource.go): a JSON transformer that shapes a model for the `{data, error, meta}` response envelope, with constructors for one item and a collection.
+- `regius make middleware <name>`: Create a custom middleware stub as a method on the app's Middleware struct; pass `--global` to also wire `a.use(a.Middleware.<Name>)` into the global chain in routes.go.
+- `regius make service <name>`: Create a service-layer stub (services/<name>.go) with App/Models injected; the first service also bootstraps the services/services.go hub, adds the Services field to the application and handlers, and wires NewServices in init.regius.go. Handlers reach services via `h.Services.<Name>`.
 - `regius make locale <code>`: Create a new translation locale file (e.g. `regius make locale fr`).
 
 </details>

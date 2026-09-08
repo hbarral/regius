@@ -52,6 +52,8 @@ func initApplication() *application {
 	myHandlers.Models = app.Models
 	app.Middleware.Models = app.Models
 
+	// register services here
+
 	// register background workers here
 
 	return app
