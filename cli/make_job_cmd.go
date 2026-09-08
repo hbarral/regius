@@ -40,8 +40,8 @@ func doMakeJob(name string) error {
 	}
 
 	lower := strings.ToLower(name)
-	title := webhookTitle(lower)
-	jobName := strings.ReplaceAll(lower, "-", "_")
+	title := pascalIdent(lower)
+	jobName := snakeIdent(name)
 
 	// the handler file; refuse duplicates
 	fileName := b.RootPath + "/workers/" + jobName + ".go"
@@ -130,34 +130,17 @@ func jobsTableMigration() (dialect string, up, down []byte, err error) {
 // appendRegistration adds one MustRegister entry to the workers hub,
 // keeping the marker comment last. Idempotent per job name.
 func appendRegistration(registerPath, jobName, title string) error {
-	data, err := os.ReadFile(registerPath)
-	if err != nil {
-		return fmt.Errorf("failed to read workers/register.go: %w", err)
-	}
-
-	str := string(data)
-	if strings.Contains(str, fmt.Sprintf("m.MustRegister(%q, %s,", jobName, title)) {
-		return nil
-	}
-
 	snippet := fmt.Sprintf("\tm.MustRegister(%q, %s, jobs.Options{\n\t\tMaxAttempts: 3, // TODO: tune per job\n\t})\n", jobName, title)
-	marker := "// additional jobs are registered here"
-	if strings.Contains(str, "\n\t"+marker) {
-		str = strings.Replace(str, "\n\t"+marker, snippet+"\n\t"+marker, 1)
-	} else {
+	already := fmt.Sprintf("m.MustRegister(%q, %s,", jobName, title)
+	return insertAtMarker(registerPath, "// additional jobs are registered here", snippet, already, func(content string) (string, bool) {
 		// fallback: before the closing brace of RegisterAll (the last one
 		// in the file)
-		idx := strings.LastIndex(str, "\n}")
+		idx := strings.LastIndex(content, "\n}")
 		if idx < 0 {
-			return errors.New("no registration insertion point found in workers/register.go; add the MustRegister line manually")
+			return "", false
 		}
-		str = str[:idx] + "\n" + snippet + str[idx:]
-	}
-
-	if err := os.WriteFile(registerPath, []byte(str), 0644); err != nil {
-		return fmt.Errorf("failed to write workers/register.go: %w", err)
-	}
-	return nil
+		return content[:idx] + "\n" + snippet + content[idx:], true
+	})
 }
 
 // wireWorkersRegistration inserts the workers import and the
@@ -201,21 +184,5 @@ func wireWorkersRegistration(initPath, module string) error {
 // preferring the spot right after the middleware import (the skeleton
 // layout) and falling back to the import block's closing paren.
 func addWorkersImport(src, module string) string {
-	imp := "\"" + module + "/workers\""
-	if strings.Contains(src, imp) {
-		return src
-	}
-
-	anchor := "\"" + module + "/middleware\""
-	if strings.Contains(src, anchor) {
-		return strings.Replace(src, anchor, anchor+"\n\t"+imp, 1)
-	}
-
-	if i := strings.Index(src, "import ("); i >= 0 {
-		if j := strings.Index(src[i:], "\n)"); j > 0 {
-			pos := i + j
-			return src[:pos] + "\n\t" + imp + src[pos:]
-		}
-	}
-	return src
+	return addImport(src, "\""+module+"/workers\"", "\""+module+"/middleware\"")
 }

@@ -291,3 +291,16 @@ SCALAR_ENABLED=false
 # JSON monitoring endpoints at /api/jobs (stats, list, retry, drop). Default
 # off; layer APIKeyAuth or IPFilter on them — they bypass CSRF/sanitizer.
 #JOBS_DASHBOARD_ENABLED=false
+
+# hot-reload development (`regius dev`). Defaults shown; uncomment to change.
+# DEV_BUILD_DELAY is the debounce after the last file change before rebuilding.
+# DEV_EXIT_ON_FAILURE=true stops the watcher instead of keeping the old
+# process alive when a rebuild fails.
+#DEV_BUILD_DELAY=500ms
+#DEV_EXIT_ON_FAILURE=false
+# Browser live-reload: `regius dev` enables it automatically for the dev
+# process (open tabs reload after restarts and CSS rebuilds). Set
+# DEV_RELOAD_ENABLED=false to keep it off even under `regius dev`. Never
+# enable it in production.
+#DEV_RELOAD_ENABLED=false
+#DEV_RELOAD_PATH=/__dev

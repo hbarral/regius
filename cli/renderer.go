@@ -147,84 +147,16 @@ func jetTailwindSources() string {
 `
 }
 
-// patchTaskfileForJet rewrites the scaffolded Taskfile for the jet renderer so
-// the Tailwind watcher scans Jet templates instead of templ/templui sources.
-func patchTaskfileForJet() error {
-	// Write the source file up-front so the dev workflow is ready immediately.
-	if err := copyDataToFile([]byte(jetTailwindSources()), "assets/css/sources.generated.css"); err != nil {
-		return err
+// patchCSSSources writes the renderer-specific @source directives to
+// assets/css/sources.generated.css so the Makefile tailwind targets (and
+// `regius dev`) work immediately after scaffolding.
+func patchCSSSources(renderer string) error {
+	switch strings.ToLower(renderer) {
+	case "jet":
+		return copyDataToFile([]byte(jetTailwindSources()), "assets/css/sources.generated.css")
+	default:
+		return copyDataToFile([]byte(goTailwindSources()), "assets/css/sources.generated.css")
 	}
-
-	taskfile := `version: "3"
-
-tasks:
-  tailwind:
-    desc: Watch and rebuild Tailwind CSS stylesheet automatically
-    cmds:
-      - |
-        printf '%s\n' \
-          '@source "./**/*.jet";' \
-          '@source "./**/*.js";' \
-          > ./assets/css/sources.generated.css && \
-        NODE_OPTIONS="" tailwindcss -i ./assets/css/input.css -o ./public/css/output.css --watch
-
-  build-css:
-    desc: Build the Tailwind CSS stylesheet once
-    cmds:
-      - |
-        printf '%s\n' \
-          '@source "./**/*.jet";' \
-          '@source "./**/*.js";' \
-          > ./assets/css/sources.generated.css && \
-        NODE_OPTIONS="" tailwindcss -i ./assets/css/input.css -o ./public/css/output.css
-
-  dev:
-    desc: Run the Tailwind CSS watcher for development
-    cmds:
-      - go-task tailwind
-`
-	return os.WriteFile("Taskfile.yml", []byte(taskfile), 0o644)
-}
-
-// patchTaskfileForGo rewrites the scaffolded Taskfile for the go renderer so
-// the Tailwind watcher scans Go templates instead of templ/templui sources.
-func patchTaskfileForGo() error {
-	// Write the source file up-front so the dev workflow is ready immediately.
-	if err := copyDataToFile([]byte(goTailwindSources()), "assets/css/sources.generated.css"); err != nil {
-		return err
-	}
-
-	taskfile := `version: "3"
-
-tasks:
-  tailwind:
-    desc: Watch and rebuild Tailwind CSS stylesheet automatically
-    cmds:
-      - |
-        printf '%s\n' \
-          '@source "./**/*.page.template";' \
-          '@source "./**/*.layout.template";' \
-          '@source "./**/*.js";' \
-          > ./assets/css/sources.generated.css && \
-        NODE_OPTIONS="" tailwindcss -i ./assets/css/input.css -o ./public/css/output.css --watch
-
-  build-css:
-    desc: Build the Tailwind CSS stylesheet once
-    cmds:
-      - |
-        printf '%s\n' \
-          '@source "./**/*.page.template";' \
-          '@source "./**/*.layout.template";' \
-          '@source "./**/*.js";' \
-          > ./assets/css/sources.generated.css && \
-        NODE_OPTIONS="" tailwindcss -i ./assets/css/input.css -o ./public/css/output.css
-
-  dev:
-    desc: Run the Tailwind CSS watcher for development
-    cmds:
-      - go-task tailwind
-`
-	return os.WriteFile("Taskfile.yml", []byte(taskfile), 0o644)
 }
 
 // pruneForRenderer removes templui/Tailwind-only files from the scaffold for
@@ -260,7 +192,7 @@ func pruneForRenderer(renderer string) error {
 	switch renderer {
 	case "go":
 		// The go renderer keeps the Tailwind CSS workflow and ships a
-		// pre-built public/css/output.css, so assets/ and the Taskfile stay.
+		// pre-built public/css/output.css, so assets/ stay.
 		// Remove the jet views that are shipped for the jet renderer.
 		_ = os.Remove("views/home.jet")
 		_ = os.Remove("views/layouts/base.jet")
@@ -287,8 +219,9 @@ func pruneForRenderer(renderer string) error {
 			}
 		}
 
-		// Rewrite the Tailwind watcher to scan Go templates instead of templ.
-		if err := patchTaskfileForGo(); err != nil {
+		// Write the go-template Tailwind sources (the Makefile targets read
+		// them from assets/css/sources.generated.css).
+		if err := patchCSSSources("go"); err != nil {
 			return err
 		}
 
@@ -320,8 +253,9 @@ func pruneForRenderer(renderer string) error {
 			}
 		}
 
-		// Rewrite the Tailwind watcher to scan Jet templates instead of templ.
-		if err := patchTaskfileForJet(); err != nil {
+		// Write the Jet Tailwind sources (the Makefile targets read them from
+		// assets/css/sources.generated.css).
+		if err := patchCSSSources("jet"); err != nil {
 			return err
 		}
 	}

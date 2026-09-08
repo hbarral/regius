@@ -9,12 +9,15 @@ import (
 
 func (a *application) routes() *chi.Mux {
 	// middlewares
+	// add any global middleware here
 	// a.use(a.Middleware.CheckRemember)
 
 	// routes
 	a.get("/", a.Handlers.Home)
 	a.get("/set-language/{lang}", a.Handlers.SetLanguage)
 	a.get("/sse/ping", a.Handlers.SSEPing)
+
+	// add any route here
 
 	// static routes
 	fileServer := http.FileServer(http.Dir("./public"))

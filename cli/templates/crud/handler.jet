@@ -1,0 +1,169 @@
+package handlers
+
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/hbarral/regius/render"
+)
+
+// $TITLEList renders all $TABLE.
+func (h *Handlers) $TITLEList(w http.ResponseWriter, r *http.Request) {
+	// TODO: fetch records, e.g.:
+	// all, err := h.Models.$TITLE.GetAll(nil)
+	// if err != nil {
+	// 	h.App.ErrorStatus(w, http.StatusInternalServerError)
+	// 	return
+	// }
+
+	err := h.App.Render.Page(w, r, h.App.Render.Jet("$TABLE/index", nil), &render.TemplateData{Data: map[string]any{
+		// "items": all,
+	}})
+	if err != nil {
+		h.App.ErrorLog.Println("error rendering", err)
+	}
+}
+
+// $TITLEShow renders one $TABLE record.
+func (h *Handlers) $TITLEShow(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		h.App.ErrorStatus(w, http.StatusBadRequest)
+		return
+	}
+	_ = id
+
+	// TODO: fetch the record, e.g.:
+	// one, err := h.Models.$TITLE.Get(id)
+	// if err != nil {
+	// 	h.App.ErrorStatus(w, http.StatusNotFound)
+	// 	return
+	// }
+
+	err = h.App.Render.Page(w, r, h.App.Render.Jet("$TABLE/show", nil), &render.TemplateData{Data: map[string]any{
+		"id": id,
+		// "item": one,
+	}})
+	if err != nil {
+		h.App.ErrorLog.Println("error rendering", err)
+	}
+}
+
+// $TITLENew renders the create form.
+func (h *Handlers) $TITLENew(w http.ResponseWriter, r *http.Request) {
+	err := h.App.Render.Page(w, r, h.App.Render.Jet("$TABLE/form", nil), nil)
+	if err != nil {
+		h.App.ErrorLog.Println("error rendering", err)
+	}
+}
+
+// $TITLECreate stores a new $TABLE record.
+func (h *Handlers) $TITLECreate(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		h.App.ErrorStatus(w, http.StatusBadRequest)
+		return
+	}
+
+	// TODO: validate the input and insert, e.g.:
+	// m := data.$TITLE{ /* TODO: map fields from r.PostForm */ }
+	// newID, err := h.Models.$TITLE.Insert(m)
+	// if err != nil {
+	// 	h.App.Session.Put(r.Context(), "error", "could not create the record")
+	// 	http.Redirect(w, r, "/$TABLE/new", http.StatusSeeOther)
+	// 	return
+	// }
+	// h.App.Session.Put(r.Context(), "flash", "record created")
+	// http.Redirect(w, r, "/$TABLE", http.StatusSeeOther)
+	// return
+
+	h.App.Session.Put(r.Context(), "error", "$TITLE create is not implemented yet")
+	http.Redirect(w, r, "/$TABLE", http.StatusSeeOther)
+}
+
+// $TITLEEdit renders the edit form for one $TABLE record.
+func (h *Handlers) $TITLEEdit(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		h.App.ErrorStatus(w, http.StatusBadRequest)
+		return
+	}
+	_ = id
+
+	// TODO: fetch the record, e.g.:
+	// one, err := h.Models.$TITLE.Get(id)
+	// if err != nil {
+	// 	h.App.ErrorStatus(w, http.StatusNotFound)
+	// 	return
+	// }
+
+	err = h.App.Render.Page(w, r, h.App.Render.Jet("$TABLE/form", nil), &render.TemplateData{Data: map[string]any{
+		"id":         id,
+		"formAction": "/$TABLE/" + chi.URLParam(r, "id"),
+		// "item": one,
+	}})
+	if err != nil {
+		h.App.ErrorLog.Println("error rendering", err)
+	}
+}
+
+// $TITLEUpdate stores changes to one $TABLE record.
+func (h *Handlers) $TITLEUpdate(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		h.App.ErrorStatus(w, http.StatusBadRequest)
+		return
+	}
+	_ = id
+
+	err = r.ParseForm()
+	if err != nil {
+		h.App.ErrorStatus(w, http.StatusBadRequest)
+		return
+	}
+
+	// TODO: validate the input and update, e.g.:
+	// m, err := h.Models.$TITLE.Get(id)
+	// if err != nil {
+	// 	h.App.ErrorStatus(w, http.StatusNotFound)
+	// 	return
+	// }
+	// // TODO: map fields from r.PostForm onto m
+	// err = h.Models.$TITLE.Update(*m)
+	// if err != nil {
+	// 	h.App.Session.Put(r.Context(), "error", "could not update the record")
+	// 	http.Redirect(w, r, "/$TABLE/"+strconv.Itoa(id)+"/edit", http.StatusSeeOther)
+	// 	return
+	// }
+	// h.App.Session.Put(r.Context(), "flash", "record updated")
+	// http.Redirect(w, r, "/$TABLE", http.StatusSeeOther)
+	// return
+
+	h.App.Session.Put(r.Context(), "error", "$TITLE update is not implemented yet")
+	http.Redirect(w, r, "/$TABLE", http.StatusSeeOther)
+}
+
+// $TITLEDelete removes one $TABLE record.
+func (h *Handlers) $TITLEDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		h.App.ErrorStatus(w, http.StatusBadRequest)
+		return
+	}
+	_ = id
+
+	// TODO: delete the record, e.g.:
+	// err = h.Models.$TITLE.Delete(id)
+	// if err != nil {
+	// 	h.App.Session.Put(r.Context(), "error", "could not delete the record")
+	// 	http.Redirect(w, r, "/$TABLE", http.StatusSeeOther)
+	// 	return
+	// }
+	// h.App.Session.Put(r.Context(), "flash", "record deleted")
+	// http.Redirect(w, r, "/$TABLE", http.StatusSeeOther)
+	// return
+
+	h.App.Session.Put(r.Context(), "error", "$TITLE delete is not implemented yet")
+	http.Redirect(w, r, "/$TABLE", http.StatusSeeOther)
+}

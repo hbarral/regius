@@ -7,8 +7,6 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 func init() {
@@ -39,7 +37,7 @@ func doMakeHandler(name string) error {
 	}
 
 	lower := strings.ToLower(name)
-	title := cases.Title(language.English, cases.NoLower).String(name)
+	title := pascalIdent(name)
 	appName := os.Getenv("APP_NAME")
 
 	fileName := b.RootPath + "/handlers/" + lower + ".go"

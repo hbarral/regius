@@ -1,0 +1,24 @@
+package services
+
+import (
+	"${APP_NAME}/data"
+
+	"github.com/hbarral/regius"
+)
+
+// Services is the app's service-layer hub: constructed once in
+// init.regius.go and injected into the handlers so they can reach every
+// service via h.Services.<Name>. The `regius make service` command appends
+// one entry per service.
+type Services struct {
+	$FIELD_NAME *$SERVICE_TYPE
+	// additional service fields are registered here
+}
+
+// NewServices constructs every service with its shared dependencies.
+func NewServices(app *regius.Regius, models data.Models) *Services {
+	return &Services{
+		$FIELD_NAME: New$SERVICE_TYPE(app, models),
+		// additional service constructors are registered here
+	}
+}

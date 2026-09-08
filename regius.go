@@ -95,6 +95,7 @@ type config struct {
 	uploads          uploadConfig
 	cors             CORSConfig
 	securityHeaders  SecurityHeadersConfig
+	devReload        DevReloadConfig
 	apiKeyAuth       APIKeyAuthConfig
 	requestID        RequestIDConfig
 	requestSanitizer RequestSanitizerConfig
@@ -255,6 +256,11 @@ func (r *Regius) New(rootPath string) error {
 	}
 	hstsPreload, _ := strconv.ParseBool(os.Getenv("HSTS_PRELOAD"))
 
+	devReloadEnabled := false
+	if os.Getenv("DEV_RELOAD_ENABLED") != "" {
+		devReloadEnabled, _ = strconv.ParseBool(os.Getenv("DEV_RELOAD_ENABLED"))
+	}
+
 	apiKeyAuthEnabled := false
 	if os.Getenv("API_KEY_AUTH_ENABLED") != "" {
 		apiKeyAuthEnabled, _ = strconv.ParseBool(os.Getenv("API_KEY_AUTH_ENABLED"))
@@ -384,6 +390,10 @@ func (r *Regius) New(rootPath string) error {
 			CrossOriginOpenerPolicy:       os.Getenv("CROSS_ORIGIN_OPENER_POLICY"),
 			CrossOriginResourcePolicy:     os.Getenv("CROSS_ORIGIN_RESOURCE_POLICY"),
 			XDNSPrefetchControl:           os.Getenv("X_DNS_PREFETCH_CONTROL"),
+		},
+		devReload: DevReloadConfig{
+			Enabled: devReloadEnabled,
+			Path:    os.Getenv("DEV_RELOAD_PATH"),
 		},
 		apiKeyAuth: APIKeyAuthConfig{
 			Enabled:    apiKeyAuthEnabled,
