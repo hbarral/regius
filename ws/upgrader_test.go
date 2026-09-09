@@ -1,7 +1,9 @@
 package ws
 
 import (
+	"bufio"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -229,13 +231,24 @@ func TestUpgrade_OriginRejected_TypedError(t *testing.T) {
 	}
 }
 
+// hijackableRecorder lets recorder-based tests pass the upgrader's
+// hijackability walk; the handshake-failure paths under test return
+// before any hijack happens, so the stub never runs.
+type hijackableRecorder struct {
+	*httptest.ResponseRecorder
+}
+
+func (hijackableRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return nil, nil, errors.New("not really hijackable")
+}
+
 func TestUpgrade_UpgradeFailed(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/ws", nil)
 	for k, v := range wsHeaders() {
 		r.Header.Set(k, v)
 	}
 	r.Header.Set("Sec-WebSocket-Version", "12") // unsupported version
-	w := httptest.NewRecorder()
+	w := &hijackableRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 	_, err := (&Upgrader{}).Upgrade(w, r)
 	if !errors.Is(err, ErrUpgradeFailed) {
@@ -292,6 +305,94 @@ func TestConn_CloseHandshake(t *testing.T) {
 	}
 	if closeErr.Text != "done" {
 		t.Fatalf("close text = %q, want %q", closeErr.Text, "done")
+	}
+}
+
+// unwrappingWrapper mimics middleware like the scs session writer: it
+// wraps the ResponseWriter without promoting http.Hijacker, but exposes
+// Unwrap so the underlying writer is reachable.
+type unwrappingWrapper struct {
+	http.ResponseWriter
+	wroteHeader bool
+}
+
+func (uw *unwrappingWrapper) WriteHeader(code int) {
+	uw.wroteHeader = true
+	uw.ResponseWriter.WriteHeader(code)
+}
+
+func (uw *unwrappingWrapper) Write(b []byte) (int, error) {
+	uw.wroteHeader = true
+	return uw.ResponseWriter.Write(b)
+}
+
+func (uw *unwrappingWrapper) Unwrap() http.ResponseWriter {
+	return uw.ResponseWriter
+}
+
+// TestUpgrade_ThroughWrappingMiddleware is the regression test for the
+// scs case: an upgrade must succeed through a middleware writer that
+// implements Unwrap but not http.Hijacker. Without the chain walk,
+// gorilla's direct assertion fails and the handshake 500s.
+func TestUpgrade_ThroughWrappingMiddleware(t *testing.T) {
+	upgrader := &Upgrader{WriteTimeout: time.Second}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uw := &unwrappingWrapper{ResponseWriter: w}
+		conn, err := upgrader.Upgrade(uw, r)
+		if err != nil {
+			t.Errorf("Upgrade() through wrapping middleware error = %v", err)
+			return
+		}
+		defer conn.Close("done")
+		if err := conn.WriteEvent(Event{Event: "hello", Data: []byte(`"wrapped"`)}); err != nil {
+			t.Errorf("WriteEvent() error = %v", err)
+		}
+	})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL(server.URL), nil)
+	if err != nil {
+		t.Fatalf("dial through wrapping middleware error = %v", err)
+	}
+	defer conn.Close()
+
+	var ev Event
+	if err := conn.ReadJSON(&ev); err != nil {
+		t.Fatalf("ReadJSON() error = %v", err)
+	}
+	if ev.Event != "hello" || string(ev.Data) != `"wrapped"` {
+		t.Fatalf("received %+v, want hello/wrapped", ev)
+	}
+}
+
+// TestUpgrade_UnhijackableWriter verifies a clear typed error (and a 500
+// to the client) when the wrapper chain bottoms out without a hijackable
+// writer.
+func TestUpgrade_UnhijackableWriter(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// strip hijackability: a wrapper with no Unwrap and no Hijacker
+		deaf := &struct{ http.ResponseWriter }{w}
+		_, err := (&Upgrader{}).Upgrade(deaf, r)
+		if !errors.Is(err, ErrUpgradeFailed) {
+			t.Errorf("Upgrade() error = %v, want ErrUpgradeFailed", err)
+		}
+	})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	_, resp, err := websocket.DefaultDialer.Dial(wsURL(server.URL), nil)
+	if err == nil {
+		t.Fatal("dial succeeded through unhijackable writer, want 500")
+	}
+	if resp == nil {
+		t.Fatalf("dial error without response: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusInternalServerError)
 	}
 }
 

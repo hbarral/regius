@@ -100,12 +100,47 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request) (*Conn, error
 		EnableCompression: u.Compression,
 	}
 
-	conn, err := gorilla.Upgrade(w, r, nil)
+	// Middleware wraps the ResponseWriter without promoting
+	// http.Hijacker from the wrapped writer (method embedding only
+	// promotes the http.ResponseWriter interface), which makes gorilla's
+	// direct type assertion fail with a 500 — the scs session writer and
+	// any other Unwrap-implementing wrapper hit this. Walk the chain to
+	// the hijackable writer; the handshake response is written straight
+	// to the hijacked connection, so the wrappers are bypassed (correct:
+	// a hijacked connection has no response body for them to modify).
+	target := w
+	if _, ok := target.(http.Hijacker); !ok {
+		unwrapped, ok := hijackableWriter(w)
+		if !ok {
+			http.Error(w, "regius/ws: response writer does not support hijacking", http.StatusInternalServerError)
+			return nil, fmt.Errorf("%w: response writer does not support hijacking", ErrUpgradeFailed)
+		}
+		target = unwrapped
+	}
+
+	conn, err := gorilla.Upgrade(target, r, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrUpgradeFailed, err)
 	}
 
 	return &Conn{ws: conn, writeTimeout: writeTimeout}, nil
+}
+
+// hijackableWriter walks the middleware wrapper chain (via the
+// http.ResponseWriter Unwrap convention) until it finds a writer that
+// supports hijacking. It reports false when the chain bottoms out
+// without one.
+func hijackableWriter(w http.ResponseWriter) (http.ResponseWriter, bool) {
+	for {
+		if _, ok := w.(http.Hijacker); ok {
+			return w, true
+		}
+		unwrapper, ok := w.(interface{ Unwrap() http.ResponseWriter })
+		if !ok {
+			return nil, false
+		}
+		w = unwrapper.Unwrap()
+	}
 }
 
 // RequireOrigin wraps checker so that requests without an Origin header
