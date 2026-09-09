@@ -33,6 +33,7 @@ Regius is a CLI application for building web pages, inspired by Laravel but buil
   - [_`Scalar API Reference`_](#scalar-api-reference)
   - [_`Webhooks`_](#webhooks)
   - [_`Background Jobs`_](#background-jobs)
+  - [_`WebSockets`_](#websockets)
   - [_`Internationalization (i18n)`_](#internationalization-i18n)
   - [_`Server-Sent Events (SSE)`_](#server-sent-events-sse)
   - [_`Configuration Management`_](#configuration-management)
@@ -341,6 +342,7 @@ Seed files are plain `.sql` files executed in a single transaction, and each is 
 - `regius make api <name>`: Create a CRUD API handler with pagination + response envelope, mounted in routes-api.go. Pass `--with-resource` to also generate an API resource (JSON transformer).
 - `regius make webhook <name>`: Create a signed inbound webhook endpoint (providers: generic, github, stripe) mounted at /api/webhooks/<name>.
 - `regius make job <name>`: Create a background job (typed payload, handler, enqueue helper) in the workers directory; on first run it also bootstraps the workers/register.go hub, wires RegisterAll into init.regius.go, and scaffolds the regius_jobs table migration.
+- `regius make websocket <name>`: Create a WebSocket endpoint (handlers/ws_<name>.go) mounted at /ws/<name> on the app routes: an upgrade handler with an echo read loop and a dispatch TODO, plus a WSBroadcast<Name> helper for hub-wide broadcasts. The session cookie rides the GET handshake, so sockets can authenticate before upgrading.
 - `regius make crud <name>`: Create a full-stack web CRUD slice: model (data/<name>.go), create-table migration, model wiring in data/models.go, resource controller (handlers/<table>_crud.go with list/show/new/create/edit/update/delete), renderer-aware views (views/<table>/), and routes mounted at /<table>s in routes.go. Accepts `--renderer templ|jet|go`.
 - `regius make resource <name>`: Create an API resource (resources/<name>_resource.go): a JSON transformer that shapes a model for the `{data, error, meta}` response envelope, with constructors for one item and a collection.
 - `regius make middleware <name>`: Create a custom middleware stub as a method on the app's Middleware struct; pass `--global` to also wire `a.use(a.Middleware.<Name>)` into the global chain in routes.go.
@@ -1352,6 +1354,94 @@ These routes live on the outer mux, so they bypass CSRF/sanitizer (no form body)
 
 </details>
 
+<a name="websockets"></a>
+<details>
+    <summary>WebSockets</summary>
+
+- Bidirectional real-time channels via the `regius/ws` package (built on [gorilla/websocket](https://github.com/gorilla/websocket)), with the same ergonomics as the SSE broker: broadcast/send, bounded per-client buffers, heartbeats — and a `{"event","data"}` envelope shared with SSE, so one payload works over both transports unchanged.
+
+  - Hub available on every app: `app.WS` — mount `app.WS.Handler(upgrader)` on any route, or use the default route
+  - Default route at `/ws` is opt-in (`WS_ENABLED`), mounted on the outer mux like the SSE stream
+  - JSON helper: `app.WSBroadcastJSON(event, payload)` — mirrors `SSEBroadcastJSON`
+  - Handshake security by default: same-origin checks (cross-site WebSocket hijacking protection), `WS_ALLOWED_ORIGINS` to admit other origins, `WS_ALLOW_EMPTY_ORIGIN=false` to require browser clients
+  - Per-connection care: heartbeat pings (30s) with pong-extended liveness deadlines, a 32 KiB message limit, bounded buffers with slow-client eviction, and an optional client cap
+  - Upgrades work through the middleware stack — including behind the session middleware and under `regius dev`
+
+  **Usage Example in Your App:**
+
+```go
+// Broadcast a JSON event to every connected socket (same envelope as SSE)
+_ = app.WSBroadcastJSON("notification", map[string]string{
+	"message": "Hello, world!",
+})
+
+// Per-client operations
+err := app.WS.Send(clientID, ev)   // targeted send
+clients := app.WS.Clients()        // snapshot: id, remote addr, connected-at
+_ = app.WS.Close(clientID, "server shutdown")
+
+// An authenticated socket on an app route: the session cookie rides the
+// GET handshake, so you can check the session before upgrading
+r.Get("/ws/chat", func(w http.ResponseWriter, r *http.Request) {
+	conn, err := (&ws.Upgrader{}).Upgrade(w, r)
+	if err != nil {
+		return // the HTTP error response (403/400) was already written
+	}
+	defer conn.Close("done")
+	for {
+		var ev ws.Event
+		if err := conn.ReadJSON(&ev); err != nil {
+			return // client gone, malformed, or oversized message
+		}
+		_ = conn.WriteEvent(ev) // echo it back
+	}
+})
+```
+
+  **Mounting patterns:**
+
+| Mount | Where | What runs on the handshake |
+|---|---|---|
+| Default route (`WS_ENABLED=true`) | outer mux at `WS_PATH` | `RequestID`, `IPFilter`, `SecurityHeaders` — bypasses session/CSRF/sanitizer/maintenance (the SSE-stream trade-off) |
+| App route (what `regius make websocket` scaffolds) | `r.Routes` at `/ws/<name>` | the full app stack — the session is loaded, so authenticate before upgrading |
+
+  **Middleware notes:**
+
+  - The upgrade hijacks the connection, so body-modifying middleware steps aside: DevReload skips script injection, and the session middleware's cookie writer is bypassed (the handshake response goes straight to the hijacked connection)
+  - If you override `CONTENT_SECURITY_POLICY`, include `connect-src ws://localhost:* wss://your-domain` — otherwise browsers refuse the socket
+  - `IPFilter` and the rate limiter apply at handshake time, useful for blocking abusive clients before the socket opens
+
+  **Reverse proxy (wss://):** terminate TLS at the proxy and forward the upgrade headers — nginx example:
+
+```nginx
+location /ws/ {
+    proxy_pass http://127.0.0.1:4000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 300s;   # keep above WS_PONG_TIMEOUT or the proxy idle-kills the socket
+}
+```
+
+  **Scaffolding:** `regius make websocket <name>` generates `handlers/ws_<name>.go` (echo read loop with a dispatch TODO, plus a `WSBroadcast<Name>` helper) and mounts `/ws/<name>` on the app routes. Try it live with `websocat ws://localhost:4000/ws/<name>`.
+
+  **Environment Variables:**
+
+```properties
+WS_ENABLED=false
+WS_PATH=/ws
+WS_ALLOWED_ORIGINS=
+WS_ALLOW_EMPTY_ORIGIN=true
+WS_HEARTBEAT=30s
+WS_WRITE_TIMEOUT=10s
+WS_PONG_TIMEOUT=60s
+WS_MAX_MESSAGE_SIZE=32768
+WS_CLIENT_BUFFER=16
+WS_MAX_CLIENTS=0
+```
+
+</details>
+
 <a name="internationalization-i18n"></a>
 <details>
     <summary>Internationalization (i18n)</summary>
@@ -1890,6 +1980,23 @@ SUPPORT_EMAIL="support@$testapp.com"
 #JOBS_RETENTION=24h
 #JOBS_SCHEDULER_LOCK=true
 #JOBS_DASHBOARD_ENABLED=false
+
+# websockets (opt-in route; the hub is always constructed). WS_ENABLED
+# mounts the default broadcast route at WS_PATH; authenticated sockets
+# should be mounted on app routes instead (regius make websocket does
+# this). Cross-origin handshakes are rejected by default (CSWSH
+# protection): extend with WS_ALLOWED_ORIGINS, or require an Origin
+# header from every client with WS_ALLOW_EMPTY_ORIGIN=false.
+#WS_ENABLED=false
+#WS_PATH=/ws
+#WS_ALLOWED_ORIGINS=
+#WS_ALLOW_EMPTY_ORIGIN=true
+#WS_HEARTBEAT=30s
+#WS_WRITE_TIMEOUT=10s
+#WS_PONG_TIMEOUT=60s
+#WS_MAX_MESSAGE_SIZE=32768
+#WS_CLIENT_BUFFER=16
+#WS_MAX_CLIENTS=0
 ```
 
 </details>

@@ -292,6 +292,25 @@ SCALAR_ENABLED=false
 # off; layer APIKeyAuth or IPFilter on them — they bypass CSRF/sanitizer.
 #JOBS_DASHBOARD_ENABLED=false
 
+# websockets (opt-in route; the hub is always constructed). WS_ENABLED mounts
+# the default broadcast route at WS_PATH on the outer mux (bypasses
+# session/CSRF like the SSE stream); for authenticated sockets mount
+# app.WS.Handler on an app route instead — `regius make websocket` does this.
+# Cross-origin handshakes are rejected by default (CSWSH protection): extend
+# with WS_ALLOWED_ORIGINS, or require an Origin header from every client with
+# WS_ALLOW_EMPTY_ORIGIN=false (non-browser clients like websocat don't send
+# one).
+#WS_ENABLED=false
+#WS_PATH=/ws
+#WS_ALLOWED_ORIGINS=
+#WS_ALLOW_EMPTY_ORIGIN=true
+#WS_HEARTBEAT=30s
+#WS_WRITE_TIMEOUT=10s
+#WS_PONG_TIMEOUT=60s
+#WS_MAX_MESSAGE_SIZE=32768
+#WS_CLIENT_BUFFER=16
+#WS_MAX_CLIENTS=0
+
 # hot-reload development (`regius dev`). Defaults shown; uncomment to change.
 # DEV_BUILD_DELAY is the debounce after the last file change before rebuilding.
 # DEV_EXIT_ON_FAILURE=true stops the watcher instead of keeping the old
