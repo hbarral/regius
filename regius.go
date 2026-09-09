@@ -27,6 +27,7 @@ import (
 	"github.com/hbarral/regius/mailer"
 	"github.com/hbarral/regius/render"
 	"github.com/hbarral/regius/session"
+	"github.com/hbarral/regius/ws"
 )
 
 var (
@@ -63,11 +64,16 @@ type Regius struct {
 	// constructs it (memory backend by default) so Enqueue works everywhere;
 	// workers and the scheduler run only while enabled (JOBS_ENABLED) and
 	// started — ListenAndServe does both when enabled.
-	Jobs            *jobs.Manager
-	Mail            mailer.Mail
-	Server          Server
-	I18n            I18nConfig
-	SSE             *SSEBroker
+	Jobs   *jobs.Manager
+	Mail   mailer.Mail
+	Server Server
+	I18n   I18nConfig
+	SSE    *SSEBroker
+	// WS is the WebSocket broadcast hub (see the ws package). New always
+	// constructs it (mirroring SSE) so apps can mount r.WS.Handler on any
+	// route; the default route at WS_PATH is mounted only while WS_ENABLED
+	// is true. Broadcast from handlers with WSBroadcastJSON.
+	WS              *ws.Hub
 	Scalar          ScalarConfig
 	FileSystems     map[string]interface{}
 	S3              filesystems.FS
@@ -103,6 +109,7 @@ type config struct {
 	i18n             I18nConfig
 	hash             hashConfig
 	jobs             jobsConfig
+	ws               wsConfig
 	scalar           ScalarConfig
 }
 
@@ -434,6 +441,7 @@ func (r *Regius) New(rootPath string) error {
 		},
 		hash: r.createHashConfig(),
 		jobs: r.createJobsConfig(),
+		ws:   r.createWSConfig(),
 		scalar: ScalarConfig{
 			Enabled:     scalarEnabled,
 			DocsPath:    scalarDocsPath,
@@ -448,6 +456,7 @@ func (r *Regius) New(rootPath string) error {
 
 	r.I18n = r.config.i18n
 	r.SSE = NewSSEBroker()
+	r.WS = r.createWSHub()
 	r.Scalar = r.config.scalar
 
 	jobsManager, err := r.createJobsManager()

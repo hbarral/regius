@@ -86,6 +86,26 @@ func TestAllowOrigins_Wildcard(t *testing.T) {
 	}
 }
 
+func TestRequireOrigin(t *testing.T) {
+	checker := RequireOrigin(CheckSameOrigin)
+
+	r := httptest.NewRequest(http.MethodGet, "http://example.com/ws", nil)
+	r.Host = "example.com"
+	if err := checker(r); err == nil {
+		t.Fatal("empty origin admitted by RequireOrigin, want rejection")
+	}
+
+	r.Header.Set("Origin", "https://example.com")
+	if err := checker(r); err != nil {
+		t.Fatalf("same-origin request rejected: %v", err)
+	}
+
+	r.Header.Set("Origin", "https://evil.example")
+	if err := checker(r); err == nil {
+		t.Fatal("cross-origin request admitted, want rejection")
+	}
+}
+
 func TestAllowOrigins_ExplicitListOnly(t *testing.T) {
 	checker := AllowOrigins("good.example")
 

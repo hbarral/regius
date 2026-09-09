@@ -1,7 +1,9 @@
 package regius
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
 	"net"
 	"net/http"
 	"strconv"
@@ -239,6 +241,9 @@ type injectingWriter struct {
 	headerWritten bool
 	status        int
 	buffering     bool
+	// hijacked is set by Hijack: the connection left net/http, so there
+	// is no response body left to modify and finish must write nothing.
+	hijacked bool
 	// sniff is set when the handler left Content-Type unset: net/http
 	// would sniff the body at the connection level, so the decision is
 	// deferred to finish() using the same http.DetectContentType.
@@ -286,6 +291,25 @@ func (w *injectingWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
+// Hijack delegates to the wrapped writer so connection-hijacking handlers
+// (WebSocket upgrades above all) work through the middleware. Method
+// embedding only promotes the http.ResponseWriter interface, so without
+// this passthrough a type assertion to http.Hijacker on the wrapper fails
+// and every upgrade under `regius dev` would 500. Once hijacked there is
+// no response body to modify: injection is skipped for the rest of the
+// request.
+func (w *injectingWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := w.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("regius: underlying ResponseWriter does not support hijacking")
+	}
+	conn, rw, err := hijacker.Hijack()
+	if err == nil {
+		w.hijacked = true
+	}
+	return conn, rw, err
+}
+
 // Flush streams what has been buffered so far and disables injection for
 // the rest of the response: once bytes have left the process un-injected,
 // it is too late to add the script tag.
@@ -317,7 +341,7 @@ func (w *injectingWriter) Flush() {
 // connection — so HTML pages render identically with and without the
 // middleware.
 func (w *injectingWriter) finish() {
-	if !w.buffering {
+	if w.hijacked || !w.buffering {
 		return
 	}
 	w.buffering = false

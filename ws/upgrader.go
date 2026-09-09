@@ -108,6 +108,19 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request) (*Conn, error
 	return &Conn{ws: conn, writeTimeout: writeTimeout}, nil
 }
 
+// RequireOrigin wraps checker so that requests without an Origin header
+// are rejected. Use it when only browser clients are expected: non-browser
+// clients (CLI tools, server-to-server) do not send Origin, and the default
+// policies admit them.
+func RequireOrigin(checker func(r *http.Request) error) func(r *http.Request) error {
+	return func(r *http.Request) error {
+		if strings.TrimSpace(r.Header.Get("Origin")) == "" {
+			return errors.New("origin header required")
+		}
+		return checker(r)
+	}
+}
+
 // CheckSameOrigin is the default origin policy: it accepts requests with no
 // Origin header (non-browser clients) and requests whose Origin host equals
 // the request's Host header. Any other Origin is rejected — a malicious page
