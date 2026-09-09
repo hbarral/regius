@@ -1501,6 +1501,32 @@ The same operations are available programmatically on `app.App.Jobs` (`Stats`, `
   - Per-connection care: heartbeat pings (30s) with pong-extended liveness deadlines, a 32 KiB message limit, bounded buffers with slow-client eviction, and an optional client cap
   - Upgrades work through the middleware stack — including behind the session middleware and under `regius dev`
 
+  **Quickstart — a socket from zero to running:**
+
+```sh
+regius new demo && cd demo   # 1. create an app
+regius make websocket chat   # 2. scaffold the endpoint (handler + route at /ws/chat)
+```
+
+3. Start the app — `regius dev` (hot-reload) or `go run .`. The socket is live immediately: the generated handler echoes whatever you send. No `.env` changes are needed for it (the scaffolded route mounts on the app routes; only the optional framework-wide broadcast route at `/ws` needs `WS_ENABLED=true`)
+4. Talk to it from a terminal:
+
+```sh
+websocat ws://localhost:4000/ws/chat
+{"event": "ping", "data": "hello"}
+# echoed straight back: {"event":"ping","data":"hello"}
+```
+
+5. Or from the browser (a page served by the app — cross-origin pages are rejected by default):
+
+```js
+const socket = new WebSocket("ws://localhost:4000/ws/chat");
+socket.onmessage = (e) => console.log(JSON.parse(e.data));
+socket.send(JSON.stringify({ event: "ping", data: "hello" }));
+```
+
+6. Make it yours: dispatch on the event name inside the read loop of `handlers/ws_chat.go` (the generated TODO marks the spot), and push to **every** connected socket from any handler with `handlers.WSBroadcastChat(h.App, "chat.message", payload)` — the broadcast example is shown below
+
   **Usage Example in Your App:**
 
 ```go
