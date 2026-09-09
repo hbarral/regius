@@ -7,6 +7,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
+
+	"github.com/hbarral/regius/ws"
 )
 
 func devReloadHandler(t *testing.T, cfg DevReloadConfig, next http.Handler) http.Handler {
@@ -223,31 +227,28 @@ func TestDevReload_StreamBootEvent(t *testing.T) {
 		close(done)
 	}()
 
-	// poll until the boot event has been written
-	deadline := time.Now().Add(3 * time.Second)
-	for {
-		if strings.Contains(rr.Body.String(), "event: boot") {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("no boot event within deadline")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	body := rr.Body.String()
-	if !strings.Contains(body, "retry: 500") {
-		t.Errorf("boot event missing the fast reconnect hint:\n%s", body)
-	}
-	if ct := rr.Header().Get("Content-Type"); ct != "text/event-stream" {
-		t.Errorf("Content-Type = %q", ct)
-	}
-
+	// The boot event is written immediately after the stream starts, so a
+	// short grace period is enough for it to land. The body is only read
+	// after the handler goroutine stopped (happens-before via done):
+	// polling the recorder's buffer while the handler writes is a data
+	// race on the recorder's bytes.Buffer.
+	time.Sleep(50 * time.Millisecond)
 	cancel()
 	select {
 	case <-done:
 	case <-time.After(3 * time.Second):
 		t.Fatal("stream handler did not stop after context cancellation")
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "event: boot") {
+		t.Errorf("boot event missing from stream:\n%s", body)
+	}
+	if !strings.Contains(body, "retry: 500") {
+		t.Errorf("boot event missing the fast reconnect hint:\n%s", body)
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "text/event-stream" {
+		t.Errorf("Content-Type = %q", ct)
 	}
 }
 
@@ -313,6 +314,47 @@ func TestDevReload_UnknownDevPath(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", rr.Code)
+	}
+}
+
+// TestDevReload_WebSocketUpgrade is the regression test for the injecting
+// writer's Hijack passthrough: a WebSocket upgrade must succeed through
+// the live-reload middleware (regius dev), while HTML responses on other
+// paths keep receiving the injected script tag.
+//
+// Hijacking requires a real net/http server, so this test dials an
+// httptest server with the gorilla client instead of using a recorder.
+func TestDevReload_WebSocketUpgrade(t *testing.T) {
+	upgrade := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := (&ws.Upgrader{WriteTimeout: time.Second}).Upgrade(w, r)
+		if err != nil {
+			t.Errorf("upgrade through DevReload middleware error = %v", err)
+			return
+		}
+		defer conn.Close("done")
+		if err := conn.WriteEvent(ws.Event{Event: "hello", Data: []byte(`"dev"`)}); err != nil {
+			t.Errorf("WriteEvent() error = %v", err)
+		}
+	})
+
+	ts := httptest.NewServer(devReloadHandler(t, DevReloadConfig{Enabled: true}, upgrade))
+	defer ts.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Fatalf("dial through DevReload middleware error = %v", err)
+	}
+	defer conn.Close()
+
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline() error = %v", err)
+	}
+	var ev ws.Event
+	if err := conn.ReadJSON(&ev); err != nil {
+		t.Fatalf("ReadJSON() error = %v", err)
+	}
+	if ev.Event != "hello" || string(ev.Data) != `"dev"` {
+		t.Fatalf("received %+v, want hello/dev", ev)
 	}
 }
 

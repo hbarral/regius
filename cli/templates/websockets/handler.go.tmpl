@@ -1,0 +1,72 @@
+package handlers
+
+import (
+	"net/http"
+
+	"github.com/hbarral/regius"
+	"github.com/hbarral/regius/ws"
+)
+
+// WS$HANDLER_NAME upgrades the /ws/$NAME socket and echoes every event
+// back to the client until it disconnects.
+//
+// The route is mounted on the app routes (not the framework's default
+// /ws mount), so the handshake runs through the session/CSRF middleware:
+// the session cookie rides the GET upgrade request, which makes
+// authenticate-before-upgrade possible.
+func (h *Handlers) WS$HANDLER_NAME(w http.ResponseWriter, r *http.Request) {
+	// TODO: authenticate the handshake if this socket is not public, e.g.
+	// check the session before upgrading (the session is loaded because
+	// this route is mounted under the app routes).
+
+	upgrader := &ws.Upgrader{
+		// CheckOrigin defaults to same-origin (CSWSH protection); extend
+		// it with ws.AllowOrigins("https://app.example.com") when
+		// browsers from other origins must connect.
+	}
+	conn, err := upgrader.Upgrade(w, r)
+	if err != nil {
+		// Upgrade already wrote the HTTP error response (403 origin
+		// rejection, 400 malformed handshake).
+		return
+	}
+	defer conn.Close("done")
+
+	for {
+		var ev ws.Event
+		if err := conn.ReadJSON(&ev); err != nil {
+			// The client went away, sent a malformed message, or exceeded
+			// the message size limit: the read loop ends.
+			return
+		}
+
+		// TODO: dispatch on ev.Event and decode ev.Data, e.g.
+		//
+		//	switch ev.Event {
+		//	case "$NAME.send":
+		//		var p $HANDLER_NAMEMessage
+		//		if err := json.Unmarshal(ev.Data, &p); err != nil {
+		//			continue
+		//		}
+		//		// ... store it, reply, or broadcast.
+		//	}
+		//
+		// To push to every connected socket instead of just this client,
+		// use WSBroadcast$HANDLER_NAME below.
+
+		// Echo the event back so the socket is testable out of the box
+		// (try: websocat ws://localhost:PORT/ws/$NAME).
+		if err := conn.WriteEvent(ev); err != nil {
+			h.App.ErrorLog.Println("ws $NAME write error:", err)
+			return
+		}
+	}
+}
+
+// WSBroadcast$HANDLER_NAME pushes an event to every client connected to
+// the framework's WebSocket hub (all sockets, on every mount):
+//
+//	handlers.WSBroadcast$HANDLER_NAME(h.App, "$NAME.message", payload)
+func WSBroadcast$HANDLER_NAME(app *regius.Regius, event string, payload any) error {
+	return app.WSBroadcastJSON(event, payload)
+}

@@ -29,6 +29,7 @@ func init() {
 	makeCmd.AddCommand(makeAPICmd)
 	makeCmd.AddCommand(makeWebhookCmd)
 	makeCmd.AddCommand(makeJobCmd)
+	makeCmd.AddCommand(makeWebsocketCmd)
 	makeCmd.AddCommand(makeMiddlewareCmd)
 	makeCmd.AddCommand(makeServiceCmd)
 	makeCmd.AddCommand(makeResourceCmd)

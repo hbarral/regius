@@ -42,6 +42,14 @@ func (r *Regius) routes() http.Handler {
 		mux.Get("/sse/stream", r.SSE.Handler())
 	}
 
+	// The WebSocket mount lives on the outer mux (SSE precedent): the
+	// handshake bypasses session/CSRF/sanitizer/maintenance middleware.
+	// Authenticated sockets should mount r.WS.Handler under r.Routes
+	// instead, where the GET handshake carries the session cookie.
+	if r.config.ws.enabled {
+		mux.Get(r.config.ws.path, r.WS.Handler(r.createWSUpgrader()))
+	}
+
 	if r.Scalar.Enabled {
 		r.registerScalarRoutes(mux)
 	}
