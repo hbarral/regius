@@ -50,8 +50,8 @@ type ListFilter struct {
 // the removal from pending, and the lease write happen indivisibly, so two
 // concurrent workers can never claim the same job.
 //
-// MemoryStore ships with the package; Redis and SQL stores follow in later
-// phases. Anything implementing this interface can back a Manager.
+// The package ships with MemoryStore, RedisStore, and SQLStore
+// implementations. Anything implementing this interface can back a Manager.
 type Store interface {
 	// Enqueue inserts a new pending job. Implementations must not alias j:
 	// they store their own copy so later transitions never write through

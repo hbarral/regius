@@ -1197,6 +1197,24 @@ regius make job send-welcome-email
 - Later runs append a `MustRegister` line to `register.go`; duplicate names are refused
 - Hyphenated or underscored names become valid Go identifiers: `send-welcome-email` and `send_welcome_email` both produce the `SendWelcomeEmail` handler and the `send_welcome_email` job name
 
+**Quickstart — a job from zero to running:**
+
+```sh
+regius new demo && cd demo           # 1. create an app
+regius make job send-welcome-email   # 2. scaffold the job (+ wiring + migration)
+```
+
+3. Fill in the TODO in `workers/send_welcome_email.go` (the handler is shown below)
+4. Turn the feature on in `.env`:
+
+```properties
+JOBS_ENABLED=true
+JOBS_BACKEND=sql   # or redis; memory (default) keeps jobs only for the current process
+```
+
+5. If you chose `sql`, run `./regius migrate` to create the `regius_jobs` table
+6. Call `workers.EnqueueSendWelcomeEmail(...)` from a handler (shown below) and start the app — the work now happens outside the request cycle, with retries if it fails
+
 **Where each piece of code goes**
 
 A generated app has three files involved in background jobs. Knowing which one holds what is the main thing to get right:
@@ -1230,7 +1248,7 @@ package workers
 import "github.com/hbarral/regius/jobs"
 
 func RegisterAll(m *jobs.Manager) {
-    m.MustRegister("send_welcome_email", workers.SendWelcomeEmail, jobs.Options{
+    m.MustRegister("send_welcome_email", SendWelcomeEmail, jobs.Options{
         MaxAttempts: 5,
     })
 
@@ -1239,6 +1257,20 @@ func RegisterAll(m *jobs.Manager) {
 ```
 
 You normally do **not** type that `MustRegister` line by hand — `regius make job <name>` writes it (and the handler file, and the boot wiring) for you. The line to edit is the one above: change `MaxAttempts`, or add `Timeout` / `Backoff` if the job needs them.
+
+**Tuning retries, timeouts, and backoff** — edit the generated registration line in `workers/register.go`:
+
+```go
+m.MustRegister("sync_payments", SyncPayments, jobs.Options{
+    MaxAttempts: 8,                                                 // default 3 (JOBS_MAX_ATTEMPTS)
+    Timeout:     2 * time.Minute,                                   // per-attempt deadline; 0 = none
+    Backoff:     jobs.ExponentialBackoff(30*time.Second, time.Hour), // default: 30s base, 15m cap
+})
+```
+
+- `FixedBackoff(d)` waits exactly `d` between attempts; `LinearBackoff(step)` waits `step × attempt`; `ExponentialBackoff(base, max)` doubles from `base` up to `max`. All exponential delays get **full jitter** (random within `[0, delay]`) so a burst of failures doesn't retry in lockstep
+- A handler that exceeds `Timeout` — or returns any error — counts as a failed attempt; a panic is recovered and also counts as a failed attempt (it never kills the worker)
+- After the final attempt the job is `dead` and its `last_error` is recorded — find and resurrect it via the monitoring endpoints below
 
 **The handler file** (`regius make job` scaffolds this — fill in the TODO):
 
@@ -1288,15 +1320,57 @@ func (h *Handlers) Signup(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-- `app.App.Jobs` is always constructed (memory backend by default), so `Enqueue` works even with workers off
-- Workers and the scheduler run in this process only when `JOBS_ENABLED=true`; `ListenAndServe` starts them and drains them on shutdown within `JOBS_GRACEFUL_TIMEOUT` (in-flight attempts are cancelled and their jobs requeued)
-- `JOBS_BACKEND` picks the store: `memory` (default, no persistence), `redis` (reuses `REDIS_*`), or `sql` (the app's database pool — run `./regius migrate` after `regius make job`)
+**Choosing a backend** — `JOBS_BACKEND` picks where jobs live:
+
+| Backend | Jobs survive a restart? | Multi-process? | Use it for |
+|---------|--------------------------|----------------|------------|
+| `memory` (default) | No — queue is empty on boot | No | dev, tests, apps where lost work is acceptable |
+| `sql` | Yes — rows in your own database (`regius_jobs` table) | Yes | the default choice for production: one database, atomic claims, nothing extra to run |
+| `redis` | Yes — keys under `JOBS_PREFIX` | Yes | apps already running Redis that don't want job rows in their primary database |
+
+```properties
+# sql — jobs live in the app's own database (any DATABASE_TYPE)
+JOBS_ENABLED=true
+JOBS_BACKEND=sql
+# then: ./regius migrate   (regius make job already scaffolded the migration)
+
+# redis — jobs live in Redis, reusing the app's REDIS_* connection settings
+JOBS_ENABLED=true
+JOBS_BACKEND=redis
+JOBS_PREFIX=regius:jobs   # key namespace; change it if several apps share one Redis
+```
+
+- `app.App.Jobs` is always constructed (memory backend by default), so `Enqueue` works even with workers off — e.g. a web process that only dispatches
+- Workers and the scheduler run in a process only when `JOBS_ENABLED=true`; `ListenAndServe` starts them and drains them on shutdown within `JOBS_GRACEFUL_TIMEOUT` (in-flight attempts are cancelled and their jobs requeued)
 
 **Delivery semantics:**
 
 - At-least-once: a crash between claiming and completing a job means it runs again after its lease expires — **handlers must be idempotent**
 - Retries with backoff (`Fixed`/`Linear`/`Exponential` with full jitter); after `MaxAttempts` a job is `dead` and visible in the monitoring endpoints
 - A maintenance loop reclaims expired leases (crash recovery) and prunes completed jobs past `JOBS_RETENTION`
+- Keep payloads small (a few KB of IDs and parameters); for large blobs, store the file via `filesystems` (S3, MinIO, ...) and pass a reference in the payload
+
+**Writing idempotent handlers.** Because delivery is at-least-once, a handler may run twice for the same logical work — after a crash, a deploy restart, or a lease expiry. Guard the side effect instead of hoping it doesn't happen:
+
+```go
+func SendWelcomeEmail(ctx context.Context, j *jobs.Job) error {
+    var p SendWelcomeEmailPayload
+    if err := j.Decode(&p); err != nil {
+        return err
+    }
+
+    // dedup: each job run has a unique ID — record it wherever the side
+    // effect lands (a "sent_welcome_emails" row, a cache key, ...) and
+    // treat "already done" as success.
+    if alreadySent(p.UserID) {
+        return nil // idempotent no-op: the first attempt already did the work
+    }
+
+    return sendEmail(p.Email)
+}
+```
+
+A returned error schedules the next attempt; returning `nil` marks the job completed. Handlers that respect `ctx` cancellation can be interrupted cleanly on shutdown.
 
 **Scheduling recurring jobs** — also goes in `workers/register.go`, inside `RegisterAll`, so it runs once at boot before the workers start:
 
@@ -1319,9 +1393,22 @@ func RegisterAll(m *jobs.Manager) {
 - A one-off at a specific time (`At`) is called from a handler instead, since it is triggered by a request:
 
 ```go
-// handlers/reports.go
-app.App.Jobs.At(r.Context(), runAt, "generate_report", reportPayload)
+// handlers/reports.go — generate tomorrow at 06:00
+runAt := time.Now().AddDate(0, 0, 1).Truncate(24 * time.Hour).Add(6 * time.Hour)
+app.App.Jobs.At(r.Context(), runAt, "generate_report", GenerateReportPayload{UserID: user.ID})
 ```
+
+**Delayed jobs and per-job overrides** — `EnqueueWithOptions` schedules the first attempt in the future and can give one specific job its own attempt budget:
+
+```go
+// retry a flaky import sooner and harder than the handler default
+_, err := app.App.Jobs.EnqueueWithOptions(r.Context(), "import_csv", ImportPayload{Path: path}, jobs.EnqueueOptions{
+    RunAt:       time.Now().Add(15 * time.Minute), // zero/past = as soon as possible
+    MaxAttempts: 10,                               // overrides the handler's Options for this job only
+})
+```
+
+The scaffolded `Enqueue<Name>` helpers wrap `Enqueue` for the common case; call `EnqueueWithOptions` directly when a job needs a delay or its own retry budget.
 
 - With `JOBS_SCHEDULER_LOCK=true` (default), only one process fires each tick when several run workers; set it false for machine-local schedules that must fire on every process
 
@@ -1335,6 +1422,53 @@ app.App.Jobs.At(r.Context(), runAt, "generate_report", reportPayload)
 | `DELETE` | `/api/jobs/{id}` | remove a dead job |
 
 These routes live on the outer mux, so they bypass CSRF/sanitizer (no form body). They are **off by default**; layer `APIKeyAuth` or `IPFilter` on them in production.
+
+Example round-trip against a running app (`JOBS_DASHBOARD_ENABLED=true`):
+
+```sh
+# how is the queue doing?
+curl http://localhost:4000/api/jobs/stats
+# {"data":{"pending":0,"running":0,"completed":41,"dead":2}}
+
+# something died — inspect it (newest first)
+curl "http://localhost:4000/api/jobs?status=dead&limit=10"
+# {"data":[{"id":"cn4lq8v2m0d0c3f1","name":"sync_payments","status":"dead",
+#           "attempts":8,"max_attempts":8,
+#           "last_error":"dial tcp: lookup api.example.com: no such host", ...}],
+#  "meta":{"total":2}}
+
+# fix the underlying issue, then give the job a fresh attempt budget
+curl -X POST http://localhost:4000/api/jobs/cn4lq8v2m0d0c3f1/retry
+# {"data":{"status":"pending"}}
+
+# or discard it for good
+curl -X DELETE http://localhost:4000/api/jobs/cn4lq8v2m0d0c3f1
+# {"data":{"status":"dropped"}}
+```
+
+The same operations are available programmatically on `app.App.Jobs` (`Stats`, `List`, `Get`, `Retry`, `Drop`) — e.g. to build your own admin screen or alerting.
+
+**The job model** — what `List`/`Get` return and what a handler receives:
+
+| Field | Meaning |
+|-------|---------|
+| `id` | unique, sortable ID of this job run |
+| `name` | the registered job name (`send_welcome_email`) |
+| `payload` | the JSON you passed to `Enqueue` — decode with `j.Decode(&v)` |
+| `status` | `pending` → `running` → `completed`, or `dead` after the final failed attempt |
+| `attempts` / `max_attempts` | how many tries have run / the budget for this job |
+| `run_at` | when the next attempt becomes eligible (now, or after backoff/delay) |
+| `lease_until` | crash detection: a `running` job past this is reclaimed and requeued |
+| `last_error` | the error string from the most recent failed attempt |
+| `created_at` / `updated_at` / `completed_at` | bookkeeping timestamps |
+
+**Deploying with workers:**
+
+- The simplest setup runs one process: it serves HTTP **and** runs workers (`JOBS_ENABLED=true`) — right for most apps
+- To scale, run the same binary with different env: web processes with `JOBS_ENABLED=false` (they only enqueue; `Jobs` is always constructed so dispatch works) and one or more worker processes with `JOBS_ENABLED=true`
+- With `sql`/`redis` backends, claims are atomic — several worker processes can safely pull from the same queue
+- Recurring schedules (`Cron`/`Every`) fire on **one** process at a time when `JOBS_SCHEDULER_LOCK=true` (default), so web + worker processes can both have them registered without double-firing
+- On shutdown (`SIGTERM`), in-flight attempts are cancelled and their jobs requeued within `JOBS_GRACEFUL_TIMEOUT`; anything interrupted mid-run re-runs after its lease expires — idempotent handlers make that safe
 
 **Environment variables:**
 
