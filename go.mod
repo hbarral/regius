@@ -31,6 +31,7 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/gomodule/redigo v1.8.9
 	github.com/google/uuid v1.6.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/invopop/ctxi18n v0.9.0
 	github.com/jackc/pgconn v1.14.3
 	github.com/jackc/pgx/v4 v4.18.2
