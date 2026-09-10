@@ -629,20 +629,37 @@ func TestHub_HooksCanCallHub(t *testing.T) {
 	conns[0].Close()
 }
 
-func TestHub_OnConnect_Replaced(t *testing.T) {
+func TestHub_OnConnect_MultipleAndRemoval(t *testing.T) {
 	hub := NewHub()
 	rec := &hookRecorder{}
-	hub.OnConnect(rec.onConnect)
+	remove := hub.OnConnect(rec.onConnect)
 	rec2 := &hookRecorder{}
-	hub.OnConnect(rec2.onConnect) // replaces
+	hub.OnConnect(rec2.onConnect) // additive: both stay installed
 
 	dialHub(t, hub, nil, 1)
 
+	// Both listeners fired for the first client.
+	rec.waitFor(t, 1, "connect")
 	rec2.waitFor(t, 1, "connect")
+
+	// Removing one leaves the other serving: dial two more clients
+	// through a fresh server for the same hub.
+	remove()
+	server := httptest.NewServer(hub.Handler(nil))
+	defer server.Close()
+	for i := 0; i < 2; i++ {
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL(server.URL), nil)
+		if err != nil {
+			t.Fatalf("dial %d error = %v", i, err)
+		}
+		defer conn.Close()
+	}
+
+	rec2.waitFor(t, 3, "connect")
 	rec.mu.Lock()
 	got := len(rec.connects)
 	rec.mu.Unlock()
-	if got != 0 {
-		t.Fatalf("replaced hook still fired %d times", got)
+	if got != 1 {
+		t.Fatalf("removed listener fired %d times after removal, want 1", got)
 	}
 }
