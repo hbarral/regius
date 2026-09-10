@@ -34,6 +34,7 @@ Regius is a CLI application for building web pages, inspired by Laravel but buil
   - [_`Webhooks`_](#webhooks)
   - [_`Background Jobs`_](#background-jobs)
   - [_`WebSockets`_](#websockets)
+  - [_`Notifications`_](#notifications)
   - [_`Internationalization (i18n)`_](#internationalization-i18n)
   - [_`Server-Sent Events (SSE)`_](#server-sent-events-sse)
   - [_`Configuration Management`_](#configuration-management)
@@ -1599,6 +1600,78 @@ WS_MAX_MESSAGE_SIZE=32768
 WS_CLIENT_BUFFER=16
 WS_MAX_CLIENTS=0
 ```
+
+</details>
+
+<a name="notifications"></a>
+<details>
+    <summary>Notifications</summary>
+
+- Typed, UI-ready notifications delivered over both real-time transports at once — the SSE broker and the WebSocket hub — with one JSON shape and one browser listener.
+
+  - `Notification` carries `id`, `title`, `body`, `level` (info | success | warning | error), an optional `link`, an optional `topic`, and `created_at`
+  - Three targets: `NotifyAll` (every connection on both transports), `NotifyUser` (session identity — the auth scaffolding's `userID` key by default), `NotifyTopic` (client-chosen routing topics)
+  - Both handler mounts live on app routes, so the session rides the request: `a.get("/sse/notify", app.Notifier.SSEHandler())` and `a.get("/ws/notify", app.Notifier.WSHandler(nil))`
+  - Server-side identity only: client messages can subscribe to topics but can never change who they are; topics are public routing channels, not access control
+
+  **Quickstart — a notification from zero to a toast:**
+
+1. Mount both handlers in `routes.go` (app routes, so the session is available):
+
+```go
+a.get("/sse/notify", a.App.Notifier.SSEHandler())
+a.get("/ws/notify", a.App.Notifier.WSHandler(nil))
+```
+
+2. Send from anywhere with access to the app:
+
+```go
+// Everyone, on both transports at once
+app.NotifyAll(regius.NewNotification("success", "Deployed", "v1.2.3 is live"))
+
+// One user, identified by their session ("42" — the userID session value)
+if reached := app.NotifyUser("42", regius.NewNotification("info", "Order shipped", "#1234 is on its way")); reached == 0 {
+	// user 42 has no open connections: best-effort, no inbox
+}
+
+// Everyone subscribed to a topic
+app.NotifyTopic("orders", regius.NewNotification("info", "Order shipped", "#1234"))
+```
+
+3. Listen in the browser — one listener shape for both transports, deduplicated by ID:
+
+```js
+const seen = new Set();
+function show(note) {
+	if (seen.has(note.id)) return; // a page holding both transports gets NotifyAll twice
+	seen.add(note.id);
+	console.log(note.level, note.title, note.body);
+}
+
+const es = new EventSource("/sse/notify?topics=orders");
+es.addEventListener("notification", (e) => show(JSON.parse(e.data)));
+
+const socket = new WebSocket(`ws://${location.host}/ws/notify`);
+socket.onmessage = (e) => {
+	const msg = JSON.parse(e.data);
+	if (msg.event === "notification") show(msg.data);
+};
+// subscribe to more topics over the socket at any time:
+socket.send(JSON.stringify({ event: "notify.subscribe", data: "orders" }));
+```
+
+  **Targets and semantics:**
+
+| Call | Reaches | Returns |
+|---|---|---|
+| `NotifyAll(note)` | every connection on both transports | — (dedup client-side by `note.id`) |
+| `NotifyUser(userID, note)` | connections whose handshake identified that user | connections reached (0 = offline) |
+| `NotifyTopic(topic, note)` | subscribers of the topic (WS message or SSE `?topics=`) | connections reached |
+
+- Delivery is best-effort and in-memory: offline users get nothing (no replay), and the registries are single-process — the same limitation as the WebSocket hub
+- Topic names are validated (`a-z A-Z 0-9 _ . -`, 1–64 chars); an invalid `?topics=` value on the SSE stream is a 400
+- Non-notification events on the SSE broker pass through the notification stream untouched, so one stream can carry both
+- Introspection for monitoring: `app.Notifier.Subscribers("orders")` and `app.Notifier.ConnectedUsers()`
 
 </details>
 

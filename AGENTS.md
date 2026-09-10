@@ -321,6 +321,15 @@ The scaffolded app defaults to **templ** (`github.com/a-h/templ`) with the [temp
 - Configured via env vars in `regius.go` `New()`: `WS_ENABLED`, `WS_PATH`, `WS_ALLOWED_ORIGINS`, `WS_ALLOW_EMPTY_ORIGIN`, `WS_HEARTBEAT` (30s), `WS_WRITE_TIMEOUT` (10s), `WS_PONG_TIMEOUT` (60s), `WS_MAX_MESSAGE_SIZE` (32768), `WS_CLIENT_BUFFER` (16), `WS_MAX_CLIENTS` (0 = unlimited); malformed values fall back to defaults
 - Single-process hub (in-memory registry): multiple app processes do not share broadcasts — cross-process fan-out is a tracked follow-up (Redis pub/sub backend) in `docs/plan_websocket_support.md`
 
+#### Real-Time Notifications
+
+- Root package surface in `notify.go` (a `regius/notify` subpackage would circular-import: it needs `SSEBroker` from root while root needs the `Notifier`): `Notification` (id/title/body/level/link/topic/created_at; xid `ID` for client-side dedup when a page holds both transports), `NewNotification`, `Notifier`, `NewNotifier(broker, hub, identity)`; plan in `docs/plan_real_time_notification_helper.md`
+- `Regius.Notifier` is always constructed in `New()`, wired to `r.SSE` + `r.WS`, with the default identity reading the auth scaffolding's `userID` session key (`Session.Put(ctx, "userID", user.ID)`); helpers `r.NotifyAll`/`r.NotifyUser`/`r.NotifyTopic` (user/topic return connections reached; 0 = offline — best-effort, no inbox, single-process registries)
+- Mounts (app routes, session rides the request): `Notifier.SSEHandler()` takes topics from `?topics=` (validated, 400 on bad names) and filters topic-scoped events server-side — non-notification broker events pass through; `Notifier.WSHandler(upgrader)` binds identity via the hub's `HandlerWithMeta` (server-side only; client messages subscribe (`notify.subscribe`/`notify.unsubscribe` with a JSON-string topic) but can never change identity). Topics are public routing channels, not access control; names match `^[a-zA-Z0-9_.-]{1,64}$`
+- Transport substrate (additive, coexists with app hooks): `ws.Hub` `ClientInfo.Meta`/`HandlerWithMeta` + `OnConnect`/`OnDisconnect`/`OnMessage` as **additive listeners returning remove-funcs** (exactly-once disconnect across all exit paths); `SSEBroker.SubscribeWithID` for per-subscriber addressing
+- Middleware notes: the SSE handler flushes through `http.ResponseController` (the session wrapper doesn't promote `http.Flusher`; the controller walks the `Unwrap` chain — same reasoning as the ws upgrader's hijack walk); introspection via `Notifier.Subscribers(topic)`/`Notifier.ConnectedUsers()`
+- No env vars, no CLI scaffolding (v1 is framework + docs); persistence (offline inbox) and cross-process delivery are tracked follow-ups in the plan
+
 #### Code Generation Scaffolding
 
 - Naming: `pascalIdent`/`snakeIdent`/`envIdent` in `cli/naming.go` normalize CLI names to valid Go identifiers (`send-welcome-email`/`send_welcome_email` → `SendWelcomeEmail`/`send_welcome_email`); `make crud` additionally singularizes/pluralizes via go-pluralize ("post" → `Post` model/handlers, `posts` table/URL/views)

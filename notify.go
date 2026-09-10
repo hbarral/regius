@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -125,6 +126,48 @@ func (n *Notifier) identityOf(r *http.Request) string {
 	return n.identity(r)
 }
 
+// defaultNotifierIdentity is the identity function New wires into
+// r.Notifier: the auth scaffolding's "userID" session key
+// (Session.Put(ctx, "userID", user.ID)). Zero/absent means anonymous.
+func (r *Regius) defaultNotifierIdentity() func(*http.Request) string {
+	return func(req *http.Request) string {
+		if r.Session == nil {
+			return ""
+		}
+		if userID := r.Session.GetInt(req.Context(), "userID"); userID != 0 {
+			return strconv.Itoa(userID)
+		}
+		return ""
+	}
+}
+
+// NotifyAll delivers note to every connection on both transports via the
+// app's notifier; see Notifier.NotifyAll.
+func (r *Regius) NotifyAll(note Notification) {
+	if r.Notifier == nil {
+		return
+	}
+	r.Notifier.NotifyAll(note)
+}
+
+// NotifyUser delivers note to the user's connections via the app's
+// notifier and returns how many it reached; see Notifier.NotifyUser.
+func (r *Regius) NotifyUser(userID string, note Notification) int {
+	if r.Notifier == nil {
+		return 0
+	}
+	return r.Notifier.NotifyUser(userID, note)
+}
+
+// NotifyTopic delivers note to a topic's subscribers via the app's
+// notifier and returns how many it reached; see Notifier.NotifyTopic.
+func (r *Regius) NotifyTopic(topic string, note Notification) int {
+	if r.Notifier == nil {
+		return 0
+	}
+	return r.Notifier.NotifyTopic(topic, note)
+}
+
 // WSHandler returns the http.HandlerFunc for the notification socket.
 // Clients subscribe and unsubscribe by sending
 // {"event":"notify.subscribe","data":"<topic>"} messages; the identity
@@ -141,13 +184,14 @@ func (n *Notifier) WSHandler(u *ws.Upgrader) http.HandlerFunc {
 // (?topics=orders,news) and are fixed for the connection's life. Non-
 // notification events on the broker pass through untouched, so a client
 // may also consume the app's own SSE broadcasts on the same stream.
+//
+// Flushing goes through http.ResponseController so the handler works
+// behind middleware that wraps the ResponseWriter without promoting
+// http.Flusher (the session middleware among them): the controller walks
+// the wrapper chain via the Unwrap convention.
 func (n *Notifier) SSEHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			http.Error(w, "streaming not supported", http.StatusInternalServerError)
-			return
-		}
+		controller := http.NewResponseController(w)
 
 		topics, err := parseNotifyTopics(r.URL.Query().Get("topics"))
 		if err != nil {
@@ -159,7 +203,11 @@ func (n *Notifier) SSEHandler() http.HandlerFunc {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
 		w.WriteHeader(http.StatusOK)
-		flusher.Flush()
+		if err := controller.Flush(); err != nil {
+			// No flusher reachable through the wrapper chain: streaming
+			// is impossible on this connection.
+			return
+		}
 
 		clientID, events, unsubscribe := n.sse.SubscribeWithID(r.Context())
 		defer unsubscribe()
@@ -188,7 +236,9 @@ func (n *Notifier) SSEHandler() http.HandlerFunc {
 				if err := writeEvent(w, ev); err != nil {
 					return
 				}
-				flusher.Flush()
+				if err := controller.Flush(); err != nil {
+					return
+				}
 			}
 		}
 	}

@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -606,4 +608,146 @@ func TestParseNotifyTopics(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestIntegration_NotifierSessionIdentity exercises the default wiring:
+// r.Notifier reads the auth scaffolding's userID session key, and a
+// logged-in client is user-targetable over both transports through the
+// real middleware stack (session load, CSRF, sanitizer).
+func TestIntegration_NotifierSessionIdentity(t *testing.T) {
+	app := newTestApp(t, map[string]string{"COOKIE_NAME": "session"})
+
+	app.Routes.Get("/fake-login", func(w http.ResponseWriter, r *http.Request) {
+		app.Session.Put(r.Context(), "userID", 42)
+		w.WriteHeader(http.StatusOK)
+	})
+	app.Routes.Get("/sse/notify", app.Notifier.SSEHandler())
+	app.Routes.Get("/ws/notify", app.Notifier.WSHandler(nil))
+
+	ts := httptest.NewServer(app.Handler())
+	defer ts.Close()
+
+	// Log in with a cookie jar so the session cookie carries userID=42.
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("cookie jar error = %v", err)
+	}
+	client := &http.Client{Jar: jar}
+	resp, err := client.Get(ts.URL + "/fake-login")
+	if err != nil {
+		t.Fatalf("fake-login error = %v", err)
+	}
+	resp.Body.Close()
+
+	var cookie *http.Cookie
+	for _, c := range jar.Cookies(parsedURL(t, ts.URL)) {
+		if c.Name == app.Session.Cookie.Name {
+			cookie = c
+		}
+	}
+	if cookie == nil {
+		t.Fatal("no session cookie after login")
+	}
+
+	// The notifier's registries must see user "42" once both transports
+	// connect with the session cookie.
+	wsConn, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(ts.URL, "http")+"/ws/notify",
+		http.Header{"Cookie": []string{cookie.Name + "=" + cookie.Value}})
+	if err != nil {
+		t.Fatalf("ws dial error = %v", err)
+	}
+	defer wsConn.Close()
+
+	sse := notifySSEClientWithCookie(t, ts.URL, cookie)
+	defer sse.close()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		users := app.Notifier.ConnectedUsers()
+		if len(users) == 1 && users[0] == "42" {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := app.Notifier.ConnectedUsers(); len(got) != 1 || got[0] != "42" {
+		t.Fatalf("ConnectedUsers() = %v, want [42]", got)
+	}
+
+	// The Regius helper reaches both transports by session identity.
+	note := NewNotification("success", "Welcome back", "you logged in")
+	if got := app.NotifyUser("42", note); got != 2 {
+		t.Fatalf("NotifyUser(42) reached %d connections, want 2", got)
+	}
+	if got := readWSNotification(t, wsConn); got.ID != note.ID {
+		t.Fatalf("ws got ID %s, want %s", got.ID, note.ID)
+	}
+	if got := readSSENotification(t, sse); got.ID != note.ID {
+		t.Fatalf("sse got ID %s, want %s", got.ID, note.ID)
+	}
+
+	// Anonymous (no cookie) connections are not user-targetable but still
+	// receive broadcasts.
+	anon, _, err := websocket.DefaultDialer.Dial(
+		"ws"+strings.TrimPrefix(ts.URL, "http")+"/ws/notify", nil)
+	if err != nil {
+		t.Fatalf("anonymous ws dial error = %v", err)
+	}
+	defer anon.Close()
+
+	broadcast := NewNotification("info", "Everyone", "hello")
+	app.NotifyAll(broadcast)
+	if got := readWSNotification(t, anon); got.ID != broadcast.ID {
+		t.Fatalf("anonymous ws got ID %s, want %s", got.ID, broadcast.ID)
+	}
+}
+
+// TestIntegration_NotifyHelpers_NilSafety verifies the Regius helpers on
+// a zero-value app (no Notifier constructed).
+func TestIntegration_NotifyHelpers_NilSafety(t *testing.T) {
+	r := &Regius{}
+
+	if got := r.NotifyUser("42", NewNotification("info", "x", "y")); got != 0 {
+		t.Fatalf("NotifyUser on zero Regius = %d, want 0", got)
+	}
+	if got := r.NotifyTopic("orders", NewNotification("info", "x", "y")); got != 0 {
+		t.Fatalf("NotifyTopic on zero Regius = %d, want 0", got)
+	}
+	r.NotifyAll(NewNotification("info", "x", "y")) // must not panic
+}
+
+func parsedURL(t *testing.T, raw string) *url.URL {
+	t.Helper()
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("url parse %q: %v", raw, err)
+	}
+	return u
+}
+
+// notifySSEClientWithCookie opens the notification stream carrying the
+// given cookie (the session).
+func notifySSEClientWithCookie(t *testing.T, base string, cookie *http.Cookie) *sseStream {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/sse/notify", nil)
+	if err != nil {
+		cancel()
+		t.Fatalf("request error = %v", err)
+	}
+	req.AddCookie(cookie)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		cancel()
+		t.Fatalf("sse connect error = %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		cancel()
+		resp.Body.Close()
+		t.Fatalf("sse connect status = %d, want 200", resp.StatusCode)
+	}
+
+	return &sseStream{resp: resp, reader: bufio.NewReader(resp.Body), cancel: cancel}
 }
