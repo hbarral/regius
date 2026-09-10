@@ -32,7 +32,17 @@ func NewSSEBroker() *SSEBroker {
 	}
 }
 
+// Subscribe registers a client and returns its event channel plus the
+// unsubscribe function. Client IDs are opaque to this API; handlers that
+// need per-client addressing (Send by ID) use SubscribeWithID instead.
 func (b *SSEBroker) Subscribe(ctx context.Context) (<-chan SSEEvent, func()) {
+	_, ch, unsubscribe := b.SubscribeWithID(ctx)
+	return ch, unsubscribe
+}
+
+// SubscribeWithID is Subscribe plus the assigned client ID, for handlers
+// that target individual subscribers via Send (the notification layer).
+func (b *SSEBroker) SubscribeWithID(ctx context.Context) (string, <-chan SSEEvent, func()) {
 	id := b.nextID.Add(1)
 	clientID := strconv.FormatInt(id, 10)
 	ch := make(chan SSEEvent, 16)
@@ -41,11 +51,12 @@ func (b *SSEBroker) Subscribe(ctx context.Context) (<-chan SSEEvent, func()) {
 	b.clients[clientID] = ch
 	b.mu.Unlock()
 
-	return ch, func() {
+	unsubscribe := func() {
 		b.mu.Lock()
 		delete(b.clients, clientID)
 		b.mu.Unlock()
 	}
+	return clientID, ch, unsubscribe
 }
 
 func (b *SSEBroker) Broadcast(ev SSEEvent) {

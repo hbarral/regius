@@ -436,3 +436,213 @@ func TestHub_ConcurrentChurn(t *testing.T) {
 		t.Fatalf("hub has %d clients after churn, want 0", got)
 	}
 }
+
+// hookRecorder collects connect/disconnect hook events with their Meta,
+// for the hook tests below.
+type hookRecorder struct {
+	mu          sync.Mutex
+	connects    []ClientInfo
+	disconnects []ClientInfo
+}
+
+func (rec *hookRecorder) onConnect(info ClientInfo) {
+	rec.mu.Lock()
+	rec.connects = append(rec.connects, info)
+	rec.mu.Unlock()
+}
+
+func (rec *hookRecorder) onDisconnect(info ClientInfo) {
+	rec.mu.Lock()
+	rec.disconnects = append(rec.disconnects, info)
+	rec.mu.Unlock()
+}
+
+func (rec *hookRecorder) waitFor(t *testing.T, n int, which string) []ClientInfo {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		rec.mu.Lock()
+		var got int
+		if which == "connect" {
+			got = len(rec.connects)
+		} else {
+			got = len(rec.disconnects)
+		}
+		rec.mu.Unlock()
+		if got >= n {
+			rec.mu.Lock()
+			defer rec.mu.Unlock()
+			if which == "connect" {
+				return rec.connects
+			}
+			return rec.disconnects
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %d %s hooks", n, which)
+	return nil
+}
+
+func TestHub_MetaRoundTrip(t *testing.T) {
+	hub := NewHub()
+	handler := hub.HandlerWithMeta(nil, func(r *http.Request) map[string]string {
+		return map[string]string{
+			"notify.user": r.Header.Get("X-Test-User"),
+			"static":      "yes",
+		}
+	})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL(server.URL), http.Header{
+		"X-Test-User": []string{"42"},
+	})
+	if err != nil {
+		t.Fatalf("dial error = %v", err)
+	}
+	defer conn.Close()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if clients := hub.Clients(); len(clients) == 1 {
+			if clients[0].Meta["notify.user"] != "42" || clients[0].Meta["static"] != "yes" {
+				t.Fatalf("meta = %v, want notify.user=42 static=yes", clients[0].Meta)
+			}
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("client never registered")
+}
+
+func TestHub_ConnectDisconnectHooks(t *testing.T) {
+	hub := NewHub()
+	rec := &hookRecorder{}
+	hub.OnConnect(rec.onConnect)
+	hub.OnDisconnect(rec.onDisconnect)
+
+	conns := dialHub(t, hub, nil, 1)
+
+	connects := rec.waitFor(t, 1, "connect")
+	if connects[0].ID == "" || connects[0].RemoteAddr == "" {
+		t.Fatalf("connect hook got incomplete info: %+v", connects[0])
+	}
+
+	// Exit path 1: the client drops the connection.
+	conns[0].Close()
+	disconnects := rec.waitFor(t, 1, "disconnect")
+	if disconnects[0].ID != connects[0].ID {
+		t.Fatalf("disconnect ID = %q, want %q", disconnects[0].ID, connects[0].ID)
+	}
+}
+
+func TestHub_DisconnectHook_HubClose(t *testing.T) {
+	hub := NewHub()
+	rec := &hookRecorder{}
+	hub.OnDisconnect(rec.onDisconnect)
+
+	dialHub(t, hub, nil, 1)
+	rec.waitFor(t, 0, "connect") // no connect hook installed
+
+	clientID := hub.Clients()[0].ID
+	if err := hub.Close(clientID, "bye"); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	disconnects := rec.waitFor(t, 1, "disconnect")
+	if disconnects[0].ID != clientID {
+		t.Fatalf("disconnect ID = %q, want %q", disconnects[0].ID, clientID)
+	}
+
+	// A second Close on the already-removed client must not fire the hook
+	// again (exactly-once semantics): give a racing hook a moment, then
+	// assert the count is still one.
+	if err := hub.Close(clientID, "again"); !errors.Is(err, ErrClientNotFound) {
+		t.Fatalf("second Close() error = %v, want ErrClientNotFound", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	rec.mu.Lock()
+	got := len(rec.disconnects)
+	rec.mu.Unlock()
+	if got != 1 {
+		t.Fatalf("disconnect hook fired %d times, want exactly 1", got)
+	}
+}
+
+func TestHub_DisconnectHook_OversizedMessage(t *testing.T) {
+	hub := NewHub(WithMaxMessageSize(64))
+	rec := &hookRecorder{}
+	hub.OnDisconnect(rec.onDisconnect)
+
+	conns := dialHub(t, hub, nil, 1)
+
+	big := make([]byte, 512)
+	if err := conns[0].WriteMessage(websocket.TextMessage, big); err != nil {
+		t.Fatalf("WriteMessage() error = %v", err)
+	}
+
+	rec.waitFor(t, 1, "disconnect")
+}
+
+func TestHub_DisconnectHook_SlowClientEviction(t *testing.T) {
+	hub := NewHub(WithClientBuffer(1))
+	rec := &hookRecorder{}
+	hub.OnDisconnect(rec.onDisconnect)
+
+	c := &client{
+		info: ClientInfo{ID: "1", ConnectedAt: time.Now()},
+		conn: &Conn{},
+		send: make(chan Event, 1),
+		hub:  hub,
+		done: make(chan struct{}),
+	}
+	hub.clients["1"] = c
+	c.send <- Event{Event: "filler"}
+
+	hub.Broadcast(Event{Event: "overflow"})
+
+	disconnects := rec.waitFor(t, 1, "disconnect")
+	if disconnects[0].ID != "1" {
+		t.Fatalf("disconnect ID = %q, want 1", disconnects[0].ID)
+	}
+}
+
+func TestHub_HooksCanCallHub(t *testing.T) {
+	hub := NewHub()
+
+	// Hooks firing while the registry lock was just released must be able
+	// to call back into the hub without deadlocking.
+	hub.OnConnect(func(info ClientInfo) {
+		_ = hub.Clients()
+		_ = hub.Send(info.ID, Event{Event: "welcome"})
+	})
+	hub.OnDisconnect(func(info ClientInfo) {
+		_ = hub.Clients()
+	})
+
+	conns := dialHub(t, hub, nil, 1)
+	ev := readEvent(t, conns[0])
+	if ev.Event != "welcome" {
+		t.Fatalf("received %+v, want welcome (sent from inside the connect hook)", ev)
+	}
+	conns[0].Close()
+}
+
+func TestHub_OnConnect_Replaced(t *testing.T) {
+	hub := NewHub()
+	rec := &hookRecorder{}
+	hub.OnConnect(rec.onConnect)
+	rec2 := &hookRecorder{}
+	hub.OnConnect(rec2.onConnect) // replaces
+
+	dialHub(t, hub, nil, 1)
+
+	rec2.waitFor(t, 1, "connect")
+	rec.mu.Lock()
+	got := len(rec.connects)
+	rec.mu.Unlock()
+	if got != 0 {
+		t.Fatalf("replaced hook still fired %d times", got)
+	}
+}

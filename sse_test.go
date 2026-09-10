@@ -177,3 +177,72 @@ func TestRegius_SSEBroadcastJSON_NotInitialized(t *testing.T) {
 		t.Fatal("expected error when SSE broker is nil")
 	}
 }
+
+func TestSSEBroker_SubscribeWithID(t *testing.T) {
+	broker := NewSSEBroker()
+
+	id, ch, unsubscribe := broker.SubscribeWithID(context.Background())
+	defer unsubscribe()
+
+	if id == "" {
+		t.Fatal("SubscribeWithID returned an empty client id")
+	}
+
+	// The id addresses this subscriber directly.
+	if err := broker.Send(id, SSEEvent{Event: "direct", Data: []byte("you")}); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	select {
+	case ev := <-ch:
+		if ev.Event != "direct" {
+			t.Fatalf("event = %q, want %q", ev.Event, "direct")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for targeted event")
+	}
+
+	// Broadcast reaches the same channel.
+	broker.Broadcast(SSEEvent{Event: "all", Data: []byte("everyone")})
+	select {
+	case ev := <-ch:
+		if ev.Event != "all" {
+			t.Fatalf("event = %q, want %q", ev.Event, "all")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for broadcast")
+	}
+
+	// Unsubscribe removes the id from the registry.
+	unsubscribe()
+	if err := broker.Send(id, SSEEvent{Event: "gone"}); err == nil {
+		t.Fatal("Send() after unsubscribe succeeded, want client-not-found")
+	}
+}
+
+func TestSSEBroker_SubscribeWithID_DistinctIDs(t *testing.T) {
+	broker := NewSSEBroker()
+
+	id1, ch1, unsub1 := broker.SubscribeWithID(context.Background())
+	defer unsub1()
+	id2, ch2, unsub2 := broker.SubscribeWithID(context.Background())
+	defer unsub2()
+
+	if id1 == id2 {
+		t.Fatalf("both subscribers got the same id %q", id1)
+	}
+
+	// A targeted send to id2 must not reach id1.
+	if err := broker.Send(id2, SSEEvent{Event: "only-two"}); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	select {
+	case <-ch2:
+	case <-time.After(time.Second):
+		t.Fatal("id2 timed out")
+	}
+	select {
+	case ev := <-ch1:
+		t.Fatalf("id1 received %+v, want nothing", ev)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
