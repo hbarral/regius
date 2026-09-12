@@ -1,0 +1,64 @@
+package handlers
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"os"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/hbarral/regius/webhook"
+)
+
+// $HANDLER_NAMEWebhookRoutes mounts the inbound webhook endpoint at
+// /api/webhooks/$resource_name (POST only).
+//
+// The mount lives under /api so the endpoint is exempt from CSRF (NoSurf) and
+// input sanitization: signature verification requires the byte-exact raw
+// body, so it must run before anything parses or rewrites it.
+func (h *Handlers) $HANDLER_NAMEWebhookRoutes() http.Handler {
+	r := chi.NewRouter()
+
+	r.Post("/", h.$HANDLER_NAMEWebhook)
+
+	return r
+}
+
+// $HANDLER_NAMEWebhook verifies the $PROVIDER_NAME webhook signature, then
+// decodes the payload. The signing secret is read from $SECRET_ENV; to rotate
+// secrets, pass extra ones to the preset call below (any-match semantics).
+func (h *Handlers) $HANDLER_NAMEWebhook(w http.ResponseWriter, r *http.Request) {
+	opts := webhook.$PRESET_FUNC(os.Getenv("$SECRET_ENV"))
+	payload, err := webhook.Verify(r, opts)
+	if err != nil {
+		// Never log the raw payload: it is unverified at this point and may
+		// contain sensitive data.
+		switch {
+		case errors.Is(err, webhook.ErrNoSecret):
+			h.App.ErrorLog.Println("webhook $resource_name: $SECRET_ENV is not set")
+			h.App.WriteAPIError(w, http.StatusInternalServerError, "server_error", "webhook not configured")
+		case errors.Is(err, webhook.ErrMissingHeader), errors.Is(err, webhook.ErrBadTimestamp):
+			h.App.ErrorLog.Printf("webhook %s rejected: %v", "$resource_name", err)
+			h.App.WriteAPIError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		case errors.Is(err, webhook.ErrBadSignature):
+			h.App.ErrorLog.Printf("webhook %s rejected: %v", "$resource_name", err)
+			h.App.WriteAPIError(w, http.StatusUnauthorized, "bad_signature", "invalid webhook signature")
+		default:
+			h.App.ErrorLog.Printf("webhook %s: %v", "$resource_name", err)
+			h.App.WriteAPIError(w, http.StatusBadRequest, "invalid_request", "could not read webhook payload")
+		}
+		return
+	}
+
+	var event map[string]any
+	if err := json.Unmarshal(payload, &event); err != nil {
+		h.App.WriteAPIError(w, http.StatusBadRequest, "invalid_request", "invalid JSON payload")
+		return
+	}
+
+	// TODO: dispatch on the event type, e.g. event["type"] or event["action"]
+	// TODO: make processing idempotent: providers retry failed deliveries, so
+	// receiving the same event id twice must be a no-op (dedupe by event id).
+
+	h.App.WriteAPIResponse(w, http.StatusOK, map[string]string{"status": "received"})
+}

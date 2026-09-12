@@ -1,0 +1,78 @@
+es:
+  app:
+    name: Regius
+
+  navbar:
+    home: Inicio
+    docs: Documentación
+    github: Github
+    menu: Menú
+    sign_in: Iniciar sesión
+    sign_out: Cerrar sesión
+    get_started: Comenzar
+    welcome: "Bienvenido, %{name}"
+
+  language:
+    selector_label: Idioma
+    english: Inglés
+    spanish: Español
+
+  home:
+    title: Regius
+    subtitle: Crea algo real con Go
+    send_ping: Enviar ping
+
+  auth:
+    sign_in_title: Inicia sesión en tu cuenta
+    sign_in_description: Ingresa tu correo y contraseña
+    sign_up_title: Crear una cuenta
+    sign_up_description: Ingresa tus datos para registrarte
+    forgot_title: ¿Olvidaste tu contraseña?
+    forgot_description: Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña
+    reset_title: Restablecer tu contraseña
+    reset_description: Ingresa y confirma tu nueva contraseña
+    email: Correo electrónico
+    password: Contraseña
+    first_name: Nombre
+    last_name: Apellido
+    verify_password: Verificar contraseña
+    remember_me: Recordarme
+    forgot_password: ¿Olvidaste tu contraseña?
+    sign_in_button: Iniciar sesión
+    sign_up_button: Registrarse
+    send_reset_email: Enviar correo de restablecimiento
+    reset_password_button: Restablecer contraseña
+    no_account: ¿No tienes una cuenta?
+    has_account: ¿Ya tienes una cuenta?
+    remember_password: ¿Recordaste tu contraseña?
+    sign_up_link: Regístrate
+    sign_in_link: Inicia sesión
+    back: Volver
+    passwords_mismatch: ¡Las contraseñas no coinciden!
+
+  validation:
+    required: Este campo no puede estar vacío
+    email: Correo electrónico inválido
+    integer: Este campo debe ser un número entero
+    float: Este campo debe ser un número decimal
+    date_iso: Este campo debe ser una fecha en formato AAAA-MM-DD
+    no_spaces: No se permiten espacios
+    url: Este campo debe ser una URL válida
+    uuid: Este campo debe ser un UUID válido
+    phone: Este campo debe ser un número de teléfono válido
+    credit_card: Este campo debe ser un número de tarjeta de crédito válido
+    alpha: Este campo solo puede contener letras
+    alphanumeric: Este campo solo puede contener letras y números
+    numeric: Este campo solo puede contener dígitos
+    min_length: Este campo debe tener al menos %{min} caracteres
+    max_length: Este campo debe tener como máximo %{max} caracteres
+    length: Este campo debe tener exactamente %{count} caracteres
+    range: Este campo debe estar entre %{min} y %{max}
+    min: Este campo debe ser al menos %{min}
+    max: Este campo debe ser como máximo %{max}
+    json: Este campo debe ser JSON válido
+    ip: Este campo debe ser una dirección IP válida
+    boolean: Este campo debe ser un valor booleano
+    pattern: Este campo tiene un formato inválido
+    one_of: "Este campo debe ser uno de: %{values}"
+    failed: Validación fallida para %{field}

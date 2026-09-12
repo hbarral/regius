@@ -1,3 +1,5 @@
+//go:build integration
+
 package mailer
 
 import (
@@ -13,17 +15,6 @@ import (
 var (
 	pool     *dockertest.Pool
 	resource *dockertest.Resource
-	mailer   = Mail{
-		Domain:      "localhost",
-		Templates:   "./testdata/mail",
-		Host:        "localhost",
-		Port:        1026,
-		Encryption:  "none",
-		FromAddress: "a@a.com",
-		FromName:    "John",
-		Jobs:        make(chan Message, 1),
-		Results:     make(chan Result, 1),
-	}
 )
 
 func TestMain(m *testing.M) {
@@ -49,7 +40,7 @@ func TestMain(m *testing.M) {
 		},
 	}
 
-	resource, err := pool.RunWithOptions(&opts)
+	resource, err = pool.RunWithOptions(&opts)
 	if err != nil {
 		_ = pool.Purge(resource)
 		log.Fatalf("Could not start resource: %s", err)

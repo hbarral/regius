@@ -10,9 +10,20 @@ import (
 )
 
 func (r *Regius) routes() http.Handler {
+	appRoutes := chi.NewRouter()
+	appRoutes.Use(r.SessionLoad)
+	appRoutes.Use(r.NoSurf)
+	maxSize, _ := strconv.ParseInt(os.Getenv("MAX_FILESIZE"), 10, 64)
+	appRoutes.Use(r.MaxRequestSize(maxSize))
+	appRoutes.Use(r.RequestSanitizer(r.config.requestSanitizer))
+	appRoutes.Use(r.CheckForMaintenanceMode)
+
+	r.Routes = appRoutes
+
 	mux := chi.NewRouter()
 	mux.Use(r.RequestID(r.config.requestID))
 	mux.Use(middleware.RealIP)
+	mux.Use(r.Language(r.config.i18n))
 	mux.Use(r.IPFilter(r.config.ipFilter))
 
 	if r.config.cors.Enabled {
@@ -20,17 +31,39 @@ func (r *Regius) routes() http.Handler {
 	}
 
 	mux.Use(r.SecurityHeaders(r.config.securityHeaders))
+	mux.Use(r.DevReload(r.config.devReload))
 	if r.Debug {
 		mux.Use(middleware.Logger)
 	}
 
 	mux.Use(middleware.Recoverer)
-	mux.Use(r.SessionLoad)
-	mux.Use(r.NoSurf)
-	maxSize, _ := strconv.ParseInt(os.Getenv("MAX_FILESIZE"), 10, 64)
-	mux.Use(r.MaxRequestSize(maxSize))
-	mux.Use(r.RequestSanitizer(r.config.requestSanitizer))
-	mux.Use(r.CheckForMaintenanceMode)
 
-	return mux
+	if r.SSE != nil {
+		mux.Get("/sse/stream", r.SSE.Handler())
+	}
+
+	// The WebSocket mount lives on the outer mux (SSE precedent): the
+	// handshake bypasses session/CSRF/sanitizer/maintenance middleware.
+	// Authenticated sockets should mount r.WS.Handler under r.Routes
+	// instead, where the GET handshake carries the session cookie.
+	if r.config.ws.enabled {
+		mux.Get(r.config.ws.path, r.WS.Handler(r.createWSUpgrader()))
+	}
+
+	if r.Scalar.Enabled {
+		r.registerScalarRoutes(mux)
+	}
+
+	if r.config.jobs.dashboardEnabled {
+		r.registerJobsRoutes(mux)
+	}
+
+	mux.Mount("/", appRoutes)
+
+	r.handler = mux
+	return appRoutes
+}
+
+func (r *Regius) Handler() http.Handler {
+	return r.handler
 }

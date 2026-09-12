@@ -1,0 +1,22 @@
+{{extends "../layouts/main.jet"}}
+
+{{block browserTitle()}}$TITLE form{{end}}
+
+{{block css()}}{{end}}
+
+{{block pageContent()}}
+<main class="flex-1">
+  <div class="container mx-auto px-4 py-8">
+    <h1 class="mb-6 text-3xl font-bold tracking-tight">$TITLE form</h1>
+    <form method="post" action="{{if .Data.formAction}}{{.Data.formAction}}{{else}}/$TABLE{{end}}" class="max-w-md space-y-4">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <!-- TODO: add the $TITLE fields -->
+      <button type="submit" class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
+        Save
+      </button>
+    </form>
+  </div>
+</main>
+{{end}}
+
+{{block js()}}{{end}}

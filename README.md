@@ -6,21 +6,307 @@
 
 Regius is a CLI application for building web pages, inspired by Laravel but built with Go. It offers tools for database migrations and code generation, providing an agile and organized development experience.
 
-## 🌍 Repository
+## Table of Contents
+
+- [**`Getting Started`**](#getting-started)
+  - [_`Repository`_](#repository)
+- [**`Documentation`**](#documentation)
+  - [_`Usage`_](#usage)
+  - [_`Database Features`_](#database-features)
+- [**`Features`**](#features)
+  - [_`Basic Commands`_](#basic-commands)
+  - [_`Migration Commands`_](#migration-commands)
+  - [_`Seeding`_](#seeding)
+  - [_`Code Generation Commands`_](#code-generation-commands)
+  - [_`CLI Features`_](#cli-features)
+  - [_`Database Features`_](#database-features)
+  - [_`Configuration Options`_](#configuration-options)
+  - [_`Usage Example in Your App`_](#usage-example-in-your-app)
+  - [_`Rate Limiting Middleware`_](#rate-limiting-middleware)
+  - [_`CORS Middleware`_](#cors-middleware)
+  - [_`API Key Authentication Middleware`_](#api-key-authentication-middleware)
+  - [_`Request ID Tracing Middleware`_](#request-id-tracing-middleware)
+  - [_`Request Sanitization Middleware`_](#request-sanitization-middleware)
+  - [_`IP Whitelist/Blacklist Middleware`_](#ip-whitelistblacklist-middleware)
+  - [_`Browser Live-Reload (DevReload)`_](#browser-live-reload-devreload)
+  - [_`Validation`_](#validation)
+  - [_`Scalar API Reference`_](#scalar-api-reference)
+  - [_`Webhooks`_](#webhooks)
+  - [_`Background Jobs`_](#background-jobs)
+  - [_`WebSockets`_](#websockets)
+  - [_`Internationalization (i18n)`_](#internationalization-i18n)
+  - [_`Server-Sent Events (SSE)`_](#server-sent-events-sse)
+  - [_`Configuration Management`_](#configuration-management)
+  - [_`Hot-Reload`_](#hot-reload)
+  - [_`Secrets Management`_](#secrets-management)
+  - [_`Encrypted Values`_](#encrypted-values)
+  - [_`Environment Variables`_](#environment-variables)
+  - [_`Database Configuration`_](#database-configuration)
+  - [_`Rendering Templates`_](#rendering-templates)
+- [**`Contributing`**](#contributing)
+- [**`License`**](#license)
+
+## Getting Started
+
+### Homebrew (macOS & Linux)
+
+The easiest way to install Regius on macOS or Linux is with [Homebrew](https://brew.sh):
+
+```sh
+brew install hbarral/tap/regius
+```
+
+Verify the installation:
+
+```sh
+regius help
+```
+
+To upgrade to the latest release later on:
+
+```sh
+brew upgrade regius
+```
+
+### Download Binaries
+
+Download the suitable binary for your operating system from the links below:
+
+- [Linux](https://github.com/hbarral/regius/releases/download/v1.10.0/regius_Linux_x86_64.tar.gz)
+- [Windows](https://github.com/hbarral/regius/releases/download/v1.10.0/regius_Windows_x86_64.zip)
+- [Mac](https://github.com/hbarral/regius/releases/download/v1.10.0/regius_Darwin_x86_64.tar.gz)
+
+<details>
+    <summary>Build from Source</summary>
+
+1. Clone the repository:
+
+```sh
+git clone https://github.com/hbarral/regius.git
+cd regius
+```
+
+2. Build the project for your operating system:
+
+```sh
+go build -o regius ./cmd/cli
+```
+
+3. Run the binary:
+
+```sh
+regius help
+```
+
+</details>
+
+## Repository
 
 Visit the official repository at [Regius on GitHub](https://github.com/hbarral/regius).
 
-## 📋 Features
+## Documentation
 
-### Basic Commands
+The official documentation can be found at [regius.pro](https://regius.pro)
 
-- `regius new <app_name>`: Creates a new web application.
+### Usage
+
+<details>
+    <summary>Create a new application</summary>
+
+Each command has different options and parameters. Here are some basic usage examples:
+
+```sh
+regius new myapp
+```
+
+  The scaffold defaults to the **templ** renderer (`github.com/a-h/templ` +
+  [templui](https://github.com/templui/templui) + Tailwind v4) and the
+  **sqlite** database, and ships a runnable auth scaffold (navbar, sign
+  in/up/forgot/reset-password). After `regius new`, run the auth migration
+  (`regius migrate`) and `regius migrate` then `go run .`:
+
+```sh
+cd myapp
+regius migrate          # creates users/tokens/remember_tokens on sqlite
+go run .                # http://localhost:4000  (/ , /auth/signin)
+```
+
+  Optional flags:
+
+- `--db <type>`: pre-fill `DATABASE_TYPE` in the generated `.env`
+  (`postgres`|`postgresql`|`mysql`|`mariadb`|`sqlite`|`sqlite3`).
+  Defaults to `sqlite` (a local file at `data/<name>.db`, no server needed).
+  - `--renderer <engine>`: template engine to scaffold — `templ` (default) |
+  `jet` (`github.com/CloudyKit/jet/v6`, `*.jet` views with shared
+  `views/layouts/*.jet` layouts, Tailwind v4 + Alpine.js for the same modern
+  UI as the templ skeleton) |
+  `go` (built-in `html/template`, `*.page.template` views with a shared
+  `views/layouts/*.layout.template` layout system, Tailwind v4 + Alpine.js
+  for the same modern UI as the templ skeleton). `regius make auth` and
+  `regius make handler` also accept `--renderer`, falling back to the
+  `RENDERER` env var then `templ`.
+  - `-v`, `--verbose`: stream `go get` / `go mod tidy` output live instead of
+  capturing it (the captured output is shown only on failure by default).
+
+```sh
+regius new myapp --db postgres -v
+regius new jetapp --renderer jet
+regius new goapp --renderer go
+```
+
+</details>
+
+<details>
+    <summary>Develop with hot-reload</summary>
+
+`regius dev` starts your app and watches the project for changes. When you
+save a Go file, template, or config file, the app is rebuilt and restarted
+automatically (`.templ` changes run `templ generate` first, and a
+`tailwindcss --watch` subprocess keeps the stylesheet fresh). If a rebuild
+fails, the previously started process keeps serving until the next
+successful build. No external tools required.
+
+Open browser tabs reload automatically after every restart and after
+CSS-only rebuilds (the `r.DevReload` middleware is enabled for the dev
+process; tabs reconnect and pick up the new app). Disable with
+`--no-browser-reload`.
+
+```sh
+cd myapp
+regius dev              # or: make dev
+```
+
+Optional flags:
+
+- `--port <n>`: override the `PORT` from `.env`
+- `--build-delay <dur>`: debounce delay after the last change (default `500ms`)
+- `--no-tailwind`: disable the Tailwind CSS watcher
+- `--no-templ`: disable automatic `templ generate`
+- `--no-browser-reload`: disable automatic browser reload
+- `--exit`: exit on build failure instead of keeping the old process alive
+- `--ignore <paths>`: comma-separated extra paths to ignore
+- `--watch <paths>`: comma-separated extra paths to watch
+- `-v`, `--verbose`: stream build output live
+
+The related env vars (in `.env`) are `DEV_BUILD_DELAY` (default `500ms`),
+`DEV_EXIT_ON_FAILURE` (default `false`), and `DEV_RELOAD_ENABLED` (set
+automatically by `regius dev`; an explicit `false` keeps browser reload
+off); flags win over env vars.
+
+For stylesheet-only work, `make tailwind-watch` rebuilds CSS on template
+changes, and `make tailwind` builds it once.
+
+</details>
+
+<details>
+    <summary>Show help commands</summary>
+
+```sh
+regius help
+```
+
+</details>
+
+<details>
+    <summary>Run a migration</summary>
+
+```sh
+regius migration
+```
+
+</details>
+
+<details>
+    <summary>Create a migration</summary>
+
+```sh
+regius make migration create_users_table
+```
+
+</details>
+
+<details>
+    <summary>Create a seed file and run it</summary>
+
+```sh
+regius make seed default_users
+regius db:seed
+```
+
+</details>
+
+<details>
+    <summary>Check current migration version</summary>
+
+```sh
+regius migrate version
+```
+
+</details>
+
+<details>
+    <summary>Create a model</summary>
+
+```sh
+regius make model User
+```
+
+</details>
+
+<details>
+    <summary>Create a GORM model</summary>
+
+```sh
+regius make gorm-model User
+```
+
+</details>
+
+<details>
+    <summary>Put the server in maintenance mode</summary>
+
+```sh
+regius down
+```
+
+</details>
+
+<details>
+    <summary>Bring the server back from maintenance mode</summary>
+
+```sh
+regius up
+```
+
+</details>
+
+<details>
+    <summary>For more details about usage and commands, refer to the CLI help</summary>
+
+```sh
+regius help
+```
+
+</details>
+
+## Features
+
+<a name="basic-commands"></a>
+<details>
+    <summary>Basic Commands</summary>
+
+- `regius new <app_name>`: Creates a new web application (defaults to `templ` renderer + `sqlite` database, with a runnable auth scaffold; switch with `--renderer jet|go` and/or `--db postgres|mysql|...`).
+- `regius dev`: Start the app with hot-reload in development (rebuild + restart on file changes; runs `templ generate` and the Tailwind watcher alongside; open tabs reload automatically).
 - `regius version`: Print application version.
 - `regius help`: Show help for any command.
 - `regius up`: Bring the server back from maintenance mode.
 - `regius down`: Put the server in maintenance mode.
 
-### Migration Commands
+</details>
+
+<a name="migration-commands"></a>
+<details>
+    <summary>Migration Commands</summary>
 
 - `regius migrate`: Run all pending migrations (defaults to "up").
 - `regius migrate up`: Run all pending migrations.
@@ -28,14 +314,22 @@ Visit the official repository at [Regius on GitHub](https://github.com/hbarral/r
 - `regius migrate reset`: Reset and re-run all migrations.
 - `regius migrate version`: Show the current migration version (uses `golang-migrate`).
 
-### Seeding
+</details>
+
+<a name="seeding"></a>
+<details>
+    <summary>Seeding</summary>
 
 - `regius make seed <name>`: Create a new SQL seed file in `seeds/`.
 - `regius db:seed`: Run all pending seed files in `seeds/` (filename order), tracking executed seeds in the `regius_seeds` table.
 
 Seed files are plain `.sql` files executed in a single transaction, and each is only applied once.
 
-### Code Generation Commands
+</details>
+
+<a name="code-generation-commands"></a>
+<details>
+    <summary>Code Generation Commands</summary>
 
 - `regius make migration <name>`: Create SQL migration files.
 - `regius make auth`: Create authentication system (tables, models, middleware, handlers, views).
@@ -45,16 +339,32 @@ Seed files are plain `.sql` files executed in a single transaction, and each is 
 - `regius make session`: Create session table in database.
 - `regius make key`: Generate 32-character encryption key.
 - `regius make mail <name>`: Create mail templates.
+- `regius make api <name>`: Create a CRUD API handler with pagination + response envelope, mounted in routes-api.go. Pass `--with-resource` to also generate an API resource (JSON transformer).
+- `regius make webhook <name>`: Create a signed inbound webhook endpoint (providers: generic, github, stripe) mounted at /api/webhooks/<name>.
+- `regius make job <name>`: Create a background job (typed payload, handler, enqueue helper) in the workers directory; on first run it also bootstraps the workers/register.go hub, wires RegisterAll into init.regius.go, and scaffolds the regius_jobs table migration.
+- `regius make websocket <name>`: Create a WebSocket endpoint (handlers/ws_<name>.go) mounted at /ws/<name> on the app routes: an upgrade handler with an echo read loop and a dispatch TODO, plus a WSBroadcast<Name> helper for hub-wide broadcasts. The session cookie rides the GET handshake, so sockets can authenticate before upgrading.
+- `regius make crud <name>`: Create a full-stack web CRUD slice: model (data/<name>.go), create-table migration, model wiring in data/models.go, resource controller (handlers/<table>_crud.go with list/show/new/create/edit/update/delete), renderer-aware views (views/<table>/), and routes mounted at /<table>s in routes.go. Accepts `--renderer templ|jet|go`.
+- `regius make resource <name>`: Create an API resource (resources/<name>_resource.go): a JSON transformer that shapes a model for the `{data, error, meta}` response envelope, with constructors for one item and a collection.
+- `regius make middleware <name>`: Create a custom middleware stub as a method on the app's Middleware struct; pass `--global` to also wire `a.use(a.Middleware.<Name>)` into the global chain in routes.go.
+- `regius make service <name>`: Create a service-layer stub (services/<name>.go) with App/Models injected; the first service also bootstraps the services/services.go hub, adds the Services field to the application and handlers, and wires NewServices in init.regius.go. Handlers reach services via `h.Services.<Name>`.
+- `regius make locale <code>`: Create a new translation locale file (e.g. `regius make locale fr`).
 
-### CLI Features
+</details>
+
+<a name="cli-features"></a>
+<details>
+    <summary>CLI Features</summary>
 
 - **Automatic help**: `--help` flag on all commands and subcommands
-- **Flag support**: Use `--format=sql` for migration format
 - **Shell completion**: Generate autocompletion scripts for bash, zsh, fish, and PowerShell
 - **Better validation**: Improved argument validation and error messages
 - **Command aliases**: Future support for command shortcuts
 
-### Database Features
+</details>
+
+<a name="database-features"></a>
+<details>
+    <summary>Database Features</summary>
 
 Regius includes a unified database layer that works out of the box with PostgreSQL, MySQL/MariaDB, and SQLite.
 
@@ -67,9 +377,9 @@ Regius includes a unified database layer that works out of the box with PostgreS
 - **GORM integration**: Access a configured `*gorm.DB` via `app.GORM()` or run `app.AutoMigrate(&models...)` for schema management. GORM reuses the framework's existing database pool.
 - **Query logging**: Enable `DATABASE_QUERY_LOGGING=true` to log every SQL statement with timing and error details through a transparent database/sql driver wrapper.
 
-**Configuration Options:**
+### Configuration Options
 
-```env
+```properties
 DATABASE_TYPE=postgres
 DATABASE_HOST=127.0.0.1
 DATABASE_PORT=5432
@@ -87,7 +397,7 @@ DATABASE_CONN_MAX_LIFETIME=15m
 DATABASE_QUERY_LOGGING=true
 ```
 
-**Usage Example in Your App:**
+### Usage Example in Your App
 
 ```go
 // Run a health check
@@ -123,9 +433,9 @@ _ = app.AutoMigrate(&User{}, &Post{})
 
 ### Examples
 
-```bash
-# Create migration with sql format
-regius make migration create_users --format=sql
+```sh
+# Create migration
+regius make migration create_users
 
 # Reverse last 2 migrations
 regius migrate down 2
@@ -138,7 +448,13 @@ regius make migration --help
 regius migrate --help
 ```
 
-- **Rate Limiting Middleware**: Protect your application from abuse and DDoS attacks with flexible rate limiting.
+</details>
+
+<a name="rate-limiting-middleware"></a>
+<details>
+    <summary>Rate Limiting Middleware</summary>
+
+- Protect your application from abuse and DDoS attacks with flexible rate limiting.
 
   - Two algorithms: **Token Bucket** (steady request patterns) and **Sliding Window** (accurate for burst traffic)
   - Multiple storage backends: **In-memory** (fastest), **Redis** (distributed), and **Badger** (embedded distributed)
@@ -160,32 +476,71 @@ regius migrate --help
 
   // Or apply to specific routes
   r.Post("/login", a.Middleware.RateLimitStrict(a.Handlers.Login))
-  ```
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.RateLimiterConfig{
-      Enabled:    true,                    // Enable/disable rate limiting
-      Algorithm:  regius.RateLimiterAlgorithmSlidingWindow,  // "token_bucket" or "sliding_window"
-      Requests:   100,                   // Maximum requests per window
-      Window:     time.Minute,           // Time duration (time.Second, time.Minute, time.Hour)
-      Storage:    "",                     // "" for in-memory, "redis" or "badger"
-      TrustProxy: true,                   // Trust proxy headers
-      Whitelist:  []string{"127.0.0.1", "::1", "10.0.0.0/8"},  // IPs/CIDRs to exclude
-  }
-  ```
+```go
+config := regius.RateLimiterConfig{
+    Enabled:    true,                                       // Enable/disable rate limiting
+    Algorithm:  regius.RateLimiterAlgorithmSlidingWindow,   // "token_bucket" or "sliding_window"
+    Requests:   100,                                        // Maximum requests per window
+    Window:     time.Minute,                                // Time duration (time.Second, time.Minute, time.Hour)
+    Storage:    "",                                         // "" for in-memory, "redis" or "badger"
+    TrustProxy: true,                                       // Trust proxy headers
+    Whitelist:  []string{"127.0.0.1", "::1", "10.0.0.0/8"}, // IPs/CIDRs to exclude
+}
+```
 
   **Testing:**
-  You can exercise the rate limiter with any HTTP load tool (e.g. `hey`, `wrk`, or a small `curl` loop) against a rate-limited route in your app.
+  You can exercise the rate limiter with any HTTP load tool. The examples below assume the default-ish config above (100 requests / minute) applied to a route like `/api/users` running at `http://localhost:4000`.
 
-  **Documentation:**
+  Once the limit is exceeded the middleware responds with `429 Too Many Requests` and sets `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Window`, and `Retry-After` headers, so you can confirm limiting by watching for `429`s and the remaining counter dropping to `0`.
 
-  - Full documentation: `RATE_LIMITER.md`
-  - Implementation details: `RATE_LIMITER_IMPLEMENTATION.md`
-  - Testing guide and quick start: see the `test-tools/` directory in a generated app
+  **wrk** (sustained load — great for seeing 429s pile up):
 
-- **CORS Middleware**: Handle Cross-Origin Resource Sharing out of the box with flexible configuration.
+```bash
+# 4 threads, 100 concurrent connections, 30s
+wrk -t4 -c100 -d30s http://localhost:4000/api/users
+```
+
+  With a 100 req/min cap, almost every connection after the first burst will get a `429`. To verify the limit headers are being set, add a `Lua` snippet that prints them:
+
+```bash
+wrk -t4 -c100 -d10s -s - <<'LUA' http://localhost:4000/api/users
+  response = function(status, headers)
+    wrk.log(status .. " remaining=" .. (headers["X-RateLimit-Remaining"] or "-"))
+  end
+LUA
+```
+
+  **hey** (fixed request count — easier for quick one-off checks):
+
+```bash
+# 1000 requests across 50 workers
+hey -n 1000 -c 50 http://localhost:4000/api/users
+
+# Pretty-print just the status-code histogram
+hey -n 1000 -c 50 http://localhost:4000/api/users | grep -A20 "Status code distribution"
+```
+
+  **curl** (single-threaded, best for inspecting headers on a rate-limited route):
+
+```bash
+for i in $(seq 1 120); do
+  curl -s -i http://localhost:4000/api/users | grep -iE 'HTTP/|X-RateLimit|Retry-After'
+done
+```
+
+  You should see `X-RateLimit-Remaining` count down to `0`, then `HTTP/1.1 429` responses with a `Retry-After` header (seconds until the window resets).
+
+</details>
+
+<a name="cors-middleware"></a>
+<details>
+    <summary>CORS Middleware</summary>
+
+- Handle Cross-Origin Resource Sharing out of the box with flexible configuration.
 
   - Opt-out by default: CORS is enabled automatically with sensible defaults
   - Configurable origins: Allow specific domains or use wildcards
@@ -196,39 +551,39 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // CORS is applied globally by default when CORS_ENABLED=true (or unset)
-  // No additional code is required
+```go
+// CORS is applied globally by default when CORS_ENABLED=true (or unset)
+// No additional code is required
 
-  // To apply CORS only to API routes, disable global CORS in .env:
-  // CORS_ENABLED=false
-  // Then manually apply in your routes file:
-  r.Group(func(mux chi.Router) {
-      mux.Use(a.CORS(regius.CORSConfig{
-          Enabled:        true,
-          AllowedOrigins: []string{"https://app.example.com"},
-          AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
-          AllowCredentials: true,
-      }))
-      // API routes here
-  })
-  ```
+// To apply CORS only to API routes, disable global CORS in .env:
+// CORS_ENABLED=false
+// Then manually apply in your routes file:
+r.Group(func(mux chi.Router) {
+  mux.Use(a.CORS(regius.CORSConfig{
+      Enabled:        true,
+      AllowedOrigins: []string{"https://app.example.com"},
+      AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
+      AllowCredentials: true,
+  }))
+  // API routes here
+})
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.CORSConfig{
-      Enabled:            true,                                              // Enable/disable CORS
-      AllowedOrigins:     []string{"*"},                                     // Allowed origins (use "*" for any)
-      AllowedMethods:     []string{"GET","POST","PUT","DELETE","OPTIONS"},   // Allowed HTTP methods
-      AllowedHeaders:     []string{"Accept","Authorization","Content-Type"}, // Allowed request headers
-      ExposedHeaders:     []string{},                                        // Headers exposed to the client
-      MaxAge:             300,                                               // Preflight cache duration in seconds
-      AllowCredentials:   true,                                              // Allow cookies/auth headers
-      OptionsPassthrough: false,                                             // Let OPTIONS requests pass through
-      Debug:              false,                                             // Enable debug logging
-  }
-  ```
+```go
+config := regius.CORSConfig{
+    Enabled:            true,                                                // Enable/disable CORS
+    AllowedOrigins:     []string{"*"},                                       // Allowed origins (use "*" for any)
+    AllowedMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}, // Allowed HTTP methods
+    AllowedHeaders:     []string{"Accept", "Authorization", "Content-Type"}, // Allowed request headers
+    ExposedHeaders:     []string{},                                          // Headers exposed to the client
+    MaxAge:             300,                                                 // Preflight cache duration in seconds
+    AllowCredentials:   true,                                                // Allow cookies/auth headers
+    OptionsPassthrough: false,                                               // Let OPTIONS requests pass through
+    Debug:              false,                                               // Enable debug logging
+}
+```
 
 - **Security Headers Middleware**: Set a bundle of HTTP security response headers out of the box — an Express "helmet" equivalent — to harden every response against XSS, clickjacking, MIME-sniffing, and SSL-downgrade attacks.
 
@@ -240,46 +595,51 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // Security headers are applied globally when SECURITY_HEADERS_ENABLED=true.
-  // No additional code is required.
+```go
+// Security headers are applied globally when SECURITY_HEADERS_ENABLED=true.
+// No additional code is required.
 
-  // To override a header for a specific route, set it in the handler:
-  func (a *App) WidgetShow(w http.ResponseWriter, r *http.Request) {
-      w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src https://cdn.example.com")
-      // ...
-  }
+// To override a header for a specific route, set it in the handler:
+func (a *App) WidgetShow(w http.ResponseWriter, r *http.Request) {
+  w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src https://cdn.example.com")
+  // ...
+}
 
-  // Or build the middleware manually for a route group:
-  r.Group(func(mux chi.Router) {
-      mux.Use(a.SecurityHeaders(regius.SecurityHeadersConfig{
-          Enabled:                true,
-          ContentSecurityPolicy:  "default-src 'self'; script-src 'self'",
-          HSTSIncludeSubDomains:  true,
-      }))
-      // routes here
-  })
-  ```
+// Or build the middleware manually for a route group:
+r.Group(func(mux chi.Router) {
+  mux.Use(a.SecurityHeaders(regius.SecurityHeadersConfig{
+      Enabled:                true,
+      ContentSecurityPolicy:  "default-src 'self'; script-src 'self'",
+      HSTSIncludeSubDomains:  true,
+  }))
+  // routes here
+})
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.SecurityHeadersConfig{
-      Enabled:                       true,                          // Master toggle
-      ContentSecurityPolicy:         "default-src 'self'",          // Empty -> default
-      HSTSMaxAge:                    31536000,                       // 0 -> 1 year default
-      HSTSIncludeSubDomains:         true,                           // Add includeSubDomains
-      HSTSPreload:                   false,                          // Add preload
-      ReferrerPolicy:                "strict-origin-when-cross-origin",
-      XFrameOptions:                 "SAMEORIGIN",
-      XPermittedCrossDomainPolicies: "none",
-      CrossOriginOpenerPolicy:       "same-origin",
-      CrossOriginResourcePolicy:     "same-origin",
-      XDNSPrefetchControl:           "off",
-  }
-  ```
+```go
+config := regius.SecurityHeadersConfig{
+    Enabled:                       true,                 // Master toggle
+    ContentSecurityPolicy:         "default-src 'self'", // Empty -> default
+    HSTSMaxAge:                    31536000,             // 0 -> 1 year default
+    HSTSIncludeSubDomains:         true,                 // Add includeSubDomains
+    HSTSPreload:                   false,                // Add preload
+    ReferrerPolicy:                "strict-origin-when-cross-origin",
+    XFrameOptions:                 "SAMEORIGIN",
+    XPermittedCrossDomainPolicies: "none",
+    CrossOriginOpenerPolicy:       "same-origin",
+    CrossOriginResourcePolicy:     "same-origin",
+    XDNSPrefetchControl:           "off",
+}
+```
 
-- **API Key Authentication Middleware**: Authenticate API requests with API keys, complementing the existing session/cookie auth used by web routes.
+</details>
+
+<a name="api-key-authentication-middleware"></a>
+<details>
+    <summary>API Key Authentication Middleware</summary>
+- Authenticate API requests with API keys, complementing the existing session/cookie auth used by web routes.
 
   - Opt-in via `API_KEY_AUTH_ENABLED`; apply to API route groups only (not global) so cookie-authed web routes are unaffected
   - Multiple key sources (in order): `Authorization: Bearer <key>` (or configured scheme), `X-API-Key` header, and an opt-in query param (`API_KEY_QUERY_PARAM`, disabled by default since keys in URLs leak via logs/referrers)
@@ -290,70 +650,75 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // Apply to your API route group (routes.go). API key auth is NOT global.
-  r.Group(func(mux chi.Router) {
-      mux.Use(a.APIKeyAuth(regius.APIKeyAuthConfig{
-          Enabled: true,
-          Keys:    []string{"client-1-secret", "client-2-secret"},
-      }))
-      // API routes here...
-  })
-
-  // Or use env-driven config (set API_KEY_AUTH_ENABLED=true and API_KEYS in .env):
-  mux.Use(a.APIKeyAuth(a.APIKeyAuthCfg()))
-
-  // DB-backed keys via a custom validator:
+```go
+// Apply to your API route group (routes.go). API key auth is NOT global.
+r.Group(func(mux chi.Router) {
   mux.Use(a.APIKeyAuth(regius.APIKeyAuthConfig{
       Enabled: true,
-      Validator: func(key string) (regius.APIKeyIdentity, bool) {
-          // look up key in DB; return identity if valid
-          return regius.APIKeyIdentity{ID: "user-42"}, true
-      },
+      Keys:    []string{"client-1-secret", "client-2-secret"},
   }))
+  // API routes here...
+})
 
-  // Retrieve the authenticated caller in a handler:
-  func (a *App) SomeAPIHandler(w http.ResponseWriter, r *http.Request) {
-      id, ok := regius.APIKeyFromContext(r.Context())
-      if !ok { /* unauthorized */ }
-      // use id.ID, id.Metadata...
-  }
-  ```
+// Or use env-driven config (set API_KEY_AUTH_ENABLED=true and API_KEYS in .env):
+mux.Use(a.APIKeyAuth(a.APIKeyAuthCfg()))
+
+// DB-backed keys via a custom validator:
+mux.Use(a.APIKeyAuth(regius.APIKeyAuthConfig{
+  Enabled: true,
+  Validator: func(key string) (regius.APIKeyIdentity, bool) {
+      // look up key in DB; return identity if valid
+      return regius.APIKeyIdentity{ID: "user-42"}, true
+  },
+}))
+
+// Retrieve the authenticated caller in a handler:
+func (a *App) SomeAPIHandler(w http.ResponseWriter, r *http.Request) {
+  id, ok := regius.APIKeyFromContext(r.Context())
+  if !ok { /* unauthorized */ }
+  // use id.ID, id.Metadata...
+}
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.APIKeyAuthConfig{
-      Enabled:    true,                 // Master toggle
-      Keys:       []string{"secret"},   // Static valid keys (constant-time compare)
-      Validator:  nil,                  // Pluggable func(key) (identity, ok); takes precedence
-      Store:      nil,                  // APIKeyStore (e.g. CacheAPIKeyStore) for lookup/revocation
-      Header:     "Authorization",      // Primary header (default "Authorization")
-      Scheme:     "Bearer",             // Scheme prefix for Header (default "Bearer")
-      AltHeader:  "X-API-Key",          // Secondary header, no prefix (default "X-API-Key")
-      QueryParam: "",                   // Opt-in query param name (default "" = off)
-      Realm:      "api",                // Used in WWW-Authenticate (default "api")
-  }
+```go
+config := regius.APIKeyAuthConfig{
+    Enabled:    true,               // Master toggle
+    Keys:       []string{"secret"}, // Static valid keys (constant-time compare)
+    Validator:  nil,                // Pluggable func(key) (identity, ok); takes precedence
+    Store:      nil,                // APIKeyStore (e.g. CacheAPIKeyStore) for lookup/revocation
+    Header:     "Authorization",    // Primary header (default "Authorization")
+    Scheme:     "Bearer",           // Scheme prefix for Header (default "Bearer")
+    AltHeader:  "X-API-Key",        // Secondary header, no prefix (default "X-API-Key")
+    QueryParam: "",                 // Opt-in query param name (default "" = off)
+    Realm:      "api",              // Used in WWW-Authenticate (default "api")
+}
 
-  // Cache-backed store (keys hashed with SHA-256, never stored raw):
-  store := regius.NewCacheAPIKeyStore(a.Cache, "apikey:")
-  _ = store.Set("client-secret", regius.APIKeyIdentity{ID: "client-1"}, 0)
-  _ = store.Revoke("client-secret") // invalidate later
-  ```
+// Cache-backed store (keys hashed with SHA-256, never stored raw):
+store := regius.NewCacheAPIKeyStore(a.Cache, "apikey:")
+_ = store.Set("client-secret", regius.APIKeyIdentity{ID: "client-1"}, 0)
+_ = store.Revoke("client-secret") // invalidate later
+```
 
   **Environment Variables:**
 
-  ```env
-  API_KEY_AUTH_ENABLED=false
-  API_KEYS=                          # comma-separated list of valid keys
-  API_KEY_HEADER=Authorization
-  API_KEY_SCHEME=Bearer
-  API_KEY_ALT_HEADER=X-API-Key
-  API_KEY_QUERY_PARAM=               # empty = disabled
-  API_KEY_REALM=api
-  ```
+```properties
+API_KEY_AUTH_ENABLED=false
+API_KEYS=                          # comma-separated list of valid keys
+API_KEY_HEADER=Authorization
+API_KEY_SCHEME=Bearer
+API_KEY_ALT_HEADER=X-API-Key
+API_KEY_QUERY_PARAM=               # empty = disabled
+API_KEY_REALM=api
+```
 
-- **Request ID Tracing Middleware**: Stamp every request with a unique correlation ID for log correlation, distributed tracing, and client-side debugging.
+</details>
+
+<a name="request-id-tracing-middleware"></a>
+<details>
+    <summary>Request ID Tracing Middleware</summary>
+-  Stamp every request with a unique correlation ID for log correlation, distributed tracing, and client-side debugging.
 
   - Enabled by default: a request ID is generated for every request
   - Incoming ID reuse: reads an incoming ID from the request header (e.g. from a proxy/gateway) and reuses it verbatim, so a single user action can be correlated across services
@@ -365,52 +730,58 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // Request ID tracing is applied globally by default.
-  // No additional code is required.
+```go
+// Request ID tracing is applied globally by default.
+// No additional code is required.
 
-  // Retrieve the request ID in a handler:
-  func (a *App) SomeHandler(w http.ResponseWriter, r *http.Request) {
-      id, ok := regius.RequestIDFromContext(r.Context())
-      if ok {
-          a.InfoLog.Printf("handling request %s", id)
-      }
-      // ...
+// Retrieve the request ID in a handler:
+func (a *App) SomeHandler(w http.ResponseWriter, r *http.Request) {
+  id, ok := regius.RequestIDFromContext(r.Context())
+  if ok {
+      a.InfoLog.Printf("handling request %s", id)
   }
+  // ...
+}
 
-  // Or build the middleware manually for a route group:
-  r.Group(func(mux chi.Router) {
-      mux.Use(a.RequestID(regius.RequestIDConfig{
-          Enabled:        true,
-          Format:         regius.RequestIDFormatXID,
-          ResponseHeader: "X-Correlation-ID",
-      }))
-      // routes here
-  })
-  ```
+// Or build the middleware manually for a route group:
+r.Group(func(mux chi.Router) {
+  mux.Use(a.RequestID(regius.RequestIDConfig{
+      Enabled:        true,
+      Format:         regius.RequestIDFormatXID,
+      ResponseHeader: "X-Correlation-ID",
+  }))
+  // routes here
+})
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.RequestIDConfig{
-      Enabled:        true,                 // Master toggle (default true)
-      Header:         "X-Request-ID",       // Request header to read incoming ID from
-      ResponseHeader: "X-Request-ID",       // Response header to echo the ID on ("" = don't echo)
-      Format:         regius.RequestIDFormatUUID, // "uuid" | "xid" | "short" | "default"
-      Generator:      nil,                  // Optional override of Format
-  }
-  ```
+```go
+config := regius.RequestIDConfig{
+    Enabled:        true,                       // Master toggle (default true)
+    Header:         "X-Request-ID",             // Request header to read incoming ID from
+    ResponseHeader: "X-Request-ID",             // Response header to echo the ID on ("" = don't echo)
+    Format:         regius.RequestIDFormatUUID, // "uuid" | "xid" | "short" | "default"
+    Generator:      nil,                        // Optional override of Format
+}
+```
 
   **Environment Variables:**
 
-  ```env
-  REQUEST_ID_ENABLED=true
-  REQUEST_ID_HEADER=X-Request-ID
-  REQUEST_ID_RESPONSE_HEADER=X-Request-ID
-  REQUEST_ID_FORMAT=uuid                   # uuid | xid | short | default
+```properties
+REQUEST_ID_ENABLED=true
+REQUEST_ID_HEADER=X-Request-ID
+REQUEST_ID_RESPONSE_HEADER=X-Request-ID
+REQUEST_ID_FORMAT=uuid                   # uuid | xid | short | default
 ```
 
-- **Request Sanitization Middleware**: Neutralize XSS at the request boundary by sanitizing query params, form-encoded values, and selected request headers with [bluemonday](https://github.com/microcosm-cc/bluemonday) before downstream handlers ever see them.
+</details>
+
+<a name="request-sanitization-middleware"></a>
+<details>
+    <summary>Request Sanitization Middleware</summary>
+
+- Neutralize XSS at the request boundary by sanitizing query params, form-encoded values, and selected request headers with [bluemonday](https://github.com/microcosm-cc/bluemonday) before downstream handlers ever see them.
 
   - Defense-in-depth: enabled by default in scaffolded apps (`REQUEST_SANITIZATION_ENABLED=true`)
   - Two policies via env: **strict** (default — strips all HTML, returns safe text) and **ugc** (allows a safe HTML subset like `<b>`, `<a>` for comment-style fields)
@@ -423,57 +794,63 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // Request sanitization is applied globally when REQUEST_SANITIZATION_ENABLED=true.
-  // No additional code is required.
+```go
+// Request sanitization is applied globally when REQUEST_SANITIZATION_ENABLED=true.
+// No additional code is required.
 
-  // Targeted sanitization in a handler (e.g. before storing user input):
-  func (a *App) StoreComment(w http.ResponseWriter, r *http.Request) {
-      raw := r.FormValue("comment")
-      safe := a.Sanitize(raw) // uses the app's configured policy
-      // store safe...
-  }
+// Targeted sanitization in a handler (e.g. before storing user input):
+func (a *App) StoreComment(w http.ResponseWriter, r *http.Request) {
+  raw := r.FormValue("comment")
+  safe := a.Sanitize(raw) // uses the app's configured policy
+  // store safe...
+}
 
-  // Or build the middleware manually for a route group:
-  r.Group(func(mux chi.Router) {
-      mux.Use(a.RequestSanitizer(regius.RequestSanitizerConfig{
-          Enabled: true,
-          Policy:  regius.SanitizePolicyUGC, // allow safe HTML subset
-          Headers: []string{"Referer"},
-      }))
-      // routes here...
-  })
-  ```
+// Or build the middleware manually for a route group:
+r.Group(func(mux chi.Router) {
+  mux.Use(a.RequestSanitizer(regius.RequestSanitizerConfig{
+      Enabled: true,
+      Policy:  regius.SanitizePolicyUGC, // allow safe HTML subset
+      Headers: []string{"Referer"},
+  }))
+  // routes here...
+})
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.RequestSanitizerConfig{
-      Enabled: true,                          // Master toggle
-      Policy:  regius.SanitizePolicyStrict,   // "strict" (default) | "ugc"
-      Query:   regius.BoolPtr(true),          // Sanitize URL query params (default true)
-      Form:    regius.BoolPtr(true),          // Sanitize form-encoded values (default true)
-      Headers: []string{"Referer", "User-Agent"}, // Header allowlist (default none)
-      Exempt:  "/api/.*",                     // Regex of paths to skip (default "/api/.*")
-      Custom:  nil,                           // Optional *bluemonday.Policy override
-  }
+```go
+config := regius.RequestSanitizerConfig{
+	Enabled: true,                              // Master toggle
+	Policy:  regius.SanitizePolicyStrict,       // "strict" (default) | "ugc"
+	Query:   regius.BoolPtr(true),              // Sanitize URL query params (default true)
+	Form:    regius.BoolPtr(true),              // Sanitize form-encoded values (default true)
+	Headers: []string{"Referer", "User-Agent"}, // Header allowlist (default none)
+	Exempt:  "/api/.*",                         // Regex of paths to skip (default "/api/.*")
+	Custom:  nil,                               // Optional *bluemonday.Policy override
+}
 
-  // BoolPtr is a tiny helper to set *bool fields (nil defaults to true):
-  regius.BoolPtr(false) // explicitly disable a scope
-  ```
+// BoolPtr is a tiny helper to set *bool fields (nil defaults to true):
+regius.BoolPtr(false) // explicitly disable a scope
+```
 
   **Environment Variables:**
 
-  ```env
-  REQUEST_SANITIZATION_ENABLED=true
-  REQUEST_SANITIZATION_POLICY=strict         # strict | ugc
-  REQUEST_SANITIZATION_QUERY=true
-  REQUEST_SANITIZATION_FORM=true
-  REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
-  REQUEST_SANITIZATION_EXEMPT=/api/.*
-  ```
+```properties
+REQUEST_SANITIZATION_ENABLED=true
+REQUEST_SANITIZATION_POLICY=strict                  # strict | ugc
+REQUEST_SANITIZATION_QUERY=true
+REQUEST_SANITIZATION_FORM=true
+REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
+REQUEST_SANITIZATION_EXEMPT=/api/.*
+```
 
-- **IP Whitelist/Blacklist Middleware**: Allow or deny requests based on the client IP, using static lists and optional runtime (cache/DB-backed) decisions for fail2ban-style blocking.
+</details>
+
+<a name="ip-whitelistblacklist-middleware"></a>
+<details>
+    <summary>IP Whitelist/Blacklist Middleware</summary>
+
+- Allow or deny requests based on the client IP, using static lists and optional runtime (cache/DB-backed) decisions for fail2ban-style blocking.
 
   - Opt-in via `IP_FILTER_ENABLED`; applied globally (after RealIP) so denied requests short-circuit before heavier middleware runs
   - Allow/deny lists of IPs **or CIDR ranges** (e.g. `10.0.0.0/8`, `192.168.1.5`, `::1/128`); bare IPs are treated as `/32` (IPv4) or `/128` (IPv6). IPv4 and IPv6 both supported
@@ -486,118 +863,982 @@ regius migrate --help
 
   **Usage Example in Your App:**
 
-  ```go
-  // IP filtering is applied globally when IP_FILTER_ENABLED=true.
-  // No additional code is required.
+```go
+// IP filtering is applied globally when IP_FILTER_ENABLED=true.
+// No additional code is required.
 
-  // Or build the middleware manually for a route group (e.g. restrict admin):
-  r.Group(func(mux chi.Router) {
-      mux.Use(a.IPFilter(regius.IPFilterConfig{
-          Enabled: true,
-          Allow:   []string{"10.0.0.0/8", "192.168.1.0/24"},
-          Deny:    []string{"10.0.0.99"},
-      }))
-      // admin routes here...
-  })
+// Or build the middleware manually for a route group (e.g. restrict admin):
+r.Group(func(mux chi.Router) {
+	mux.Use(a.IPFilter(regius.IPFilterConfig{
+		Enabled: true,
+		Allow:   []string{"10.0.0.0/8", "192.168.1.0/24"},
+		Deny:    []string{"10.0.0.99"},
+	}))
+	// admin routes here...
+})
 
-  // Runtime (fail2ban-style) blocking via a cache-backed checker:
-  checker := regius.NewCacheIPChecker(a.Cache, "ipfilter:")
-  _ = checker.Block("203.0.113.50", 3600) // block for 1 hour
-  _ = checker.Unblock("203.0.113.50")     // unblock later
+// Runtime (fail2ban-style) blocking via a cache-backed checker:
+checker := regius.NewCacheIPChecker(a.Cache, "ipfilter:")
+_ = checker.Block("203.0.113.50", 3600) // block for 1 hour
+_ = checker.Unblock("203.0.113.50")     // unblock later
 
-  mux.Use(a.IPFilter(regius.IPFilterConfig{
-      Enabled: true,
-      Deny:    []string{"198.51.100.0/24"}, // static baseline
-      Checker: checker,                      // dynamic layer on top
-  }))
-  ```
+mux.Use(a.IPFilter(regius.IPFilterConfig{
+	Enabled: true,
+	Deny:    []string{"198.51.100.0/24"}, // static baseline
+	Checker: checker,                     // dynamic layer on top
+}))
+```
 
   **Configuration Options:**
 
-  ```go
-  config := regius.IPFilterConfig{
-      Enabled:    true,                       // Master toggle
-      Allow:      []string{"10.0.0.0/8"},     // Only these networks pass (deny-wins)
-      Deny:       []string{"10.0.0.99"},      // Always blocked
-      TrustProxy: false,                      // Read X-Forwarded-For/X-Real-IP (default false)
-      StatusCode: 403,                        // Block response status (default 403)
-      Message:    "ip address not allowed",   // Block response message
-      Checker:    nil,                        // Optional IPChecker (e.g. CacheIPChecker)
-  }
+```go
+config := regius.IPFilterConfig{
+	Enabled:    true,                     // Master toggle
+	Allow:      []string{"10.0.0.0/8"},   // Only these networks pass (deny-wins)
+	Deny:       []string{"10.0.0.99"},    // Always blocked
+	TrustProxy: false,                    // Read X-Forwarded-For/X-Real-IP (default false)
+	StatusCode: 403,                      // Block response status (default 403)
+	Message:    "ip address not allowed", // Block response message
+	Checker:    nil,                      // Optional IPChecker (e.g. CacheIPChecker)
+}
 
-  // Cache-backed checker for runtime decisions (TTL in seconds; 0 = no expiry):
-  checker := regius.NewCacheIPChecker(a.Cache, "ipfilter:")
-  _ = checker.Block(ip, 3600)            // DecisionDeny
-  _ = checker.Allow(ip, 0)               // DecisionAllow
-  _ = checker.Unblock(ip)                // remove decision -> defer to static lists
-  ```
+// Cache-backed checker for runtime decisions (TTL in seconds; 0 = no expiry):
+checker := regius.NewCacheIPChecker(a.Cache, "ipfilter:")
+_ = checker.Block(ip, 3600) // DecisionDeny
+_ = checker.Allow(ip, 0)    // DecisionAllow
+_ = checker.Unblock(ip)     // remove decision -> defer to static lists
+```
 
   **Environment Variables:**
 
-  ```env
-  IP_FILTER_ENABLED=false
-  IP_FILTER_ALLOW=                          # comma-separated IPs/CIDRs to permit
-  IP_FILTER_DENY=                           # comma-separated IPs/CIDRs to block (deny-wins)
-  IP_FILTER_TRUST_PROXY=false               # read X-Forwarded-For/X-Real-IP
-  IP_FILTER_STATUS_CODE=403
-  IP_FILTER_MESSAGE=
-  ```
-
-## 🚀 Getting Started
-
-### Homebrew (macOS & Linux)
-
-The easiest way to install Regius on macOS or Linux is with [Homebrew](https://brew.sh):
-
-```bash
-brew install hbarral/tap/regius
+```properties
+IP_FILTER_ENABLED=false
+IP_FILTER_ALLOW=                          # comma-separated IPs/CIDRs to permit
+IP_FILTER_DENY=                           # comma-separated IPs/CIDRs to block (deny-wins)
+IP_FILTER_TRUST_PROXY=false               # read X-Forwarded-For/X-Real-IP
+IP_FILTER_STATUS_CODE=403
+IP_FILTER_MESSAGE=
 ```
-
-Verify the installation:
-
-```bash
-regius help
-```
-
-To upgrade to the latest release later on:
-
-```bash
-brew upgrade regius
-```
-
-### Download Binaries
-
-Download the suitable binary for your operating system from the links below:
-
-- [Linux](https://github.com/hbarral/regius/releases/download/v1.9.2/regius_Linux_x86_64.tar.gz)
-- [Windows](https://github.com/hbarral/regius/releases/download/v1.9.2/regius_Windows_x86_64.zip)
-- [Mac](https://github.com/hbarral/regius/releases/download/v1.9.2/regius_Darwin_x86_64.tar.gz)
-
-<details>
-  <summary>Build from Source</summary>
-
-1. Clone the repository:
-
-   ```bash
-    git clone https://github.com/hbarral/regius.git
-   cd regius
-   ```
-
-2. Build the project for your operating system:
-
-   ```bash
-   go build -o regius ./cmd/cli
-   ```
-
-3. Run the binary:
-
-   ```bash
-   ./regius help
-   ```
 
 </details>
 
-### Environment Variables
+<a name="browser-live-reload-devreload"></a>
+<details>
+    <summary>Browser Live-Reload (DevReload)</summary>
+
+- Development-only middleware that makes open browser tabs reload automatically while running under `regius dev`.
+- Opt-in via `DEV_RELOAD_ENABLED` — `regius dev` sets it automatically for the dev process, so no app code or config is needed.
+- When enabled it mounts three endpoints under `DEV_RELOAD_PATH` (default `/__dev`):
+  - `GET /__dev/reload.js` — the same-origin reload client (no inline scripts, CSP-safe)
+  - `GET /__dev/stream` — an SSE stream announcing a per-process boot ID (tabs reconnect after a restart and reload when the ID changes; a `retry: 500` hint keeps the reconnect fast)
+  - `POST /__dev/notify` — **loopback-only** trigger that pushes a reload event to connected tabs (used by `regius dev` after CSS-only Tailwind rebuilds; requests with proxy headers are rejected so a spoofed `X-Forwarded-For` cannot bypass the check)
+- `<script src="/__dev/reload.js" defer></script>` is injected before the closing `</body>` of HTML responses. Non-HTML responses pass through untouched, HTML fragments without a `</body>` tag are left alone, `Content-Length` is dropped when injecting, and a mid-stream `Flush` gives up injection so streaming handlers keep working. Responses without a `Content-Type` are sniffed with `http.DetectContentType` — the same rule net/http applies — so pages render identically with and without the middleware.
+- When disabled (the default) the middleware is a pure passthrough and nothing is mounted: production behavior is byte-identical.
+
+> **Warning:** never set `DEV_RELOAD_ENABLED=true` in production. The notify endpoint can force connected tabs to reload, and the injected script adds a development-only SSE connection to every page.
+
+**Environment Variables:**
+
+```properties
+DEV_RELOAD_ENABLED=false        # set automatically by `regius dev`
+DEV_RELOAD_PATH=/__dev          # base path for the reload endpoints
+```
+
+</details>
+
+<a name="validation"></a>
+<details>
+    <summary>Validation</summary>
+
+- Validate incoming request bodies and form input with a rich rule set, custom rules, struct-tag validation, localized error messages, and a request-validation middleware.
+
+  - **Built-in rules**: `Required`, `IsEmail`, `IsURL`, `IsUUID`, `IsPhone`, `IsCreditCard`, `IsAlpha`, `IsAlphanumeric`, `IsNumeric`, `IsInt`, `IsFloat`, `IsDateISO`, `IsJSON`, `IsIP`, `IsBoolean`, `IsMinLength`, `IsMaxLength`, `IsLength`, `IsRange`, `NoSpaces`, and `MatchesPattern`
+  - **Custom rules**: register reusable rules with `app.RegisterValidation("name", func(value string) bool)` and invoke any rule by name via `v.Rule("name", field, value)`. Built-in rules are pre-registered and can be overridden
+  - **Struct validation**: `v.ValidateStruct(s)` validates any struct via `validate` tags, recursing into nested structs, pointers, and slices (`nested`) with dot-path error keys (`Address.City`, `Items.0.Name`). Supported tags: `required`, `nested`, `field=name`, `min=N`, `max=N`, `len=N`, `range=N:M`, `oneof=a b c`, `regex=PATTERN`, plus any registered rule name. Optional rules skip empty values
+  - **Localized errors**: rule failures record an i18n key + params in `v.Details`; `v.LocalizedErrors(r.Context())` translates them for the request locale (via the `Language` middleware), falling back to English. 25 `validation.*` keys ship in the scaffolded `en`/`es` locale files
+  - **Request validation middleware**: `app.ValidateRequest(regius.ValidationConfig{...})` decodes JSON bodies into a struct (validating its tags) or validates form bodies field by field, then stores the validated struct in the request context (`regius.ValidatedFromContext[*MyInput](r.Context())`). On failure it responds with the API error envelope (field errors as details) or, in `ErrorFormat: "form"` mode, stores localized errors in the session (`app.PopValidationErrors`) and redirects back with 303
+
+  **Usage Example in Your App:**
+
+```go
+  type SignupInput struct {
+      Name  string `validate:"required,min=2"`
+      Email string `validate:"required,email"`
+      Age   int    `validate:"min=18"`
+  }
+
+  // In routes.go / routes-api.go - apply to specific routes
+  r.Post("/signup", app.ValidateRequest(regius.ValidationConfig{
+      StructType: SignupInput{},
+  })(a.Handlers.PostSignup))
+
+  // In the handler - the decoded, validated input is in the context
+  func (h *Handlers) PostSignup(w http.ResponseWriter, r *http.Request) {
+      input, ok := regius.ValidatedFromContext[*SignupInput](r.Context())
+      if !ok {
+          h.App.ErrorStatus(w, http.StatusBadRequest)
+          return
+      }
+      // input.Name, input.Email, input.Age are validated...
+  }
+
+  // Form validation with a browser redirect flow
+  r.Post("/login", app.ValidateRequest(regius.ValidationConfig{
+      Rules: map[string]string{
+          "email":    "required,email",
+          "password": "required,min=8",
+      },
+      ErrorFormat: "form", // store errors in session + redirect to Referer
+  })(a.Handlers.PostLogin))
+
+  // Manual validation in any handler
+  v := app.Validator(r.PostForm)
+  v.Required(r, "email", "password")
+  v.IsEmail("email", r.Form.Get("email"))
+  v.IsMinLength("password", r.Form.Get("password"), 8)
+  if !v.Valid() {
+      errors := v.LocalizedErrors(r.Context())
+      // render the form again with errors...
+  }
+```
+
+</details>
+
+<a name="scalar-api-reference"></a>
+<details>
+    <summary>Scalar API Reference</summary>
+
+- Serve an interactive API reference UI powered by [Scalar](https://github.com/scalar/scalar) from an OpenAPI 3.1 document.
+
+  - Opt-in via `SCALAR_ENABLED`; when enabled, two routes are registered: the docs UI (`/docs` by default) and the OpenAPI spec endpoint (`/openapi.json` by default)
+  - **Hybrid spec source**: build the OpenAPI document programmatically with the `api.Document` builder, or serve a static `openapi.yaml`/`openapi.json` file from disk (`SCALAR_SPEC_FILE`); when both are set, the static file takes precedence
+  - **Configurable CDN**: the Scalar JS bundle is loaded from jsDelivr by default; set `SCALAR_CDN_URL` to a local URL for air-gapped/offline use
+  - **Client library filtering**: control which code example tabs (curl, fetch, axios, etc.) appear in the docs UI via `SCALAR_SHOW_CLIENTS` (see below)
+  - API response envelope helpers: `WriteAPIResponse` / `WriteAPIError` produce a standardized `{data, error, meta}` JSON envelope
+  - Pagination helpers: offset-based (`api.ParseOffsetPagination`) and cursor-based (`api.ParseCursorPagination`) with metadata generation
+  - Scaffolding: `regius make api <name>` generates a CRUD handler (`handlers/api_<name>.go`) with the response envelope, pagination, and routes-api.go wiring; also generates an OpenAPI document builder (`handlers/api_<name>_doc.go`) and auto-wires `a.App.Scalar.Spec` in `routes-api.go` (first handler sets the spec, subsequent handlers merge via `Spec.MergePaths`)
+
+  **Programmatic spec example:**
+
+```go
+import "github.com/hbarral/regius/api"
+
+doc := api.NewDocument("My API", "1.0.0").
+    Description("A sample API").
+    Server("https://api.example.com", "Production")
+
+doc.Path("/users/{id}", api.NewPathItem().WithGet(
+    api.NewOperation("Users", "Get a user").
+        WithOperationID("getUser").
+        Param("id", "path", "User ID", true, api.IntSchema()).
+        JSONResponse(200, "User found", api.ObjectSchema()).
+        PlainResponse(404, "User not found"),
+))
+
+a.App.Scalar.Spec = doc
+```
+
+  **Static spec example:**
+
+```properties
+SCALAR_ENABLED=true
+SCALAR_SPEC_FILE=./openapi.yaml
+```
+
+  **Client library filtering (`SCALAR_SHOW_CLIENTS`):**
+
+  The Scalar UI generates code examples for many HTTP clients (curl, fetch, axios, Python requests, Go, etc.). Use `SCALAR_SHOW_CLIENTS` to control which are shown. The value is injected as a raw JavaScript expression and converted to Scalar's `hiddenClients` option at runtime.
+
+  | Value | Effect |
+  |-------|--------|
+  | *(empty / commented out)* | Show all clients (default) |
+  | `true` | Show all clients (explicit) |
+  | `["fetch","curl"]` | Show only the listed clients |
+  | `{"js":true,"shell":["curl"]}` | Per-language: show all JS clients + only curl from shell |
+
+  Available client names (by language):
+
+  | Language | Clients |
+  |----------|---------|
+  | C | `libcurl` |
+  | C# | `httpclient`, `restsharp` |
+  | Clojure | `clj_http` |
+  | Dart | `http` |
+  | F# | `httpclient` |
+  | Go | `native` |
+  | HTTP | `http1.1` |
+  | Java | `asynchttp`, `nethttp`, `okhttp`, `unirest` |
+  | JavaScript | `axios`, `fetch`, `jquery`, `ofetch`, `xhr` |
+  | Julia | `http` |
+  | Kotlin | `okhttp` |
+  | Node.js | `axios`, `fetch`, `ofetch`, `undici` |
+  | Objective-C | `nsurlsession` |
+  | OCaml | `cohttp` |
+  | PHP | `curl`, `guzzle`, `laravel` |
+  | PowerShell | `restmethod`, `webrequest` |
+  | Python | `aiohttp`, `httpx_async`, `httpx_sync`, `python3`, `requests` |
+  | R | `httr2` |
+  | Ruby | `native` |
+  | Rust | `reqwest` |
+  | Shell | `curl`, `httpie`, `wget` |
+  | Swift | `nsurlsession` |
+
+  Examples:
+
+```properties
+# Show only curl and fetch
+SCALAR_SHOW_CLIENTS=["curl","fetch"]
+```
+
+```properties
+# Show all JavaScript and Node.js clients, plus curl from shell
+SCALAR_SHOW_CLIENTS={"js":true,"node":true,"shell":["curl"]}
+```
+
+```properties
+# Show all clients (explicit)
+SCALAR_SHOW_CLIENTS=true
+```
+
+  **API response envelope:**
+
+```go
+// Success with pagination
+p := api.ParseOffsetPagination(r, 20, 100)
+// ... fetch items ...
+h.App.WriteAPIResponse(w, http.StatusOK, items, &api.Meta{
+    Pagination: p.Meta(total),
+})
+
+// Error
+h.App.WriteAPIError(w, http.StatusNotFound, "not_found", "user not found")
+```
+
+  **Environment Variables:**
+
+```properties
+SCALAR_ENABLED=false
+#SCALAR_DOCS_PATH=/docs
+#SCALAR_SPEC_PATH=/openapi.json
+#SCALAR_TITLE=API Reference
+#SCALAR_CDN_URL=https://cdn.jsdelivr.net/npm/@scalar/api-reference
+#SCALAR_SPEC_FILE=
+#SCALAR_THEME=default
+#SCALAR_SHOW_CLIENTS={"go":["native"],"java":true,"curl","fetch"}
+```
+
+</details>
+
+<a name="webhooks"></a>
+<details>
+    <summary>Webhooks</summary>
+
+Receive signed webhooks from Stripe, GitHub, or any HMAC-based provider with one command:
+
+```sh
+regius make webhook stripe-payment --provider stripe
+```
+
+- Creates `handlers/webhook_<name>.go`: a POST-only endpoint that verifies the payload's HMAC signature with the `github.com/hbarral/regius/webhook` package **before** the body is parsed, then decodes it
+- Mounts the route in `routes-api.go` at `/api/webhooks/<name>` — under `/api` so the endpoint reuses the existing CSRF and sanitizer exemptions (signature verification needs the byte-exact raw body)
+- Appends `WEBHOOK_<NAME>_SECRET` to `.env` with a generated 32-character secret; existing values are never overwritten, so re-runs stay idempotent
+- Hyphenated names become valid Go identifiers: `stripe-payment` → `StripePaymentWebhook`
+
+Provider presets (`--provider`):
+
+| Provider | Header | Notes |
+|----------|--------|-------|
+| `generic` (default) | `X-Signature` | plain HMAC-SHA256 digest of the body, hex-encoded |
+| `github` | `X-Hub-Signature-256` | `sha256=<hex>` prefix; legacy sha1 available via `Options.Hash` |
+| `stripe` | `Stripe-Signature` | `t=<unix>,v1=<sig>` signed payload with 5-minute replay tolerance |
+
+Security notes:
+
+- All signature comparisons are constant time (`hmac.Equal`), mirroring the API key middleware
+- Multiple secrets are supported for rotation: pass extras to the preset call in the generated handler (any-match semantics), then drop the old one once the provider has rotated
+- Stale Stripe timestamps are rejected to blunt replay attacks; tune or disable via `Options.TimestampTolerance`
+- The generated handler never logs the unverified payload; errors map to responses: 500 unconfigured secret, 401 bad signature, 400 missing header / stale timestamp
+- It responds 2xx fast and leaves TODO markers for typed payloads and idempotent processing (providers retry on any non-2xx)
+
+**Manual verification (framework package):**
+
+```go
+import "github.com/hbarral/regius/webhook"
+
+opts := webhook.Stripe(os.Getenv("WEBHOOK_STRIPE_PAYMENT_SECRET"))
+payload, err := webhook.Verify(r, opts)
+if err != nil {
+    // webhook.ErrNoSecret / ErrMissingHeader / ErrBadSignature / ErrBadTimestamp
+}
+```
+
+On success `r.Body` is restored, so downstream code can re-read the payload (e.g. `ReadJSON`).
+
+**Environment variables (one per endpoint, appended by the CLI):**
+
+```properties
+#WEBHOOK_STRIPE_PAYMENT_SECRET=
+```
+
+</details>
+
+<a name="background-jobs"></a>
+<details>
+    <summary>Background Jobs</summary>
+
+Run work outside the request cycle — welcome emails, report generation, outbound webhooks, image processing — with retries, backoff, dead-lettering, and monitoring.
+
+```sh
+regius make job send-welcome-email
+```
+
+- Creates `workers/<name>.go`: a typed payload struct, a handler with TODO markers, and an `Enqueue<Name>` helper that handlers/middleware call to schedule the job through `app.App.Jobs`
+- On the first run it also bootstraps `workers/register.go` (the `RegisterAll` hub), wires `workers.RegisterAll(app.App.Jobs)` into `init.regius.go`, and scaffolds the `regius_jobs`/`regius_locks` table migration for the `DATABASE_TYPE` dialect (delete the migration if `JOBS_BACKEND` stays `memory` or `redis`)
+- Later runs append a `MustRegister` line to `register.go`; duplicate names are refused
+- Hyphenated or underscored names become valid Go identifiers: `send-welcome-email` and `send_welcome_email` both produce the `SendWelcomeEmail` handler and the `send_welcome_email` job name
+
+**Quickstart — a job from zero to running:**
+
+```sh
+regius new demo && cd demo           # 1. create an app
+regius make job send-welcome-email   # 2. scaffold the job (+ wiring + migration)
+```
+
+3. Fill in the TODO in `workers/send_welcome_email.go` (the handler is shown below)
+4. Turn the feature on in `.env`:
+
+```properties
+JOBS_ENABLED=true
+JOBS_BACKEND=sql   # or redis; memory (default) keeps jobs only for the current process
+```
+
+5. If you chose `sql`, run `./regius migrate` to create the `regius_jobs` table
+6. Call `workers.EnqueueSendWelcomeEmail(...)` from a handler (shown below) and start the app — the work now happens outside the request cycle, with retries if it fails
+
+**Where each piece of code goes**
+
+A generated app has three files involved in background jobs. Knowing which one holds what is the main thing to get right:
+
+```
+<app>/
+├── init.regius.go                # boot — calls workers.RegisterAll(app.App.Jobs)
+├── handlers/
+│   └── signup.go                 # dispatch — call workers.Enqueue<Name>(...) here
+└── workers/
+    ├── register.go                # registration — MustRegister calls live here
+    └── send_welcome_email.go      # the handler + payload + enqueue helper
+```
+
+| Code | File | Who writes it |
+|------|------|---------------|
+| `MustRegister("send_welcome_email", SendWelcomeEmail, jobs.Options{…})` | `workers/register.go` (inside `RegisterAll`) | `regius make job` writes it (with `MaxAttempts: 3`); **you edit it** to tune `MaxAttempts` / `Timeout` / `Backoff` |
+| `func SendWelcomeEmail(ctx, j *jobs.Job) error { … }` (the handler) | `workers/send_welcome_email.go` | `regius make job` scaffolds it; **you fill in the TODO** |
+| `workers.EnqueueSendWelcomeEmail(ctx, app.App.Jobs, payload)` (the dispatch call) | called from `handlers/*.go` | **you call it** where the work needs to happen |
+| `workers.RegisterAll(app.App.Jobs)` (the boot wiring) | `init.regius.go` | `regius make job` wires it on first run |
+| `app.App.Jobs.Cron("0 9 * * *", …)` / `Every(…)` (recurring schedules) | `workers/register.go` (inside `RegisterAll`, before workers start) | **you add them** for recurring schedules |
+
+Here is an example of a registration hub with one job registered:
+
+```go
+// workers/register.go — this is where MustRegister calls live.
+// `regius make job send-welcome-email` wrote this line for you;
+// edit it to tune MaxAttempts, Timeout, or Backoff.
+package workers
+
+import "github.com/hbarral/regius/jobs"
+
+func RegisterAll(m *jobs.Manager) {
+    m.MustRegister("send_welcome_email", SendWelcomeEmail, jobs.Options{
+        MaxAttempts: 5,
+    })
+
+    // additional jobs are registered here
+}
+```
+
+You normally do **not** type that `MustRegister` line by hand — `regius make job <name>` writes it (and the handler file, and the boot wiring) for you. The line to edit is the one above: change `MaxAttempts`, or add `Timeout` / `Backoff` if the job needs them.
+
+**Tuning retries, timeouts, and backoff** — edit the generated registration line in `workers/register.go`:
+
+```go
+m.MustRegister("sync_payments", SyncPayments, jobs.Options{
+    MaxAttempts: 8,                                                 // default 3 (JOBS_MAX_ATTEMPTS)
+    Timeout:     2 * time.Minute,                                   // per-attempt deadline; 0 = none
+    Backoff:     jobs.ExponentialBackoff(30*time.Second, time.Hour), // default: 30s base, 15m cap
+})
+```
+
+- `FixedBackoff(d)` waits exactly `d` between attempts; `LinearBackoff(step)` waits `step × attempt`; `ExponentialBackoff(base, max)` doubles from `base` up to `max`. All exponential delays get **full jitter** (random within `[0, delay]`) so a burst of failures doesn't retry in lockstep
+- A handler that exceeds `Timeout` — or returns any error — counts as a failed attempt; a panic is recovered and also counts as a failed attempt (it never kills the worker)
+- After the final attempt the job is `dead` and its `last_error` is recorded — find and resurrect it via the monitoring endpoints below
+
+**The handler file** (`regius make job` scaffolds this — fill in the TODO):
+
+```go
+// workers/send_welcome_email.go
+package workers
+
+import (
+    "context"
+
+    "github.com/hbarral/regius/jobs"
+)
+
+type SendWelcomeEmailPayload struct {
+    UserID int    `json:"user_id"`
+    Email  string `json:"email"`
+}
+
+func SendWelcomeEmail(ctx context.Context, j *jobs.Job) error {
+    var p SendWelcomeEmailPayload
+    if err := j.Decode(&p); err != nil {
+        return err
+    }
+    // TODO: send the email using p.UserID / p.Email
+    return nil
+}
+
+func EnqueueSendWelcomeEmail(ctx context.Context, m *jobs.Manager, p SendWelcomeEmailPayload) (*jobs.Job, error) {
+    return m.Enqueue(ctx, "send_welcome_email", p)
+}
+```
+
+**Dispatching work from a handler** (you write this call where the work should happen):
+
+```go
+// handlers/signup.go
+func (h *Handlers) Signup(w http.ResponseWriter, r *http.Request) {
+    // ...create the user, hash the password, insert...
+
+    // hand the welcome email off to a background worker
+    workers.EnqueueSendWelcomeEmail(r.Context(), h.App.Jobs, workers.SendWelcomeEmailPayload{
+        UserID: user.ID,
+        Email:  user.Email,
+    })
+
+    // ...redirect...
+}
+```
+
+**Choosing a backend** — `JOBS_BACKEND` picks where jobs live:
+
+| Backend | Jobs survive a restart? | Multi-process? | Use it for |
+|---------|--------------------------|----------------|------------|
+| `memory` (default) | No — queue is empty on boot | No | dev, tests, apps where lost work is acceptable |
+| `sql` | Yes — rows in your own database (`regius_jobs` table) | Yes | the default choice for production: one database, atomic claims, nothing extra to run |
+| `redis` | Yes — keys under `JOBS_PREFIX` | Yes | apps already running Redis that don't want job rows in their primary database |
+
+```properties
+# sql — jobs live in the app's own database (any DATABASE_TYPE)
+JOBS_ENABLED=true
+JOBS_BACKEND=sql
+# then: ./regius migrate   (regius make job already scaffolded the migration)
+
+# redis — jobs live in Redis, reusing the app's REDIS_* connection settings
+JOBS_ENABLED=true
+JOBS_BACKEND=redis
+JOBS_PREFIX=regius:jobs   # key namespace; change it if several apps share one Redis
+```
+
+- `app.App.Jobs` is always constructed (memory backend by default), so `Enqueue` works even with workers off — e.g. a web process that only dispatches
+- Workers and the scheduler run in a process only when `JOBS_ENABLED=true`; `ListenAndServe` starts them and drains them on shutdown within `JOBS_GRACEFUL_TIMEOUT` (in-flight attempts are cancelled and their jobs requeued)
+
+**Delivery semantics:**
+
+- At-least-once: a crash between claiming and completing a job means it runs again after its lease expires — **handlers must be idempotent**
+- Retries with backoff (`Fixed`/`Linear`/`Exponential` with full jitter); after `MaxAttempts` a job is `dead` and visible in the monitoring endpoints
+- A maintenance loop reclaims expired leases (crash recovery) and prunes completed jobs past `JOBS_RETENTION`
+- Keep payloads small (a few KB of IDs and parameters); for large blobs, store the file via `filesystems` (S3, MinIO, ...) and pass a reference in the payload
+
+**Writing idempotent handlers.** Because delivery is at-least-once, a handler may run twice for the same logical work — after a crash, a deploy restart, or a lease expiry. Guard the side effect instead of hoping it doesn't happen:
+
+```go
+func SendWelcomeEmail(ctx context.Context, j *jobs.Job) error {
+    var p SendWelcomeEmailPayload
+    if err := j.Decode(&p); err != nil {
+        return err
+    }
+
+    // dedup: each job run has a unique ID — record it wherever the side
+    // effect lands (a "sent_welcome_emails" row, a cache key, ...) and
+    // treat "already done" as success.
+    if alreadySent(p.UserID) {
+        return nil // idempotent no-op: the first attempt already did the work
+    }
+
+    return sendEmail(p.Email)
+}
+```
+
+A returned error schedules the next attempt; returning `nil` marks the job completed. Handlers that respect `ctx` cancellation can be interrupted cleanly on shutdown.
+
+**Scheduling recurring jobs** — also goes in `workers/register.go`, inside `RegisterAll`, so it runs once at boot before the workers start:
+
+```go
+// workers/register.go (inside RegisterAll)
+func RegisterAll(m *jobs.Manager) {
+    m.MustRegister("send_welcome_email", SendWelcomeEmail, jobs.Options{MaxAttempts: 5})
+    m.MustRegister("send_daily_digest", SendDailyDigest, jobs.Options{MaxAttempts: 3})
+    m.MustRegister("refresh_cache", RefreshCache, jobs.Options{})
+
+    // recurring schedules fire on their own from here
+    m.Cron("0 9 * * *", "send_daily_digest", nil)     // robfig/cron 5-field spec
+    m.Every(5*time.Minute, "refresh_cache", nil)
+
+    // additional jobs are registered here
+}
+```
+
+- Recurring schedules enqueue an ordinary job at each tick, so scheduled work shares the same retry/backoff/monitoring pipeline as ad-hoc jobs
+- A one-off at a specific time (`At`) is called from a handler instead, since it is triggered by a request:
+
+```go
+// handlers/reports.go — generate tomorrow at 06:00
+runAt := time.Now().AddDate(0, 0, 1).Truncate(24 * time.Hour).Add(6 * time.Hour)
+app.App.Jobs.At(r.Context(), runAt, "generate_report", GenerateReportPayload{UserID: user.ID})
+```
+
+**Delayed jobs and per-job overrides** — `EnqueueWithOptions` schedules the first attempt in the future and can give one specific job its own attempt budget:
+
+```go
+// retry a flaky import sooner and harder than the handler default
+_, err := app.App.Jobs.EnqueueWithOptions(r.Context(), "import_csv", ImportPayload{Path: path}, jobs.EnqueueOptions{
+    RunAt:       time.Now().Add(15 * time.Minute), // zero/past = as soon as possible
+    MaxAttempts: 10,                               // overrides the handler's Options for this job only
+})
+```
+
+The scaffolded `Enqueue<Name>` helpers wrap `Enqueue` for the common case; call `EnqueueWithOptions` directly when a job needs a delay or its own retry budget.
+
+- With `JOBS_SCHEDULER_LOCK=true` (default), only one process fires each tick when several run workers; set it false for machine-local schedules that must fire on every process
+
+**Monitoring (opt-in via `JOBS_DASHBOARD_ENABLED=true`):**
+
+| Method | Path | Action |
+|--------|------|--------|
+| `GET` | `/api/jobs/stats` | counts by status (pending/running/completed/dead) |
+| `GET` | `/api/jobs?status=dead&name=…&limit=…` | list jobs (pending/running by run-at, completed/dead newest first; `limit` ≤ 200) |
+| `POST` | `/api/jobs/{id}/retry` | resurrect a dead job (attempts reset) |
+| `DELETE` | `/api/jobs/{id}` | remove a dead job |
+
+These routes live on the outer mux, so they bypass CSRF/sanitizer (no form body). They are **off by default**; layer `APIKeyAuth` or `IPFilter` on them in production.
+
+Example round-trip against a running app (`JOBS_DASHBOARD_ENABLED=true`):
+
+```sh
+# how is the queue doing?
+curl http://localhost:4000/api/jobs/stats
+# {"data":{"pending":0,"running":0,"completed":41,"dead":2}}
+
+# something died — inspect it (newest first)
+curl "http://localhost:4000/api/jobs?status=dead&limit=10"
+# {"data":[{"id":"cn4lq8v2m0d0c3f1","name":"sync_payments","status":"dead",
+#           "attempts":8,"max_attempts":8,
+#           "last_error":"dial tcp: lookup api.example.com: no such host", ...}],
+#  "meta":{"total":2}}
+
+# fix the underlying issue, then give the job a fresh attempt budget
+curl -X POST http://localhost:4000/api/jobs/cn4lq8v2m0d0c3f1/retry
+# {"data":{"status":"pending"}}
+
+# or discard it for good
+curl -X DELETE http://localhost:4000/api/jobs/cn4lq8v2m0d0c3f1
+# {"data":{"status":"dropped"}}
+```
+
+The same operations are available programmatically on `app.App.Jobs` (`Stats`, `List`, `Get`, `Retry`, `Drop`) — e.g. to build your own admin screen or alerting.
+
+**The job model** — what `List`/`Get` return and what a handler receives:
+
+| Field | Meaning |
+|-------|---------|
+| `id` | unique, sortable ID of this job run |
+| `name` | the registered job name (`send_welcome_email`) |
+| `payload` | the JSON you passed to `Enqueue` — decode with `j.Decode(&v)` |
+| `status` | `pending` → `running` → `completed`, or `dead` after the final failed attempt |
+| `attempts` / `max_attempts` | how many tries have run / the budget for this job |
+| `run_at` | when the next attempt becomes eligible (now, or after backoff/delay) |
+| `lease_until` | crash detection: a `running` job past this is reclaimed and requeued |
+| `last_error` | the error string from the most recent failed attempt |
+| `created_at` / `updated_at` / `completed_at` | bookkeeping timestamps |
+
+**Deploying with workers:**
+
+- The simplest setup runs one process: it serves HTTP **and** runs workers (`JOBS_ENABLED=true`) — right for most apps
+- To scale, run the same binary with different env: web processes with `JOBS_ENABLED=false` (they only enqueue; `Jobs` is always constructed so dispatch works) and one or more worker processes with `JOBS_ENABLED=true`
+- With `sql`/`redis` backends, claims are atomic — several worker processes can safely pull from the same queue
+- Recurring schedules (`Cron`/`Every`) fire on **one** process at a time when `JOBS_SCHEDULER_LOCK=true` (default), so web + worker processes can both have them registered without double-firing
+- On shutdown (`SIGTERM`), in-flight attempts are cancelled and their jobs requeued within `JOBS_GRACEFUL_TIMEOUT`; anything interrupted mid-run re-runs after its lease expires — idempotent handlers make that safe
+
+**Environment variables:**
+
+```properties
+#JOBS_ENABLED=false
+#JOBS_BACKEND=memory
+#JOBS_PREFIX=regius:jobs
+#JOBS_WORKERS=4
+#JOBS_POLL_INTERVAL=1s
+#JOBS_LEASE=5m
+#JOBS_MAX_ATTEMPTS=3
+#JOBS_GRACEFUL_TIMEOUT=30s
+#JOBS_RETENTION=24h
+#JOBS_SCHEDULER_LOCK=true
+#JOBS_DASHBOARD_ENABLED=false
+```
+
+</details>
+
+<a name="websockets"></a>
+<details>
+    <summary>WebSockets</summary>
+
+- Bidirectional real-time channels via the `regius/ws` package (built on [gorilla/websocket](https://github.com/gorilla/websocket)), with the same ergonomics as the SSE broker: broadcast/send, bounded per-client buffers, heartbeats — and a `{"event","data"}` envelope shared with SSE, so one payload works over both transports unchanged.
+
+  - Hub available on every app: `app.WS` — mount `app.WS.Handler(upgrader)` on any route, or use the default route
+  - Default route at `/ws` is opt-in (`WS_ENABLED`), mounted on the outer mux like the SSE stream
+  - JSON helper: `app.WSBroadcastJSON(event, payload)` — mirrors `SSEBroadcastJSON`
+  - Handshake security by default: same-origin checks (cross-site WebSocket hijacking protection), `WS_ALLOWED_ORIGINS` to admit other origins, `WS_ALLOW_EMPTY_ORIGIN=false` to require browser clients
+  - Per-connection care: heartbeat pings (30s) with pong-extended liveness deadlines, a 32 KiB message limit, bounded buffers with slow-client eviction, and an optional client cap
+  - Upgrades work through the middleware stack — including behind the session middleware and under `regius dev`
+
+  **Quickstart — a socket from zero to running:**
+
+```sh
+regius new demo && cd demo   # 1. create an app
+regius make websocket chat   # 2. scaffold the endpoint (handler + route at /ws/chat)
+```
+
+3. Start the app — `regius dev` (hot-reload) or `go run .`. The socket is live immediately: the generated handler echoes whatever you send. No `.env` changes are needed for it (the scaffolded route mounts on the app routes; only the optional framework-wide broadcast route at `/ws` needs `WS_ENABLED=true`)
+4. Talk to it from a terminal:
+
+```sh
+websocat ws://localhost:4000/ws/chat
+{"event": "ping", "data": "hello"}
+# echoed straight back: {"event":"ping","data":"hello"}
+```
+
+5. Or from the browser (a page served by the app — cross-origin pages are rejected by default):
+
+```js
+const socket = new WebSocket("ws://localhost:4000/ws/chat");
+socket.onmessage = (e) => console.log(JSON.parse(e.data));
+socket.send(JSON.stringify({ event: "ping", data: "hello" }));
+```
+
+6. Make it yours: dispatch on the event name inside the read loop of `handlers/ws_chat.go` (the generated TODO marks the spot), and push to **every** connected socket from any handler with `handlers.WSBroadcastChat(h.App, "chat.message", payload)` — the broadcast example is shown below
+
+  **Usage Example in Your App:**
+
+```go
+// Broadcast a JSON event to every connected socket (same envelope as SSE)
+_ = app.WSBroadcastJSON("notification", map[string]string{
+	"message": "Hello, world!",
+})
+
+// Per-client operations
+err := app.WS.Send(clientID, ev)   // targeted send
+clients := app.WS.Clients()        // snapshot: id, remote addr, connected-at
+_ = app.WS.Close(clientID, "server shutdown")
+
+// An authenticated socket on an app route: the session cookie rides the
+// GET handshake, so you can check the session before upgrading
+r.Get("/ws/chat", func(w http.ResponseWriter, r *http.Request) {
+	conn, err := (&ws.Upgrader{}).Upgrade(w, r)
+	if err != nil {
+		return // the HTTP error response (403/400) was already written
+	}
+	defer conn.Close("done")
+	for {
+		var ev ws.Event
+		if err := conn.ReadJSON(&ev); err != nil {
+			return // client gone, malformed, or oversized message
+		}
+		_ = conn.WriteEvent(ev) // echo it back
+	}
+})
+```
+
+  **Mounting patterns:**
+
+| Mount | Where | What runs on the handshake |
+|---|---|---|
+| Default route (`WS_ENABLED=true`) | outer mux at `WS_PATH` | `RequestID`, `IPFilter`, `SecurityHeaders` — bypasses session/CSRF/sanitizer/maintenance (the SSE-stream trade-off) |
+| App route (what `regius make websocket` scaffolds) | `r.Routes` at `/ws/<name>` | the full app stack — the session is loaded, so authenticate before upgrading |
+
+  **Middleware notes:**
+
+  - The upgrade hijacks the connection, so body-modifying middleware steps aside: DevReload skips script injection, and the session middleware's cookie writer is bypassed (the handshake response goes straight to the hijacked connection)
+  - If you override `CONTENT_SECURITY_POLICY`, include `connect-src ws://localhost:* wss://your-domain` — otherwise browsers refuse the socket
+  - `IPFilter` and the rate limiter apply at handshake time, useful for blocking abusive clients before the socket opens
+
+  **Reverse proxy (wss://):** terminate TLS at the proxy and forward the upgrade headers — nginx example:
+
+```nginx
+location /ws/ {
+    proxy_pass http://127.0.0.1:4000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 300s;   # keep above WS_PONG_TIMEOUT or the proxy idle-kills the socket
+}
+```
+
+  **Scaffolding:** `regius make websocket <name>` generates `handlers/ws_<name>.go` (echo read loop with a dispatch TODO, plus a `WSBroadcast<Name>` helper) and mounts `/ws/<name>` on the app routes. Try it live with `websocat ws://localhost:4000/ws/<name>`.
+
+  **Environment Variables:**
+
+```properties
+WS_ENABLED=false
+WS_PATH=/ws
+WS_ALLOWED_ORIGINS=
+WS_ALLOW_EMPTY_ORIGIN=true
+WS_HEARTBEAT=30s
+WS_WRITE_TIMEOUT=10s
+WS_PONG_TIMEOUT=60s
+WS_MAX_MESSAGE_SIZE=32768
+WS_CLIENT_BUFFER=16
+WS_MAX_CLIENTS=0
+```
+
+</details>
+
+<a name="internationalization-i18n"></a>
+<details>
+    <summary>Internationalization (i18n)</summary>
+
+- Ship multi-language apps out of the box with locale detection, translation file management, and a built-in language selector.
+
+  - Enabled by default (`I18N_ENABLED=true`); applied globally in `routes.go`
+  - Locale resolution order: `LOCALE_COOKIE_NAME` cookie → `Accept-Language` header → `DEFAULT_LOCALE`
+  - Default supported locales are **English** (`en`) and **Spanish** (`es`), configurable via `SUPPORTED_LOCALES`
+  - Generated apps embed translations under `locales/<code>/<code>.yaml` and load them in `init.regius.go`
+  - Add new locales with `regius make locale <code>` (e.g. `regius make locale fr`)
+
+  **Usage in templ views:**
+
+```go
+import "github.com/hbarral/regius/i18n"
+
+templ Hello(name string) {
+<p>{ i18n.T(ctx, "navbar.welcome", i18n.M{"name": name}) }</p>
+}
+```
+
+  **Usage in Jet/Go templates:**
+
+```html
+<p>{{T "navbar.home"}}</p>
+<html lang="{{.Locale}}">
+```
+
+  **Environment Variables:**
+
+```properties
+I18N_ENABLED=true
+DEFAULT_LOCALE=en
+SUPPORTED_LOCALES=en,es
+LOCALE_COOKIE_NAME=locale
+```
+
+</details>
+
+<a name="server-sent-events-sse"></a>
+<details>
+    <summary>Server-Sent Events (SSE)</summary>
+
+- Push real-time updates to browsers over standard HTTP with a built-in, zero-dependency SSE broker.
+
+  - Global broker available on every app: `app.SSE`
+  - Broadcast to all connected clients or send to a specific client
+  - JSON helper: `app.SSEBroadcastJSON(event, payload)` marshals a payload and broadcasts it
+  - Automatic client disconnect detection via request context cancellation
+  - Works through the existing middleware stack (`RequestID`, `CORS`, `SecurityHeaders`, `SessionLoad`, etc.)
+  - Generated apps include a visual SSE demo on the home page (`/sse/stream` and `/sse/ping`)
+
+  **Usage Example in Your App:**
+
+```go
+// Broadcast a JSON event to every connected browser
+_ = app.SSEBroadcastJSON("notification", map[string]string{
+	"message": "Hello, world!",
+})
+
+// Or build an event manually and broadcast it
+app.SSE.Broadcast(regius.SSEEvent{
+	Event: "notification",
+	Data:  []byte(`{"message":"Hello, world!"}`),
+})
+
+// Stream events from a handler
+r.Get("/sse/stream", app.SSE.Handler())
+```
+
+  **Configuration Options:**
+
+```go
+config := regius.SSEEvent{
+    ID:    "1",                   // Optional event id for the Last-Event-ID header
+    Event: "update",              // Event name listeners can subscribe to
+    Data:  []byte(`{"ok":true}`), // Raw event payload
+    Retry: 3000,                  // Optional reconnection time in milliseconds
+}
+```
+
+  **Environment Variables:**
+
+```properties
+# Disable the demo heartbeat in generated apps (disabled by default)
+SSE_DEMO_HEARTBEAT=false
+```
+
+</details>
+
+<a name="configuration-management"></a>
+<details>
+    <summary>Configuration Management</summary>
+- Beyond `.env`, Regius supports multiple config file formats, config profiles, startup validation, hot-reload, secrets management, and encrypted values.
+
+  - **Multiple file formats**: `.env`, `.yaml`/`.yml`, `.json`, and `.toml` are auto-discovered in the app root and `config/` subdirectory. Nested keys are flattened to env-var convention (e.g. `database.type` becomes `DATABASE_TYPE`). Lists become comma-separated strings. Existing OS env vars always take precedence.
+  - **Config profiles**: Set `APP_PROFILE=dev` (or `staging`, `prod`) to load profile-specific files that override base values. Profile files follow the naming convention `.env.dev`, `config.dev.yaml`, etc. Profile subdirectories (`config/dev/`) are also supported.
+  - **Startup validation**: `config.DefaultValidator()` checks standard env vars (PORT, DATABASE_TYPE, CACHE, SESSION_TYPE, HASH_ALGORITHM, booleans, numeric fields) on startup. All failures are collected into a single error. Extend with custom rules via `Validator.AddRule()`.
+  - **Hot-reload**: `app.WatchConfig(callback)` watches config files with fsnotify and reloads them on change. A tracker distinguishes config-set vars from OS env vars so only config-sourced values are updated. Changes are debounced and reported via callback with `ValueChange` entries (added/modified/removed).
+  - **Secrets management**: Use `secret://{provider}/{path}` references in config values to fetch secrets from external providers at load time. Built-in providers: `env` (env vars, for dev), `aws` (AWS Secrets Manager), `vault` (HashiCorp Vault via REST API). Enable with `SECRETS_PROVIDER=env,aws,vault` and `app.SetupSecrets()`.
+  - **Encrypted values**: Wrap sensitive values in `ENC(...)` to encrypt them at rest. Decryption uses AES-CFB with the `CONFIG_ENCRYPTION_KEY` env var (32 bytes, raw or base64). Use `config.EncryptValue()` to generate encrypted values. Compatible with the framework's `Encryption` type.
+
+  **Multiple Config File Formats:**
+
+```yaml
+# config.yaml - nested keys become env vars
+app_name: myapp
+port: "8080"
+debug: true
+
+database:
+  type: postgres
+  host: localhost
+  port: 5432
+
+cors:
+  allowed_origins:
+    - http://localhost:3000
+    - http://example.com
+```
+
+```toml
+# config.toml - same structure, different format
+app_name = "myapp"
+port = "8080"
+debug = true
+
+[database]
+type = "postgres"
+host = "localhost"
+port = 5432
+```
+
+  **Config Profiles:**
+
+```sh
+# Set the active profile via env var
+export APP_PROFILE=dev
+
+# Base file: config.yaml (always loaded)
+# Profile file: config.dev.yaml (overrides base values)
+# Profile subdirectory: config/dev/ (also loaded, overrides base)
+```
+
+```yaml
+# config.yaml (base)
+debug: false
+port: "8080"
+
+# config.dev.yaml (dev profile overrides)
+debug: true
+port: "3000"
+```
+
+</details>
+
+<a name="hot-reload"></a>
+<details>
+    <summary>Hot-Reload</summary>
+
+```go
+// Start watching config files for changes
+watcher, err := app.WatchConfig(func(changes []cfg.ValueChange) {
+    for _, c := range changes {
+        app.InfoLog.Printf("config %s: %s (old: %q, new: %q)",
+            c.Type, c.Key, c.OldValue, c.NewValue)
+    }
+})
+if err != nil {
+    log.Fatal(err)
+}
+defer watcher.Stop()
+```
+
+</details>
+
+<a name="secrets-management"></a>
+<details>
+    <summary>Secrets Management</summary>
+
+```yaml
+# config.yaml with secret references
+database:
+  pass: secret://aws/myapp/db-password
+redis:
+  password: secret://vault/secret/data/myapp/redis
+api_token: secret://env/API_TOKEN
+```
+
+```go
+// Enable secrets resolution before calling app.New()
+// Set SECRETS_PROVIDER=env,aws,vault in .env or OS env
+resolver, err := app.SetupSecrets()
+if err != nil {
+    log.Fatal(err)
+}
+// Now call app.New() - secret:// references are resolved automatically
+```
+
+```properties
+# Environment variables for secrets providers
+SECRETS_PROVIDER=env,aws,vault
+AWS_REGION=us-east-1
+VAULT_ADDR=http://vault:8200
+VAULT_TOKEN=s.hbr3xxx
+```
+
+</details>
+
+<a name="encrypted-values"></a>
+<details>
+    <summary>Encrypted Values</summary>
+
+```go
+// Generate an encrypted value (run once, store the result in config)
+key := []byte("01234567890123456789012345678901") // 32 bytes
+encrypted, _ := config.EncryptValue("my_secret_password", key)
+fmt.Println(encrypted) // ENC(Vx4nK9...==)
+```
+
+```yaml
+# config.yaml with encrypted value
+database:
+  pass: ENC(Vx4nK9mJb2Q...==)
+```
+
+```properties
+# Set the decryption key (32 bytes, raw or base64-encoded)
+CONFIG_ENCRYPTION_KEY=01234567890123456789012345678901
+```
+
+</details>
+
+<a name="environment-variables"></a>
+<details>
+    <summary>Environment Variables</summary>
 
 Upon creating a new application, `regius` generates a `.env` file with default configurations. You only need to fill in the required values. Below is an example of a complete `.env` file:
 
@@ -619,16 +1860,16 @@ SERVER_NAME=localhost
 # use https?
 SECURE=false
 
-# database configuration
-DATABASE_TYPE=
+# database configuration (sqlite is the default; a local file at data/<name>.db)
+DATABASE_TYPE=sqlite
 DATABASE_HOST=
 # ...
 ```
 
 <details>
-  <summary>See the full .env example</summary>
+    <summary>See the full .env example</summary>
 
-```plaintext
+```properties
 # Application name, without spaces
 APP_NAME=testapp
 APP_URL="http://localhost:4000"
@@ -646,14 +1887,80 @@ SERVER_NAME=localhost
 # use https?
 SECURE=false
 
+# security headers (helmet equivalent). Enabled by default.
+# HSTS (Strict-Transport-Security) is only emitted when SECURE=true.
+SECURITY_HEADERS_ENABLED=true
+CONTENT_SECURITY_POLICY=default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; frame-ancestors 'self'
+HSTS_MAX_AGE=31536000
+HSTS_INCLUDE_SUBDOMAINS=true
+HSTS_PRELOAD=false
+REFERRER_POLICY=strict-origin-when-cross-origin
+X_FRAME_OPTIONS=SAMEORIGIN
+
+# api key authentication (opt-in). Protects API routes (e.g. /api/*).
+# Add valid keys as a comma-separated list. Query param is off by default.
+API_KEY_AUTH_ENABLED=false
+API_KEYS=
+API_KEY_HEADER=Authorization
+API_KEY_SCHEME=Bearer
+API_KEY_ALT_HEADER=X-API-Key
+API_KEY_QUERY_PARAM=
+API_KEY_REALM=api
+
+# request id tracing (enabled by default). Stamps every request with a
+# correlation id: reuses an incoming id from the request header when present
+# (cross-service correlation), otherwise generates one. Echoed on the response.
+REQUEST_ID_ENABLED=true
+REQUEST_ID_HEADER=X-Request-ID
+REQUEST_ID_RESPONSE_HEADER=X-Request-ID
+REQUEST_ID_FORMAT=uuid
+
+# request sanitization for XSS prevention (defense-in-depth, on by default).
+# Sanitizes query params, form-encoded values, and selected request headers
+# using bluemonday. Strict strips all HTML; ugc allows a safe subset.
+# JSON request bodies and /api/* routes are exempt by default.
+REQUEST_SANITIZATION_ENABLED=true
+REQUEST_SANITIZATION_POLICY=strict
+REQUEST_SANITIZATION_QUERY=true
+REQUEST_SANITIZATION_FORM=true
+REQUEST_SANITIZATION_HEADERS=Referer,User-Agent
+REQUEST_SANITIZATION_EXEMPT=/api/.*
+
+# ip whitelist/blacklist (opt-in). Allow/deny lists of IPs or CIDR ranges
+# (e.g. 10.0.0.0/8, 192.168.1.5, ::1/128). Deny always wins over allow.
+# When allow is set, only listed networks may access the app.
+IP_FILTER_ENABLED=false
+IP_FILTER_ALLOW=
+IP_FILTER_DENY=
+IP_FILTER_TRUST_PROXY=false
+IP_FILTER_STATUS_CODE=403
+IP_FILTER_MESSAGE=
+
 # database configuration
-DATABASE_TYPE=
+# supported types: postgres, postgresql, mysql, mariadb, sqlite, sqlite3
+# sqlite is the default; it stores a local file at <root>/data/<DATABASE_NAME>.db
+# and needs no host/port/user/password.
+DATABASE_TYPE=sqlite
 DATABASE_HOST=
 DATABASE_PORT=
 DATABASE_USER=
 DATABASE_PASS=
-DATABASE_NAME=
+DATABASE_NAME=regius
+# DATABASE_SSL_MODE (enable | disable)
 DATABASE_SSL_MODE=
+# DATABASE_MAX_OPEN_CONNS=25
+# DATABASE_MAX_IDLE_CONNS=25
+# DATABASE_CONN_MAX_LIFETIME=15m
+# DATABASE_QUERY_LOGGING=true
+
+# read replica configuration (optional). When unset, reads use the main pool.
+# DATABASE_READ_DSN=postgres://reader:secret@read-host/appdb?sslmode=disable
+# DATABASE_READ_HOST=
+# DATABASE_READ_PORT=
+# DATABASE_READ_USER=
+# DATABASE_READ_PASS=
+# DATABASE_READ_NAME=
+# DATABASE_READ_SSL_MODE=
 
 # minio settings
 MINIO_ENDPOINT=
@@ -716,8 +2023,18 @@ MAILER_API=
 MAILER_KEY=
 MAILER_URL=
 
-# Template engine configuration (jet | go)
-RENDERER=jet
+# internationalization (i18n). Enabled by default.
+# DEFAULT_LOCALE is used when no locale cookie or Accept-Language header is present.
+# SUPPORTED_LOCALES is a comma-separated list of available languages.
+I18N_ENABLED=true
+DEFAULT_LOCALE=en
+SUPPORTED_LOCALES=en,es
+LOCALE_COOKIE_NAME=locale
+
+# Template engine (used by CLI scaffolding only; at runtime each handler
+# picks its engine via render.Jet(), render.Go(), or a templ component).
+# templ is the default. Options: templ | jet | go
+RENDERER=templ
 
 # encryption key (32 characters long)
 KEY=DPFtfVnxbtnXXRzVnRzrLxDzXXRh+Xft
@@ -781,6 +2098,7 @@ IP_FILTER_TRUST_PROXY=false
 IP_FILTER_STATUS_CODE=403
 IP_FILTER_MESSAGE=
 
+
 # github oauth
 GITHUB_KEY=
 GITHUB_SECRET=
@@ -800,15 +2118,58 @@ MYSQL_DATABASE=
 MYSQL_USER=
 MYSQL_PASSWORD=
 MYSQL_ROOT_PASSWORD=
+
+# reset password settings
+RESET_PASSWORD_MAILER_FROM="no-reply@${APP_NAME}.com"
+# support email
+SUPPORT_EMAIL="support@$testapp.com"
+
+# background jobs (opt-in). Workers and the scheduler run only when
+# JOBS_ENABLED=true; the manager is always constructed so Enqueue works
+# even with workers off. JOBS_BACKEND picks the store: memory (default),
+# redis (reuses REDIS_*), or sql (the app's database pool — run
+# `./regius migrate` after `regius make job` scaffolds regius_jobs).
+#JOBS_ENABLED=false
+#JOBS_BACKEND=memory
+#JOBS_PREFIX=regius:jobs
+#JOBS_WORKERS=4
+#JOBS_POLL_INTERVAL=1s
+#JOBS_LEASE=5m
+#JOBS_MAX_ATTEMPTS=3
+#JOBS_GRACEFUL_TIMEOUT=30s
+#JOBS_RETENTION=24h
+#JOBS_SCHEDULER_LOCK=true
+#JOBS_DASHBOARD_ENABLED=false
+
+# websockets (opt-in route; the hub is always constructed). WS_ENABLED
+# mounts the default broadcast route at WS_PATH; authenticated sockets
+# should be mounted on app routes instead (regius make websocket does
+# this). Cross-origin handshakes are rejected by default (CSWSH
+# protection): extend with WS_ALLOWED_ORIGINS, or require an Origin
+# header from every client with WS_ALLOW_EMPTY_ORIGIN=false.
+#WS_ENABLED=false
+#WS_PATH=/ws
+#WS_ALLOWED_ORIGINS=
+#WS_ALLOW_EMPTY_ORIGIN=true
+#WS_HEARTBEAT=30s
+#WS_WRITE_TIMEOUT=10s
+#WS_PONG_TIMEOUT=60s
+#WS_MAX_MESSAGE_SIZE=32768
+#WS_CLIENT_BUFFER=16
+#WS_MAX_CLIENTS=0
 ```
 
 </details>
 
-### Database Configuration
+</details>
+
+<a name="database-configuration"></a>
+<details>
+    <summary>Database Configuration</summary>
 
 After creating a new application, a `.env` file is generated with the following database variables:
 
-```
+```properties
 # database configuration
 # supported types: postgres, postgresql, mysql, mariadb, sqlite, sqlite3
 DATABASE_TYPE=postgres
@@ -834,7 +2195,7 @@ Fill in these values with your database connection details. Migrations, seeds, a
 
 Regius provides a centralized password hashing utility accessible via `App.Hash`, supporting `bcrypt` (default), `scrypt`, and `argon2id`. The algorithm and its parameters are configured through environment variables:
 
-```
+```properties
 HASH_ALGORITHM=bcrypt
 HASH_COST=12
 ```
@@ -851,88 +2212,88 @@ ok, err := h.App.Hash.Compare(storedHash, plainPassword)
 
 The `make auth` scaffolding uses `App.Hash` directly, so the generated handlers and user model stay hash-agnostic. Defaults preserve the previous behavior (bcrypt at cost 12), so existing password hashes continue to verify.
 
-## 🎯 Usage
+</details>
 
-Each command has different options and parameters. Here are some basic usage examples:
+<a name="rendering-templates"></a>
+<details>
+    <summary>Rendering Templates</summary>
 
-- **Create a new application:**
+Regius provides a unified `render.Template` interface for all three template engines: **jet**, **go**, and **templ**. The scaffolded app defaults to **templ** (`regius new --renderer templ`; switch with `--renderer jet|go`). Every handler calls the same `Page()` method — the only difference is how the `Template` is created.
 
-  ```bash
-  ./regius new myapp
-  ```
+> **templ build step:** templ views (`*.templ`) are compiled to Go (`*_templ.go`) by `templ generate`. The scaffolded `Makefile` runs `templ generate` as part of `build`, and `regius new`/`regius make auth`/`regius make handler` invoke it automatically for templ apps.
 
-  Optional flags:
+<details>
+    <summary>Jet</summary>
 
-  - `--db <type>`: pre-fill `DATABASE_TYPE` in the generated `.env`
-    (`postgres`|`postgresql`|`mysql`|`mariadb`|`sqlite`|`sqlite3`).
-  - `-v`, `--verbose`: stream `go get` / `go mod tidy` output live instead of
-    capturing it (the captured output is shown only on failure by default).
-
-  ```bash
-  ./regius new myapp --db postgres -v
-  ```
-
-- Show help commands:
-
-  ```bash
-  ./regius help
-  ```
-
-- Run a migration:
-
-  ```bash
-  ./regius migration
-  ```
-
-- Create a migration:
-
-  ```bash
-  ./regius make migration create_users_table
-  ```
-
-- Create a seed file and run it:
-
-  ```bash
-  ./regius make seed default_users
-  ./regius db:seed
-  ```
-
-- Check current migration version:
-
-  ```bash
-  ./regius migrate version
-  ```
-
-- Create a model:
-
-  ```bash
-  ./regius make model User
-  ```
-
-- Create a GORM model:
-
-  ```bash
-  ./regius make gorm-model User
-  ```
-
-- Put the server in maintenance mode:
-
-  ```bash
-  ./regius down
-  ```
-
-- Bring the server back from maintenance mode:
-  ```bash
-  ./regius up
-  ```
-
-For more details about usage and commands, refer to the CLI help:
-
-```bash
-./regius help
+```go
+h.App.Render.Page(w, r, h.App.Render.Jet("home", nil), nil)
 ```
 
-## 🤝 Contributing
+</details>
+
+<details>
+    <summary>Go</summary>
+
+```go
+// Single-file template (no layout)
+h.App.Render.Page(w, r, h.App.Render.Go("home"), nil)
+
+// Template inside a shared layout (page defines a "content" block)
+h.App.Render.Page(w, r, h.App.Render.GoLayout("home", "base"), nil)
+```
+
+The `go` renderer uses `html/template`. Pages rendered with `GoLayout(name,
+layout)` must define a `{{define "content"}}...{{end}}` block; the layout in
+`views/layouts/<layout>.layout.template` executes it with
+`{{template "content" .}}`. Component partials in `views/components/*.page.template`
+are automatically available to every Go template.
+
+</details>
+
+<details>
+    <summary>Templ</summary>
+
+Templ components implement `render.Template` natively — pass them directly with no wrapper and no registration:
+
+```go
+h.App.Render.Page(w, r, views.Home(), &render.TemplateData{Data: data})
+```
+
+</details>
+
+### Mixing Engines
+
+Each handler independently chooses its engine, so you can mix jet, go, and templ in the same application without any global `RENDERER` setting.
+
+### Tailwind CSS
+
+The `templ`, `go`, and `jet` renderers ship a pre-built stylesheet at
+`public/css/output.css` so generated apps look correct immediately. The source
+of truth is `assets/css/input.css` plus the Tailwind utility classes used in
+your views.
+
+To customize styles you need the **Tailwind CSS CLI** installed:
+
+```sh
+# Rebuild once
+make tailwind
+
+# Or watch for changes
+make tailwind-watch
+
+# Or use hot-reload development (watches Go + templates + CSS)
+make dev
+```
+
+Scanning by renderer:
+
+- `go`: `*.page.template`, `*.layout.template`, `*.js`
+- `jet`: `*.jet`, `*.js`
+- `templ`: `*.templ`, `*.js`, and the `templui` component library
+
+</details>
+
+## Contributing
 
 Contributions are welcome! Please follow the GitHub flow for contributions:
 
@@ -942,7 +2303,7 @@ Contributions are welcome! Please follow the GitHub flow for contributions:
 4. Push to the branch (`git push origin feature-new-feature`).
 5. Open a Pull Request.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
 

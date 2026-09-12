@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"net/rpc"
 	"os"
 	"path/filepath"
@@ -16,21 +17,18 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/go-chi/chi/v5"
 	"github.com/gomodule/redigo/redis"
-	"github.com/joho/godotenv"
 	"github.com/robfig/cron/v3"
 
 	"github.com/hbarral/regius/cache"
-	"github.com/hbarral/regius/filesystems/miniofilesystem"
-	"github.com/hbarral/regius/filesystems/s3filesystem"
-	"github.com/hbarral/regius/filesystems/sftpfilesystem"
-	"github.com/hbarral/regius/filesystems/webdavfilesystem"
+	cfg "github.com/hbarral/regius/config"
+	"github.com/hbarral/regius/filesystems"
 	"github.com/hbarral/regius/hash"
+	"github.com/hbarral/regius/jobs"
 	"github.com/hbarral/regius/mailer"
 	"github.com/hbarral/regius/render"
 	"github.com/hbarral/regius/session"
+	"github.com/hbarral/regius/ws"
 )
-
-const version = "1.3.0"
 
 var (
 	myRedisCache  *cache.RedisCache
@@ -44,7 +42,6 @@ var maintenanceMode bool
 type Regius struct {
 	AppName       string
 	Debug         bool
-	Version       string
 	ErrorLog      *log.Logger
 	InfoLog       *log.Logger
 	RootPath      string
@@ -57,14 +54,35 @@ type Regius struct {
 	EncryptionKey string
 	Cache         cache.Cache
 	Hash          hash.Hasher
-	Scheduler     *cron.Cron
-	Mail          mailer.Mail
-	Server        Server
-	FileSystems   map[string]interface{}
-	S3            s3filesystem.S3
-	SFTP          sftpfilesystem.SFTP
-	WebDAV        webdavfilesystem.WebDAV
-	Minio         miniofilesystem.Minio
+	// Scheduler runs raw cron jobs registered via AddFunc. Deprecated: use
+	// Jobs (MustRegister + Cron/Every) instead — registered jobs get
+	// retries, backoff, persistence, and monitoring. The field stays for
+	// compatibility; New now starts it, so previously dead registrations
+	// finally run.
+	Scheduler *cron.Cron
+	// Jobs is the background job queue (see the jobs package). New always
+	// constructs it (memory backend by default) so Enqueue works everywhere;
+	// workers and the scheduler run only while enabled (JOBS_ENABLED) and
+	// started — ListenAndServe does both when enabled.
+	Jobs   *jobs.Manager
+	Mail   mailer.Mail
+	Server Server
+	I18n   I18nConfig
+	SSE    *SSEBroker
+	// WS is the WebSocket broadcast hub (see the ws package). New always
+	// constructs it (mirroring SSE) so apps can mount r.WS.Handler on any
+	// route; the default route at WS_PATH is mounted only while WS_ENABLED
+	// is true. Broadcast from handlers with WSBroadcastJSON.
+	WS              *ws.Hub
+	Scalar          ScalarConfig
+	FileSystems     map[string]interface{}
+	S3              filesystems.FS
+	SFTP            filesystems.FS
+	WebDAV          filesystems.FS
+	Minio           filesystems.FS
+	handler         http.Handler
+	configWatcher   *cfg.Watcher
+	validationRules map[string]ValidationFunc
 }
 
 type Server struct {
@@ -76,7 +94,6 @@ type Server struct {
 
 type config struct {
 	port             string
-	renderer         string
 	cookie           cookieConfig
 	sessionType      string
 	database         databaseConfig
@@ -84,11 +101,16 @@ type config struct {
 	uploads          uploadConfig
 	cors             CORSConfig
 	securityHeaders  SecurityHeadersConfig
+	devReload        DevReloadConfig
 	apiKeyAuth       APIKeyAuthConfig
 	requestID        RequestIDConfig
 	requestSanitizer RequestSanitizerConfig
 	ipFilter         IPFilterConfig
+	i18n             I18nConfig
 	hash             hashConfig
+	jobs             jobsConfig
+	ws               wsConfig
+	scalar           ScalarConfig
 }
 
 type uploadConfig struct {
@@ -119,11 +141,15 @@ func (r *Regius) New(rootPath string) error {
 
 	err = r.checkDotEnv(rootPath)
 	if err != nil {
-		return nil
+		return err
 	}
 
-	err = godotenv.Load(rootPath + "/.env")
+	err = r.loadConfig(rootPath)
 	if err != nil {
+		return err
+	}
+
+	if err := cfg.DefaultValidator().Validate(); err != nil {
 		return err
 	}
 
@@ -189,12 +215,21 @@ func (r *Regius) New(rootPath string) error {
 		}
 	}
 
+	// The scheduler was historically created but never started, leaving any
+	// registered jobs (the Badger value-log GC above) dead. Start it; the
+	// GC stays here rather than on r.Jobs because it is machine-local and
+	// must run on every process with a badger cache, whereas jobs schedules
+	// are cross-process single-fire.
+	r.Scheduler.Start()
+
 	r.InfoLog = infoLog
 	r.ErrorLog = errorLog
 	r.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
-	r.Version = version
 	r.RootPath = rootPath
-	r.Mail = r.createMailer()
+
+	if os.Getenv("SMTP_HOST") != "" || os.Getenv("MAILER_API") != "" {
+		r.Mail = r.createMailer()
+	}
 
 	exploded := strings.Split(os.Getenv("ALLOWED_FILETYPES"), ",")
 	var allowedTypes []string
@@ -228,6 +263,11 @@ func (r *Regius) New(rootPath string) error {
 	}
 	hstsPreload, _ := strconv.ParseBool(os.Getenv("HSTS_PRELOAD"))
 
+	devReloadEnabled := false
+	if os.Getenv("DEV_RELOAD_ENABLED") != "" {
+		devReloadEnabled, _ = strconv.ParseBool(os.Getenv("DEV_RELOAD_ENABLED"))
+	}
+
 	apiKeyAuthEnabled := false
 	if os.Getenv("API_KEY_AUTH_ENABLED") != "" {
 		apiKeyAuthEnabled, _ = strconv.ParseBool(os.Getenv("API_KEY_AUTH_ENABLED"))
@@ -258,9 +298,62 @@ func (r *Regius) New(rootPath string) error {
 	ipFilterTrustProxy, _ := strconv.ParseBool(os.Getenv("IP_FILTER_TRUST_PROXY"))
 	ipFilterStatusCode, _ := strconv.Atoi(os.Getenv("IP_FILTER_STATUS_CODE"))
 
+	i18nEnabled := true
+	if os.Getenv("I18N_ENABLED") != "" {
+		i18nEnabled, _ = strconv.ParseBool(os.Getenv("I18N_ENABLED"))
+	}
+	defaultLocale := os.Getenv("DEFAULT_LOCALE")
+	if defaultLocale == "" {
+		defaultLocale = "en"
+	}
+	supportedLocales := parseStringSliceEnv("SUPPORTED_LOCALES", "en,es")
+	if len(supportedLocales) == 0 {
+		supportedLocales = []string{defaultLocale}
+	}
+	// Ensure the default locale is always part of the supported list.
+	foundDefault := false
+	for _, l := range supportedLocales {
+		if strings.EqualFold(l, defaultLocale) {
+			foundDefault = true
+			break
+		}
+	}
+	if !foundDefault {
+		supportedLocales = append([]string{defaultLocale}, supportedLocales...)
+	}
+	localeCookieName := os.Getenv("LOCALE_COOKIE_NAME")
+	if localeCookieName == "" {
+		localeCookieName = "locale"
+	}
+
+	scalarEnabled := false
+	if os.Getenv("SCALAR_ENABLED") != "" {
+		scalarEnabled, _ = strconv.ParseBool(os.Getenv("SCALAR_ENABLED"))
+	}
+	scalarDocsPath := os.Getenv("SCALAR_DOCS_PATH")
+	if scalarDocsPath == "" {
+		scalarDocsPath = "/docs"
+	}
+	scalarSpecPath := os.Getenv("SCALAR_SPEC_PATH")
+	if scalarSpecPath == "" {
+		scalarSpecPath = "/openapi.json"
+	}
+	scalarTitle := os.Getenv("SCALAR_TITLE")
+	if scalarTitle == "" {
+		scalarTitle = "API Reference"
+	}
+	scalarCDNURL := os.Getenv("SCALAR_CDN_URL")
+	if scalarCDNURL == "" {
+		scalarCDNURL = "https://cdn.jsdelivr.net/npm/@scalar/api-reference"
+	}
+	scalarTheme := os.Getenv("SCALAR_THEME")
+	if scalarTheme == "" {
+		scalarTheme = "default"
+	}
+	scalarShowClients := os.Getenv("SCALAR_SHOW_CLIENTS")
+
 	r.config = config{
-		port:     os.Getenv("PORT"),
-		renderer: os.Getenv("RENDERER"),
+		port: os.Getenv("PORT"),
 		cookie: cookieConfig{
 			name:     os.Getenv("COOKIE_NAME"),
 			lifetime: os.Getenv("COOKIE_LIFETIME"),
@@ -305,6 +398,10 @@ func (r *Regius) New(rootPath string) error {
 			CrossOriginResourcePolicy:     os.Getenv("CROSS_ORIGIN_RESOURCE_POLICY"),
 			XDNSPrefetchControl:           os.Getenv("X_DNS_PREFETCH_CONTROL"),
 		},
+		devReload: DevReloadConfig{
+			Enabled: devReloadEnabled,
+			Path:    os.Getenv("DEV_RELOAD_PATH"),
+		},
 		apiKeyAuth: APIKeyAuthConfig{
 			Enabled:    apiKeyAuthEnabled,
 			Keys:       parseStringSliceEnv("API_KEYS", ""),
@@ -336,8 +433,37 @@ func (r *Regius) New(rootPath string) error {
 			StatusCode: ipFilterStatusCode,
 			Message:    os.Getenv("IP_FILTER_MESSAGE"),
 		},
+		i18n: I18nConfig{
+			Enabled:          i18nEnabled,
+			DefaultLocale:    defaultLocale,
+			SupportedLocales: supportedLocales,
+			CookieName:       localeCookieName,
+		},
 		hash: r.createHashConfig(),
+		jobs: r.createJobsConfig(),
+		ws:   r.createWSConfig(),
+		scalar: ScalarConfig{
+			Enabled:     scalarEnabled,
+			DocsPath:    scalarDocsPath,
+			SpecPath:    scalarSpecPath,
+			Title:       scalarTitle,
+			CDNURL:      scalarCDNURL,
+			SpecFile:    os.Getenv("SCALAR_SPEC_FILE"),
+			Theme:       scalarTheme,
+			ShowClients: scalarShowClients,
+		},
 	}
+
+	r.I18n = r.config.i18n
+	r.SSE = NewSSEBroker()
+	r.WS = r.createWSHub()
+	r.Scalar = r.config.scalar
+
+	jobsManager, err := r.createJobsManager()
+	if err != nil {
+		return fmt.Errorf("failed to create jobs manager: %w", err)
+	}
+	r.Jobs = jobsManager
 
 	r.Routes = r.routes().(*chi.Mux)
 
@@ -385,8 +511,10 @@ func (r *Regius) New(rootPath string) error {
 	}
 
 	r.createRenderer()
-	r.FileSystems = r.createFileSystems()
-	go r.Mail.ListenForMail()
+	r.FileSystems = r.initFileSystems()
+	if os.Getenv("SMTP_HOST") != "" || os.Getenv("MAILER_API") != "" {
+		go r.Mail.ListenForMail()
+	}
 
 	return nil
 }
@@ -412,6 +540,174 @@ func (r *Regius) checkDotEnv(path string) error {
 	return nil
 }
 
+// loadConfig loads configuration from .env and any supported config files
+// (config.yaml, config.json, config.toml) in the root path. It also loads
+// files from a config/ subdirectory if it exists.
+//
+// If the APP_PROFILE environment variable is set (e.g., "dev", "staging",
+// "prod"), profile-specific files are loaded after their base counterparts
+// and take precedence (e.g., .env.dev overrides .env, config.dev.yaml
+// overrides config.yaml).
+func (r *Regius) loadConfig(rootPath string) error {
+	profile := cfg.GetProfile()
+
+	envPath := filepath.Join(rootPath, ".env")
+	if _, err := os.Stat(envPath); err == nil {
+		if err := cfg.LoadFileWithProfile(envPath, profile); err != nil {
+			return fmt.Errorf("failed to load .env: %w", err)
+		}
+	}
+
+	for _, name := range []string{"config.yaml", "config.yml", "config.json", "config.toml"} {
+		p := filepath.Join(rootPath, name)
+		if _, err := os.Stat(p); err == nil {
+			if err := cfg.LoadFileWithProfile(p, profile); err != nil {
+				return fmt.Errorf("failed to load %s: %w", name, err)
+			}
+		}
+	}
+
+	configDir := filepath.Join(rootPath, "config")
+	if info, err := os.Stat(configDir); err == nil && info.IsDir() {
+		if err := cfg.LoadDirWithProfile(configDir, profile); err != nil {
+			return fmt.Errorf("failed to load config directory: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// WatchConfig starts a hot-reload watcher on the application's config files.
+// When a config file changes, the watcher re-parses it, updates environment
+// variables, and calls the provided callback with the list of changed values.
+// The callback is optional; pass nil to ignore changes.
+//
+// The watcher is automatically stopped when StopConfigWatch is called or
+// when the application shuts down via ListenAndServe's context cancellation.
+//
+// Example:
+//
+//	w, err := app.WatchConfig(func(changes []cfg.ValueChange) {
+//	    for _, c := range changes {
+//	        app.InfoLog.Printf("config changed: %s %s", c.Key, c.Type)
+//	    }
+//	})
+//	defer w.Stop()
+func (r *Regius) WatchConfig(onChange func([]cfg.ValueChange)) (*cfg.Watcher, error) {
+	profile := cfg.GetProfile()
+
+	var paths []string
+	envPath := filepath.Join(r.RootPath, ".env")
+	if _, err := os.Stat(envPath); err == nil {
+		paths = append(paths, envPath)
+		if profile != "" {
+			profilePath := cfg.ProfileFilename(envPath, profile)
+			if _, err := os.Stat(profilePath); err == nil {
+				paths = append(paths, profilePath)
+			}
+		}
+	}
+
+	for _, name := range []string{"config.yaml", "config.yml", "config.json", "config.toml"} {
+		p := filepath.Join(r.RootPath, name)
+		if _, err := os.Stat(p); err == nil {
+			paths = append(paths, p)
+			if profile != "" {
+				profilePath := cfg.ProfileFilename(p, profile)
+				if _, err := os.Stat(profilePath); err == nil {
+					paths = append(paths, profilePath)
+				}
+			}
+		}
+	}
+
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no config files found to watch")
+	}
+
+	watcher, err := cfg.NewWatcher(paths...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create config watcher: %w", err)
+	}
+
+	if profile != "" {
+		watcher.WithProfile(profile)
+	}
+	if onChange != nil {
+		watcher.OnChange(onChange)
+	}
+
+	if err := watcher.Start(); err != nil {
+		watcher.Stop()
+		return nil, fmt.Errorf("failed to start config watcher: %w", err)
+	}
+
+	r.configWatcher = watcher
+	return watcher, nil
+}
+
+// StopConfigWatch stops the config hot-reload watcher if one is active.
+func (r *Regius) StopConfigWatch() {
+	if r.configWatcher != nil {
+		_ = r.configWatcher.Stop()
+		r.configWatcher = nil
+	}
+}
+
+// SetupSecrets configures a secrets resolver for the application. When set,
+// config values containing secret:// references are automatically resolved
+// from the registered providers during config loading.
+//
+// The resolver is registered before config files are loaded, so secrets
+// are resolved on the first load. If this method is called after New(),
+// call ReloadConfig to re-resolve secrets.
+//
+// Environment variables for provider configuration:
+//   - SECRETS_PROVIDER: comma-separated list of providers to enable
+//     (e.g., "env", "aws", "vault")
+//   - AWS_REGION: region for AWS Secrets Manager (defaults to us-east-1)
+//   - VAULT_ADDR: address for HashiCorp Vault (e.g., http://vault:8200)
+//   - VAULT_TOKEN: token for Vault authentication
+func (r *Regius) SetupSecrets() (*cfg.SecretsResolver, error) {
+	resolver := cfg.NewSecretsResolver()
+
+	providerStr := os.Getenv("SECRETS_PROVIDER")
+	if providerStr == "" {
+		return resolver, nil
+	}
+
+	providers := strings.Split(providerStr, ",")
+	for _, p := range providers {
+		p = strings.TrimSpace(strings.ToLower(p))
+		switch p {
+		case "env":
+			resolver.RegisterProvider("env", cfg.NewEnvSecretProvider())
+		case "aws":
+			region := os.Getenv("AWS_REGION")
+			if region == "" {
+				region = "us-east-1"
+			}
+			provider, err := cfg.NewAWSSecretsManagerProvider(region)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create AWS Secrets Manager provider: %w", err)
+			}
+			resolver.RegisterProvider("aws", provider)
+		case "vault":
+			addr := os.Getenv("VAULT_ADDR")
+			token := os.Getenv("VAULT_TOKEN")
+			if addr == "" || token == "" {
+				return nil, fmt.Errorf("vault provider requires VAULT_ADDR and VAULT_TOKEN")
+			}
+			resolver.RegisterProvider("vault", cfg.NewVaultProvider(addr, token))
+		default:
+			return nil, fmt.Errorf("unknown secrets provider: %s", p)
+		}
+	}
+
+	cfg.SetSecretsResolver(resolver)
+	return resolver, nil
+}
+
 func (r *Regius) startLoggers() (*log.Logger, *log.Logger) {
 	var infoLog *log.Logger
 	var errorLog *log.Logger
@@ -424,7 +720,6 @@ func (r *Regius) startLoggers() (*log.Logger, *log.Logger) {
 
 func (r *Regius) createRenderer() {
 	myrenderer := render.Render{
-		Renderer: r.config.renderer,
 		RootPath: r.RootPath,
 		Port:     r.config.port,
 		JetViews: r.JetViews,
@@ -632,73 +927,6 @@ func (r *Regius) buildDSN(prefix string) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported database type: %s", os.Getenv("DATABASE_TYPE"))
 	}
-}
-
-func (r *Regius) createFileSystems() map[string]interface{} {
-	fileSystems := make(map[string]interface{})
-
-	if os.Getenv("MINIO_SECRET") != "" {
-		useSSL := false
-
-		if strings.ToLower(os.Getenv("MINIO_USESSL")) == "true" {
-			useSSL = true
-		}
-
-		minio := miniofilesystem.Minio{
-			Endpoint: os.Getenv("MINIO_ENDPOINT"),
-			Key:      os.Getenv("MINIO_KEY"),
-			Secret:   os.Getenv("MINIO_SECRET"),
-			UseSSL:   useSSL,
-			Region:   os.Getenv("MINIO_REGION"),
-			Bucket:   os.Getenv("MINIO_BUCKET"),
-		}
-		fileSystems["MINIO"] = minio
-		r.Minio = minio
-	}
-
-	if os.Getenv("SFTP_HOST") != "" {
-		sftp := sftpfilesystem.SFTP{
-			Host: os.Getenv("SFTP_HOST"),
-			Port: os.Getenv("SFTP_PORT"),
-			User: os.Getenv("SFTP_USER"),
-			Pass: os.Getenv("SFTP_PASS"),
-		}
-
-		fileSystems["SFTP"] = sftp
-		r.SFTP = sftp
-	}
-
-	if os.Getenv("WEBDAV_HOST") != "" {
-		useSSL := false
-		if strings.ToLower(os.Getenv("WEBDAV_USESSL")) == "true" {
-			useSSL = true
-		}
-
-		webdav := webdavfilesystem.WebDAV{
-			Host:   os.Getenv("WEBDAV_HOST"),
-			Port:   os.Getenv("WEBDAV_PORT"),
-			User:   os.Getenv("WEBDAV_USER"),
-			Pass:   os.Getenv("WEBDAV_PASS"),
-			UseSSL: useSSL,
-		}
-
-		fileSystems["WebDAV"] = webdav
-		r.WebDAV = webdav
-	}
-
-	if os.Getenv("S3_KEY") != "" {
-		s3 := s3filesystem.S3{
-			Key:      os.Getenv("S3_KEY"),
-			Secret:   os.Getenv("S3_SECRET"),
-			Region:   os.Getenv("S3_REGION"),
-			Bucket:   os.Getenv("S3_BUCKET"),
-			Endpoint: os.Getenv("S3_ENDPOINT"),
-		}
-		fileSystems["S3"] = s3
-		r.S3 = s3
-	}
-
-	return fileSystems
 }
 
 func (r *Regius) listenRPC() {

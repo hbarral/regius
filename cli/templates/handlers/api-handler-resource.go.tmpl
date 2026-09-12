@@ -1,0 +1,79 @@
+package handlers
+
+import (
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/hbarral/regius/api"
+
+	"${APP_NAME}/resources"
+)
+
+func (h *Handlers) $HANDLER_NAMERoutes() http.Handler {
+	r := chi.NewRouter()
+
+	r.Get("/", h.$HANDLER_NAMEList)
+	r.Get("/{id}", h.$HANDLER_NAMEGet)
+	r.Post("/", h.$HANDLER_NAMECreate)
+	r.Put("/{id}", h.$HANDLER_NAMEUpdate)
+	r.Delete("/{id}", h.$HANDLER_NAMEDelete)
+
+	return r
+}
+
+func (h *Handlers) $HANDLER_NAMEList(w http.ResponseWriter, r *http.Request) {
+	p := api.ParseOffsetPagination(r, 20, 100)
+	_ = p
+
+	// TODO: fetch records with p.Offset() and p.Limit(), then respond with
+	// the resource collection and pagination metadata:
+	// var total int64
+	// var items []models.$HANDLER_NAME
+	// h.App.WriteAPIResponse(w, http.StatusOK, resources.New$RESOURCE_NAME_PLURAL(items), p.Meta(total))
+
+	h.App.WriteAPIResponse(w, http.StatusOK, resources.New$RESOURCE_NAME_PLURAL(nil))
+}
+
+func (h *Handlers) $HANDLER_NAMEGet(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	_ = id
+
+	// TODO: fetch a single record by id, then respond with the resource:
+	// h.App.WriteAPIError(w, http.StatusNotFound, "not_found", "$resource_name not found")
+
+	h.App.WriteAPIResponse(w, http.StatusOK, resources.New$RESOURCE_NAME(nil))
+}
+
+func (h *Handlers) $HANDLER_NAMECreate(w http.ResponseWriter, r *http.Request) {
+	// TODO: decode the request body and create the record, then respond
+	// with the resource:
+	// var input SomeInput
+	// if err := h.App.ReadJSON(w, r, &input); err != nil {
+	//     h.App.WriteAPIError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
+	//     return
+	// }
+	// h.App.WriteAPIResponse(w, http.StatusCreated, resources.New$RESOURCE_NAME(createdItem))
+
+	h.App.WriteAPIResponse(w, http.StatusCreated, nil)
+}
+
+func (h *Handlers) $HANDLER_NAMEUpdate(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	_ = id
+
+	// TODO: decode the request body and update the record, then respond
+	// with the resource:
+	// h.App.WriteAPIResponse(w, http.StatusOK, resources.New$RESOURCE_NAME(updatedItem))
+
+	h.App.WriteAPIResponse(w, http.StatusOK, nil)
+}
+
+func (h *Handlers) $HANDLER_NAMEDelete(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	_ = id
+
+	// TODO: delete the record
+	// h.App.WriteAPIResponse(w, http.StatusNoContent, nil)
+
+	h.App.WriteAPIResponse(w, http.StatusNoContent, nil)
+}

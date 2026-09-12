@@ -1,0 +1,27 @@
+package services
+
+import (
+	"context"
+
+	"${APP_NAME}/data"
+
+	"github.com/hbarral/regius"
+)
+
+// $SERVICE_TYPE TODO: describe the service's responsibility.
+type $SERVICE_TYPE struct {
+	App    *regius.Regius
+	Models data.Models
+	// TODO: add dependencies (cache, mailer, jobs manager, other services...)
+}
+
+// New$SERVICE_TYPE constructs the service with its shared dependencies.
+func New$SERVICE_TYPE(app *regius.Regius, models data.Models) *$SERVICE_TYPE {
+	return &$SERVICE_TYPE{App: app, Models: models}
+}
+
+// Do TODO: rename or replace with the service's real business logic.
+func (s *$SERVICE_TYPE) Do(ctx context.Context) error {
+	// TODO: implement
+	return nil
+}

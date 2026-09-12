@@ -1,0 +1,22 @@
+{{extends "./layouts/base.jet"}}
+
+{{block browserTitle()}}Welcome{{end}}
+
+{{block css()}}{{end}}
+
+{{block pageContent()}}
+<div class="flex h-full items-center justify-center">
+  <div class="flex flex-col items-center gap-6 text-center">
+    <img src="/public/images/regius.png" alt="Regius" class="h-auto w-24 select-none">
+    <h1 class="text-4xl font-bold tracking-tight select-none">
+      Regius
+    </h1>
+    <div class="h-px w-48 bg-border"></div>
+    <small class="text-muted-foreground select-none">
+      Go build something real
+    </small>
+  </div>
+</div>
+{{end}}
+
+{{block js()}}{{end}}

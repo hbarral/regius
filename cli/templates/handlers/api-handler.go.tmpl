@@ -1,0 +1,76 @@
+package handlers
+
+import (
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/hbarral/regius/api"
+)
+
+func (h *Handlers) $HANDLER_NAMERoutes() http.Handler {
+	r := chi.NewRouter()
+
+	r.Get("/", h.$HANDLER_NAMEList)
+	r.Get("/{id}", h.$HANDLER_NAMEGet)
+	r.Post("/", h.$HANDLER_NAMECreate)
+	r.Put("/{id}", h.$HANDLER_NAMEUpdate)
+	r.Delete("/{id}", h.$HANDLER_NAMEDelete)
+
+	return r
+}
+
+func (h *Handlers) $HANDLER_NAMEList(w http.ResponseWriter, r *http.Request) {
+	p := api.ParseOffsetPagination(r, 20, 100)
+	_ = p
+
+	// TODO: fetch records with p.Offset() and p.Limit()
+	// var total int64
+	// var items []SomeModel
+	// ...
+	// resp := api.NewResponse(items).WithPagination(p.Meta(total))
+
+	h.App.WriteAPIResponse(w, http.StatusOK, nil)
+}
+
+func (h *Handlers) $HANDLER_NAMEGet(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	_ = id
+
+	// TODO: fetch single record by id
+	// h.App.WriteAPIResponse(w, http.StatusOK, item)
+	// h.App.WriteAPIError(w, http.StatusNotFound, "not_found", "$resource_name not found")
+
+	h.App.WriteAPIResponse(w, http.StatusOK, nil)
+}
+
+func (h *Handlers) $HANDLER_NAMECreate(w http.ResponseWriter, r *http.Request) {
+	// TODO: decode request body and create record
+	// var input SomeInput
+	// if err := h.App.ReadJSON(w, r, &input); err != nil {
+	//     h.App.WriteAPIError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
+	//     return
+	// }
+	// h.App.WriteAPIResponse(w, http.StatusCreated, createdItem)
+
+	h.App.WriteAPIResponse(w, http.StatusCreated, nil)
+}
+
+func (h *Handlers) $HANDLER_NAMEUpdate(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	_ = id
+
+	// TODO: decode request body and update record
+	// h.App.WriteAPIResponse(w, http.StatusOK, updatedItem)
+
+	h.App.WriteAPIResponse(w, http.StatusOK, nil)
+}
+
+func (h *Handlers) $HANDLER_NAMEDelete(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	_ = id
+
+	// TODO: delete record
+	// h.App.WriteAPIResponse(w, http.StatusNoContent, nil)
+
+	h.App.WriteAPIResponse(w, http.StatusNoContent, nil)
+}

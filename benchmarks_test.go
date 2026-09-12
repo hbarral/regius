@@ -78,6 +78,36 @@ func BenchmarkValidation_IsDateISO(b *testing.B) {
 	}
 }
 
+func BenchmarkValidation_IsUUID(b *testing.B) {
+	r := &Regius{}
+	v := r.Validator(url.Values{})
+	for i := 0; i < b.N; i++ {
+		v.IsUUID("id", "550e8400-e29b-41d4-a716-446655440000")
+	}
+}
+
+func BenchmarkValidation_IsURL(b *testing.B) {
+	r := &Regius{}
+	v := r.Validator(url.Values{})
+	for i := 0; i < b.N; i++ {
+		v.IsURL("url", "https://example.com/path?q=1")
+	}
+}
+
+func BenchmarkValidation_ValidateStruct(b *testing.B) {
+	r := &Regius{}
+	type user struct {
+		Name  string `validate:"required,min=2,max=50"`
+		Email string `validate:"required,email"`
+		Age   int    `validate:"min=18,max=120"`
+	}
+	u := user{Name: "Alice", Email: "alice@example.com", Age: 30}
+	v := r.Validator(url.Values{})
+	for i := 0; i < b.N; i++ {
+		v.ValidateStruct(u)
+	}
+}
+
 func BenchmarkSanitize_Strict(b *testing.B) {
 	input := "<p>Hello <script>alert('xss')</script>world</p>"
 	for i := 0; i < b.N; i++ {

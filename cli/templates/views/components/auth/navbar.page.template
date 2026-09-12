@@ -1,0 +1,67 @@
+{{define "navbar"}}
+<nav class="sticky top-0 z-50 w-full transition-all duration-300">
+  <div class="container mx-auto px-4">
+    <div class="flex h-20 items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <a href="/" class="flex items-center gap-1.5">
+          <span class="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full p-1">
+            <img src="/public/images/regius.png" alt="Regius Logo" class="aspect-square h-full w-full select-none rounded-full">
+          </span>
+        </a>
+        <a href="/" class="text-xl font-bold transition-colors duration-300 select-none">
+          Regius
+        </a>
+      </div>
+      <div class="hidden md:flex items-center space-x-8 select-none">
+        <a href="/" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">
+          Home
+        </a>
+        <a href="https://regius.pro/docs/intro" target="_blank" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">
+          Docs
+        </a>
+        <a href="https://github.com/hbarral/regius" target="_blank" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">
+          Github
+        </a>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="hidden md:flex items-center space-x-4">
+          {{if .IsAuthenticated}}
+          <span class="text-sm font-medium transition-colors duration-300">
+            Welcome, {{index .Data "userName"}}
+          </span>
+          <form method="post" action="/auth/signout" class="inline">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <button type="submit" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">
+              Sign Out
+            </button>
+          </form>
+          {{else}}
+          <a href="/auth/signin" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 select-none">
+            Sign In
+          </a>
+          {{end}}
+          <a href="https://regius.pro/docs/usage" target="_blank" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2 shadow-lg select-none">
+            Get Started
+          </a>
+        </div>
+        {{template "theme_switcher" .}}
+        <div class="md:hidden" x-data="{ open: false }">
+          <button
+            type="button"
+            aria-label="Toggle menu"
+            @click="open = true"
+            class="inline-flex size-10 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 transition-all"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-5">
+              <path d="M4 5h16"></path>
+              <path d="M4 12h16"></path>
+              <path d="M4 19h16"></path>
+            </svg>
+          </button>
+          {{template "menu_mobile" .}}
+        </div>
+      </div>
+    </div>
+  </div>
+</nav>
+{{end}}

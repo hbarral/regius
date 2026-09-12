@@ -6,18 +6,41 @@ This file contains guidelines and commands for agentic coding assistants working
 
 Regius is a CLI application for building web pages in Go, inspired by Laravel. It provides tools for database migrations, code generation, and web application scaffolding.
 
-This is a **single repository (monorepo)**. The starter app template is embedded directly in the CLI as `cmd/cli/_skeleton/` (embedded via `//go:embed all:_skeleton` in `cmd/cli/copy-files.go`), so `regius new <name>` writes the skeleton from the embedded filesystem — it does **not** clone an external repository. The underscore prefix makes Go's build tool ignore the skeleton directory (so it is not compiled as part of `go build ./...`), while `all:` lets the embed include it. The skeleton source uses the internal module name `regius-app` for its imports (e.g. `regius-app/data`); `regius new` rewrites the literal `regius-app` to the chosen app name via `updateSource()` in `cmd/cli/helpers.go`.
+This repository uses a **split-module layout** to keep the CLI binary small:
 
-When changing the skeleton (`cmd/cli/_skeleton/`), verify end-to-end by building the CLI and running `regius new smoketest && (cd smoketest && go build ./...)`. The skeleton's own `go.mod`/`go.sum` are intentionally absent — it is not a standalone module; its correctness is validated by generating an app from it and building that app.
+- **Root module** (`github.com/hbarral/regius`): the web framework — `regius.go`, `render/`, `session/`, `mailer/`, `cache/`, `filesystems/`, etc. This is what end-user apps import.
+- **CLI module** (`github.com/hbarral/regius/cli`): the command-line tool — a separate Go module under `cli/` with its own `go.mod` and a minimal dependency set. It does **not** import the root module; instead it has a lightweight `Backend` struct (`cli/backend.go`) that reimplements the few methods the CLI needs (RandomString, CreateMigration, DSN building, golang-migrate wrappers, Seeder). This keeps the CLI binary at ~12 MB instead of ~35 MB.
+- **Entry point** (`cmd/cli/main.go`): a thin `package main` that imports `github.com/hbarral/regius/cli` and calls `cli.Execute()`. It lives in the root module so `go build ./cmd/cli` works from the repo root.
+
+The starter app template is embedded directly in the CLI module as `cli/_skeleton/` (embedded via `//go:embed all:_skeleton` in `cli/copy-files.go`), so `regius new <name>` writes the skeleton from the embedded filesystem.
+The underscore prefix makes Go's build tool ignore the skeleton directory, while `all:` lets the embed include it. The skeleton source uses the internal module name `regius-app` for its imports; `regius new` rewrites the literal `regius-app` to the chosen app name via `updateSource()` in `cli/helpers.go`.
+
+Code-generation templates are embedded in `cli/templates/` (via `//go:embed templates`).
+
+When changing the skeleton (`cli/_skeleton/`), verify end-to-end by building the CLI and running `regius new smoketest && (cd smoketest && go build ./...)`. `regius new` runs `templ generate` for the default `--renderer templ`, so the generated app builds directly.
+The skeleton's own `go.mod`/`go.sum` are intentionally absent — it is not a standalone module; its correctness is validated by generating an app from it and building that app. When changing renderer-aware scaffolding, also smoke the matrix: `regius new jetapp --renderer jet`, `regius new goapp --renderer go`, and `regius make auth`/`regius make handler --renderer <e>` in each, then `go build ./...`.
+
+> **Release coupling:** the embedded skeleton's handlers use the head `Render.Page(view render.Template, data)` API, and `regius dev` enables the head `r.DevReload` middleware via `DEV_RELOAD_ENABLED`. Before end-user apps build out-of-the-box (without a local `replace`), a `github.com/hbarral/regius` release carrying both APIs must be published and `cli/templates/go_mod` bumped to require it; until then verify generated apps with a `replace github.com/hbarral/regius => ../regius` directive in the app's `go.mod` (older releases simply ignore `DEV_RELOAD_ENABLED`, so `regius dev` still works — tabs just don't auto-reload).
+
+## Dependency Policy
+
+We are **not** zero-dependency. The rule is: **don't reinvent anything that already exists and works well.**
+
+- **Use a dependency when it solves a real problem well**: prefer established, actively maintained, widely adopted packages (the ecosystem's de-facto standard) over hand-rolled code — especially for protocols, parsers, and security-sensitive logic (e.g. WebSocket framing via `gorilla/websocket`, HTML sanitization via `bluemonday`).
+- **Don't add one when stdlib or existing code suffices**: if `net/http`, `crypto/*`, or an already-required package covers the need, use it. "No new deps" is a *default*, not a constraint to satisfy at the cost of owning a protocol implementation.
+- **Vet before adding**: leaf modules with small/no transitive dependency trees are preferred; check maintenance status (an archived/stale repo is a red flag), license (permissive), and whether the root module's vendoring (`go mod vendor`) stays reasonable. Run `go mod vendor` after any `go.mod` change.
+- **Wrap when it pays**: keep third-party types from leaking into public framework APIs where a thin wrapper enables a future swap (e.g. `ws.Conn` wraps gorilla's conn) — but don't build abstraction layers for their own sake.
+- **Split-module rule unchanged**: the CLI module stays minimal on purpose (binary size, not dependency phobia); root-module packages should never be imported by the CLI module.
 
 ## Build/Lint/Test Commands
 
 ### Testing
 ```bash
-# Run all tests
+# Run all tests (both root and CLI modules)
 make test
 # or
-go test -v ./...
+Go test -v ./...
+go test -v ./cli/...
 
 # Run tests with coverage
 make coverage
@@ -42,17 +65,18 @@ go test -v ./session/
 ### Building
 ```bash
 # Build CLI for current platform
-make build_cli
-
-# Build to dist directory
 make build
-# or
-go build -o ./dist/regius ./cmd/cli
+
+# Build to a specific path
+go build -ldflags "-s -w" -o ./dist/regius ./cmd/cli
 
 # Cross-platform builds (used in CI)
 GOOS=linux GOARCH=amd64 go build -o bin/regius-linux ./cmd/cli
 GOOS=windows GOARCH=amd64 go build -o bin/regius-windows.exe ./cmd/cli
 GOOS=darwin GOARCH=amd64 go build -o bin/regius-mac ./cmd/cli
+
+# Build the CLI module directly (for testing CLI deps in isolation)
+cd cli && go build -o /tmp/regius-cli .
 ```
 
 ### Formatting & Linting
@@ -238,8 +262,10 @@ func TestMain(m *testing.M) {
 - Uses Chi router (`github.com/go-chi/chi/v5`)
 
 #### Template Engines
-- Go templates (built-in)
-- Jet templates (`github.com/CloudyKit/jet/v6`)
+The scaffolded app defaults to **templ** (`github.com/a-h/templ`) with the [templui](https://github.com/templui/templui) component library + Tailwind v4; select another engine at create time with `regius new <name> --renderer jet|go`.
+- templ (`github.com/a-h/templ`) — default; ships a full templui/Tailwind UI (navbar, auth screens, theme switcher) and a `templ generate` build step. Views live in `views/*.templ` (+ generated `*_templ.go`); templ components satisfy `render.Template` natively, so handlers pass them straight to `Render.Page`.
+- Jet templates (`github.com/CloudyKit/jet/v6`) — same modern shadcn-style UI as the templ skeleton, implemented with `*.jet` views, shared `views/layouts/*.jet` layouts, Tailwind v4, and Alpine.js. Handlers call `Render.Jet("name", vars)`.
+- Go templates (built-in) — same modern shadcn-style UI as the templ skeleton, implemented with `html/template`, Tailwind v4, and Alpine.js. Views live in `views/*.page.template` and share layouts in `views/layouts/*.layout.template`; component partials live in `views/components/*.page.template`. Handlers call `Render.Go("name")` for single-file pages or `Render.GoLayout("name", "layout")` for layout-wrapped pages.
 
 #### Middleware
 - CSRF protection (`github.com/justinas/nosurf`)
@@ -252,6 +278,77 @@ func TestMain(m *testing.M) {
 - Request ID tracing middleware (`r.RequestID`) — stamps every request with a correlation ID; enabled by default (opt-out via `REQUEST_ID_ENABLED`); reuses an incoming ID from `REQUEST_ID_HEADER` (cross-service correlation), otherwise generates one (`REQUEST_ID_FORMAT`: `uuid` default | `xid` | `short` | `default`); echoes on `REQUEST_ID_RESPONSE_HEADER`; stored in context under chi's `RequestIDKey` (interoperable with `middleware.GetReqID`); retrieve via `regius.RequestIDFromContext(ctx)`; wired globally in `routes.go`
 - Request sanitization middleware (`r.RequestSanitizer`) — XSS prevention via [bluemonday](https://github.com/microcosm-cc/bluemonday); sanitizes query params, form values, and a header allowlist; opt-in via `REQUEST_SANITIZATION_ENABLED` (enabled in scaffolded apps); JSON bodies and `/api/*` exempt by default; wired globally in `routes.go`
 - IP whitelist/blacklist middleware (`r.IPFilter`) — allow/deny lists of IPs & CIDR ranges (IPv4/IPv6); deny-wins; pluggable `IPChecker` (e.g. `CacheIPChecker` for runtime fail2ban-style blocking); opt-in via `IP_FILTER_ENABLED`; wired globally in `routes.go` (after `RealIP`)
+- Browser live-reload middleware (`r.DevReload`) — development-only; makes open tabs reload automatically under `regius dev`. Opt-in via `DEV_RELOAD_ENABLED` (set automatically by `regius dev` in the child env); mounts `<DEV_RELOAD_PATH>/reload.js` (script asset), `/stream` (SSE with a per-process boot ID + `retry: 500` reconnect hint — a changed boot ID after reconnect is the restart signal), and `/notify` (loopback-only POST that broadcasts a reload event; rejects spoofable `X-Forwarded-For`/`X-Real-IP` since chi RealIP runs earlier). Injects `<script ... defer>` before the closing `</body>` of HTML responses via the framework's **first response-body-modifying middleware** (`injectingWriter` in `devreload.go`): Content-Type gate, unset types sniffed with `http.DetectContentType` at finish (no renderer sets the header), fragments without `</body>` untouched, `Content-Length` dropped when injecting, mid-stream `Flush` gives up injection, `Unwrap()` for `http.ResponseController`. Any future body-modifying middleware (e.g. compression) must be wired **after** it. The wrapper passes `Hijack` through to the underlying writer and skips injection once hijacked, so WebSocket upgrades work under `regius dev`. Disabled = pure passthrough, nothing mounted — never enable in production. Wired globally in `routes.go` (outer mux, after `SecurityHeaders`)
+- Internationalization middleware (`r.Language`) — detects locale from the `LOCALE_COOKIE_NAME` cookie, then the `Accept-Language` header, then `DEFAULT_LOCALE`; enabled by default (`I18N_ENABLED=true`); wired globally in `routes.go`; the resolved locale is available via `i18n.Locale(ctx)` and `i18n.T(ctx, "key")`
+- Scalar API Reference (`r.Scalar`) — serves an interactive API reference UI from [Scalar](https://github.com/scalar/scalar) backed by an OpenAPI 3.1 document; opt-in via `SCALAR_ENABLED`; registers two routes: the docs UI (`SCALAR_DOCS_PATH`, default `/docs`) and the spec endpoint (`SCALAR_SPEC_PATH`, default `/openapi.json`); hybrid spec source: build programmatically via `api.Document` (set on `r.Scalar.Spec` or via `SetAPIDocument()`) or serve a static file (`SCALAR_SPEC_FILE`); configurable CDN URL (`SCALAR_CDN_URL`) for air-gapped use; wired in `routes.go` when enabled
+
+### API Support
+
+#### Scalar API Reference
+- `r.Scalar` (type `ScalarConfig`) — serves the [Scalar](https://github.com/scalar/scalar) API reference UI from an OpenAPI 3.1 document; opt-in via `SCALAR_ENABLED`; wired in `routes.go` when enabled
+- The `api/` subpackage provides: `api.Document` (OpenAPI 3.1 builder with fluent API), `api.Schema` (JSON Schema helpers + Go struct reflection), `api.Response` (standardized `{data, error, meta}` envelope), `api.OffsetPagination` / `api.CursorPagination` (query-param parsing + metadata generation)
+- Response helpers on `Regius`: `WriteAPIResponse(w, status, data, meta...)` and `WriteAPIError(w, status, code, message, details...)` wrap the envelope and call `WriteJSON`
+- CLI: `regius make api <name>` scaffolds a CRUD handler (`handlers/api_<name>.go`) with pagination, envelope, and routes-api.go mounting; also generates `handlers/api_<name>_doc.go` with an OpenAPI document builder (`<Name>APIDocument`) and auto-wires `a.App.Scalar.Spec` in `routes-api.go` (first handler sets the spec, subsequent handlers merge via `Spec.MergePaths`); `--with-resource` additionally generates `resources/<name>_resource.go` and swaps the handler's TODOs for `resources.New<Resource>` calls
+- `SCALAR_SHOW_CLIENTS` controls which client library code examples are shown in the Scalar UI; accepts a raw JS expression: `true` (show all), `["curl","fetch"]` (show only those), or `{"js":true,"shell":["curl"]}` (per-language); empty = show all (default); converted to Scalar's `hiddenClients` at runtime
+- Configured via env vars in `regius.go` `New()`: `SCALAR_ENABLED`, `SCALAR_DOCS_PATH`, `SCALAR_SPEC_PATH`, `SCALAR_TITLE`, `SCALAR_CDN_URL`, `SCALAR_SPEC_FILE`, `SCALAR_THEME`, `SCALAR_SHOW_CLIENTS`
+
+#### Webhook Scaffolding
+
+- CLI: `regius make webhook <name> [--provider generic|stripe|github]` generates `handlers/webhook_<name>.go`: a POST-only endpoint that verifies the HMAC signature via the framework's `github.com/hbarral/regius/webhook` package **before** the body is parsed, then decodes the payload; hyphenated names become valid Go identifiers (`stripe-payment` → `StripePaymentWebhook`)
+- The route is mounted in `routes-api.go` at `/api/webhooks/<name>`, under `/api` so it reuses the existing NoSurf (`/api/.*`) and sanitizer exemptions — verification needs the byte-exact raw body
+- `WEBHOOK_<NAME>_SECRET` is appended to `.env` with a generated 32-char secret (`appendEnvVar` in `cli/helpers.go`; never overwrites, so re-runs are idempotent)
+- The `webhook` package supports generic `X-Signature` (hex/base64), GitHub `X-Hub-Signature-256` (+ legacy sha1 via `Options.Hash`), and Stripe `t=,v1=` signed payloads with timestamp tolerance; multiple secrets for rotation (any-match); constant-time compares; typed errors (`ErrNoSecret`, `ErrMissingHeader`, `ErrBadSignature`, `ErrBadTimestamp`); `Verify` restores `r.Body` so downstream code can re-read it
+
+#### Background Jobs
+
+- Framework package `github.com/hbarral/regius/jobs`: `Job`/`Status` (pending/running/completed/dead), `Store` interface (memory/redis/sql), `Handler`, `Options` (MaxAttempts, per-attempt Timeout, Backoff), `EnqueueOptions` (RunAt, per-job MaxAttempts), backoff presets (`Fixed`/`Linear`/`Exponential` with full jitter), `Manager` (`Register`/`MustRegister`, `Enqueue`/`EnqueueWithOptions`, `Cron`/`Every`/`At` scheduling, `Start`/`Stop` lifecycle, monitoring `Stats`/`List`/`Get`/`Retry`/`Drop`)
+- Delivery is at-least-once; handlers must be idempotent (a crash between Claim and Complete re-runs the job after its lease expires). A maintenance loop reclaims expired leases and prunes completed jobs past `JOBS_RETENTION`; recurring schedules (`Cron`/`Every`) enqueue ordinary jobs at each tick, with a store-side `TryLock` fire-guard (TTL = time until the next occurrence) so multiple processes don't double-fire; `JOBS_SCHEDULER_LOCK=false` opts out for machine-local schedules
+- `Regius.Jobs` is always constructed in `New()` (memory backend by default, so `Enqueue` works everywhere); workers + scheduler run only when `JOBS_ENABLED=true` — `ListenAndServe` starts them and drains them on shutdown within `JOBS_GRACEFUL_TIMEOUT` (in-flight attempts cancelled and requeued). `New()` also starts the previously-never-started `Regius.Scheduler` (latent-bug fix; the Badger value-log GC now actually runs); `Scheduler` is deprecated in favor of `Jobs`. The Badger GC stays on `Scheduler` deliberately (machine-local, must run on every badger process; jobs schedules are cross-process single-fire)
+- Backend selection: `JOBS_BACKEND=memory` (default) | `redis` (reuses the framework's `REDIS_*` pool wiring, creating one if the cache didn't) | `sql` (wraps the app's `r.DB.Pool` with the `DATABASE_TYPE` dialect). `NewSQLStore` normalizes aliases (postgresql/pgx/mariadb/sqlite3); `jobs.Schema(dialect)` + `jobs.ApplySchema` expose the DDL for tests/dev (the CLI migration templates duplicate it — the CLI module cannot import the root module)
+- `Store.Enqueue` must not alias the caller's `*Job` (copies on insert and read); the manager writes final state (`Complete`/`Fail`) through `context.WithoutCancel` so shutdown cannot lose an earned transition
+- Monitoring endpoints (opt-in `JOBS_DASHBOARD_ENABLED`): `/api/jobs/stats`, `/api/jobs` (status/name/limit query params; `limit` ≤ 200), `POST /api/jobs/{id}/retry`, `DELETE /api/jobs/{id}`; mounted on the outer mux (Scalar/SSE precedent), so they bypass NoSurf/sanitizer/maintenance; default-off — layer `APIKeyAuth` or `IPFilter` on them
+- CLI: `regius make job <name>` generates `workers/<name>.go` (typed payload + handler + `Enqueue<Name>` helper); on first run it also bootstraps `workers/register.go` (the `RegisterAll` hub), wires `workers.RegisterAll(app.App.Jobs)` into `init.regius.go` at the `// register background workers here` marker (fallback before `return app`), and scaffolds the `regius_jobs`/`regius_locks` table migration for the `DATABASE_TYPE` dialect (delete it if `JOBS_BACKEND` stays memory/redis). Later runs append a `MustRegister` line; duplicate names are refused. Hyphenated/underscored names normalize to valid Go identifiers (`send-welcome-email`/`send_welcome_email` → `SendWelcomeEmail`, job name `send_welcome_email`)
+- Configured via env vars in `regius.go` `New()`: `JOBS_ENABLED`, `JOBS_BACKEND`, `JOBS_PREFIX`, `JOBS_WORKERS`, `JOBS_POLL_INTERVAL`, `JOBS_LEASE`, `JOBS_MAX_ATTEMPTS`, `JOBS_GRACEFUL_TIMEOUT`, `JOBS_RETENTION`, `JOBS_SCHEDULER_LOCK`, `JOBS_DASHBOARD_ENABLED` (durations are `time.ParseDuration` strings)
+
+#### WebSockets
+
+- Framework package `github.com/hbarral/regius/ws` (built on `github.com/gorilla/websocket` per the Dependency Policy — gorilla types never leak from the package): `Upgrader` (origin checks + typed errors `ErrNotWebSocket`/`ErrOriginRejected`/`ErrUpgradeFailed`), `Conn` (JSON read/write, write timeouts, read limits, close handshake), `Hub` (SSEBroker-shaped: `Broadcast`/`Send`/`Close`/`Clients`, bounded per-client buffers, read+write pumps, heartbeat pings with pong-extended liveness deadlines, slow-client eviction — close by default, `WithDropSlow` for SSE drop semantics — `OnMessage` dispatch, `WithMaxClients` cap)
+- The wire envelope `ws.Event` (`{"event","data"}`) matches what `SSEBroadcastJSON` puts on the wire, so payloads work over both transports unchanged; `Regius.WSBroadcastJSON` mirrors `SSEBroadcastJSON`
+- `Regius.WS` is always constructed in `New()` (mirroring `r.SSE`); the default route is opt-in: `WS_ENABLED` mounts `r.WS.Handler(upgrader)` at `WS_PATH` (default `/ws`) on the outer mux (SSE-stream precedent — bypasses session/CSRF/sanitizer/maintenance). Authenticated sockets mount `r.WS.Handler` under app routes instead: the GET handshake carries the session cookie, so authenticate before upgrading
+- Origin policy for the default mount: `ws.CheckSameOrigin` (empty Origin allowed — non-browser clients; host must match) extended by `WS_ALLOWED_ORIGINS` (csv, hosts or scheme://host or `*`), with `WS_ALLOW_EMPTY_ORIGIN=false` requiring an Origin header (backed by `ws.RequireOrigin`). Cross-origin rejection is CSWSH protection — a malicious page can open a socket riding the victim's cookies
+- Hijack chain walk: middleware wraps the ResponseWriter without promoting `http.Hijacker` (scs's session writer, any Unwrap-implementing wrapper); `ws.Upgrader.Upgrade` walks the `Unwrap` chain to the hijackable writer, and gorilla's own upgrader handles the handshake — the response goes straight to the hijacked connection, bypassing body-modifying wrappers (correct: a hijacked connection has no response body). Same reasoning lives in `devreload.go`'s `injectingWriter.Hijack` passthrough + `hijacked` skip in `finish()`
+- CLI: `regius make websocket <name>` generates `handlers/ws_<name>.go` (upgrade handler with an echo read loop + dispatch TODO, `WSBroadcast<Name>` helper) and mounts `/ws/<name>` on the app routes via `insertAtMarker` (marker → after-home-route fallback); name normalization reuses `pascalIdent`/`snakeIdent` (`live-scores` → `WSLiveScores` at `/ws/live_scores`); duplicates refused; a best-effort `go mod tidy` runs in the app root so gorilla/websocket lands in the app's go.mod
+- Configured via env vars in `regius.go` `New()`: `WS_ENABLED`, `WS_PATH`, `WS_ALLOWED_ORIGINS`, `WS_ALLOW_EMPTY_ORIGIN`, `WS_HEARTBEAT` (30s), `WS_WRITE_TIMEOUT` (10s), `WS_PONG_TIMEOUT` (60s), `WS_MAX_MESSAGE_SIZE` (32768), `WS_CLIENT_BUFFER` (16), `WS_MAX_CLIENTS` (0 = unlimited); malformed values fall back to defaults
+- Single-process hub (in-memory registry): multiple app processes do not share broadcasts — cross-process fan-out is a tracked follow-up (Redis pub/sub backend) in `docs/plan_websocket_support.md`
+
+#### Code Generation Scaffolding
+
+- Naming: `pascalIdent`/`snakeIdent`/`envIdent` in `cli/naming.go` normalize CLI names to valid Go identifiers (`send-welcome-email`/`send_welcome_email` → `SendWelcomeEmail`/`send_welcome_email`); `make crud` additionally singularizes/pluralizes via go-pluralize ("post" → `Post` model/handlers, `posts` table/URL/views)
+- Wiring: all insertions into existing files go through `insertAtMarker` in `cli/helpers.go` (marker-based, idempotent, keeps the marker line last) with fallback anchors for apps generated before the markers existed; multi-file wiring (`make service`) normalizes results with `go/format` (`writeFormatted`/`gofmtFile`) so injected fields align
+- Skeleton markers: `// add any global middleware here` + `// add any route here` in `routes.go`, `// register services here` in `init.regius.go` (above the workers marker); `make middleware --global` and `make crud` wire before any route registration (chi only applies mux middleware to routes registered afterwards)
+- `regius make crud <name> [--renderer templ|jet|go]` generates the full web slice: `data/<name>.go` (upper/db model, soft-skipped when it already exists), the model wired into `data/models.go`'s `Models` struct + `New()`, `migrations/*_create_<table>_table.up/down.sql` for the `DATABASE_TYPE` dialect (valid minimal DDL + TODO `ALTER TABLE` hints), `handlers/<table>_crud.go` (`<Name>List/Show/New/Create/Edit/Update/Delete` with TODO bodies, session flash + 303 redirects), `views/<table>/{index,show,form}` renderer-aware (templ: `package <table>` funcs passed to `Render.Page`; jet: `Render.Jet("<table>/index")`; go: `Render.GoLayout("<table>/index", "main")`), and the `/<table>` route group in `routes.go`; the form view posts to `Data["formAction"]` when set (edit) and falls back to `/<table>` (create); templ renderer runs `templ generate`
+- `regius make resource <name>` generates `resources/<name>_resource.go`: a plain-Go JSON transformer (`<Name>Resource` struct + `New<Name>Resource` / `New<Name>Resources` constructors) for the `api.Response` envelope — no framework dependency, no hub needed; `make api --with-resource` generates handler + resource together
+- `regius make middleware <name> [--global]` generates `middleware/<snake>.go` as a method on the app's `Middleware` struct (so it can use `App`/`Models`); no auto-wiring by default (prints the `a.use(a.Middleware.<Name>)` hint), `--global` inserts the `a.use` line into `routes.go`'s global middleware section
+- `regius make service <name>` generates `services/<snake>.go` (`<Name>Service` with App/Models + a `Do` stub; "billing-service"/"billing" both yield `BillingService`); first run bootstraps `services/services.go` (the `Services` hub with `// additional service fields/constructors are registered here` markers), adds the `Services` field to the `application` struct (`main.go`) and `Handlers` struct, and wires `app.Services = services.NewServices(app.App, app.Models)` + `myHandlers.Services = app.Services` in `init.regius.go` (services marker → workers marker → before `return app` fallbacks); later runs append field + constructor entries; handlers reach services via `h.Services.<Name>`
+
+### Internationalization
+
+#### Locale Detection & Middleware
+- Locale resolution order: cookie (`LOCALE_COOKIE_NAME`, default `locale`) → `Accept-Language` header → `DEFAULT_LOCALE` (default `en`).
+- Supported locales are configured via the comma-separated `SUPPORTED_LOCALES` env var (default `en,es`).
+- The middleware is enabled by default and wired globally in `regius/routes.go`.
+- Handlers can read the current locale with `i18n.Locale(ctx)` from `github.com/hbarral/regius/i18n`.
+
+#### Translation Files
+- Generated apps store translations under `locales/<code>/<code>.yaml` (e.g. `locales/en/en.yaml`).
+- Files are embedded via `locales.Content` and loaded in `init.regius.go` with `i18n.LoadWithDefault(locales.Content, app.App.I18n.DefaultLocale)`.
+- Translations follow the `ctxi18n` YAML/JSON format: the top-level key is the locale code, values are nested maps.
+- Add a new locale with `./regius make locale <code>`, which creates `locales/<code>/<code>.yaml` seeded with the default translation keys.
+
+#### Using Translations in Views
+- **templ** (default renderer): import `github.com/hbarral/regius/i18n` and use `{ i18n.T(ctx, "key") }`. Interpolation: `i18n.T(ctx, "navbar.welcome", i18n.M{"name": userName})`.
+- **jet** and **go** templates: use `{{T "key"}}` (the render package injects a `T` function that reads the locale from context).
+- Always update the `<html lang="...">` attribute to use `i18n.Locale(ctx)` (templ) or `{{.Locale}}` (jet/go).
 
 ### Security Considerations
 
@@ -260,8 +357,12 @@ func TestMain(m *testing.M) {
 - Random string generation using crypto/rand
 
 #### Input Validation
-- Uses `github.com/asaskevich/govalidator`
-- Custom validation struct with error collection
+- `Validation` struct (`validator.go`, `validator_struct.go`, `validator_i18n.go`, `validator_middleware.go`) with error collection (`Errors` map + structured `Details`)
+- Built-in rules: `Required`, `Check`, `IsEmail`, `IsURL`, `IsUUID`, `IsPhone`, `IsCreditCard`, `IsAlpha`, `IsAlphanumeric`, `IsNumeric`, `IsInt`, `IsFloat`, `IsDateISO`, `IsJSON`, `IsIP`, `IsBoolean`, `IsMinLength`, `IsMaxLength`, `IsLength`, `IsRange`, `NoSpaces`, `MatchesPattern`; uses `github.com/asaskevich/govalidator` + stdlib
+- Custom rules: `Regius.RegisterValidation(name, fn)` registers reusable `ValidationFunc`s (built-ins pre-registered, overridable); invoke by name via `Validation.Rule(name, field, value, message...)`
+- Struct validation: `Validation.ValidateStruct(s)` walks `validate` struct tags via reflection (`required`, `nested`, `field=`, `min=`, `max=`, `len=`, `range=N:M`, `oneof=`, `regex=`, registry rule names); nested structs/pointers/slices produce dot-path error keys (`Address.City`, `Items.0.Name`); optional rules skip empty values
+- Localization: rule failures record i18n keys + params in `Details`; `LocalizedErrors(ctx)` translates via the `i18n` package for the request locale, falling back to English; 25 `validation.*` keys ship in the scaffolded locale files (`en`/`es`) and `cli/templates/locales/locale.yaml`
+- Request validation middleware: `r.ValidateRequest(ValidationConfig{StructType, Rules, ErrorFormat, RedirectTo})` — JSON bodies decoded into `StructType` and tag-validated (retrievable via `regius.ValidatedFromContext[*T](ctx)`); form bodies validated field-by-field against `Rules`; failures respond with the API error envelope (default) or session flash + 303 redirect (`ErrorFormat: "form"`, errors readable via `PopValidationErrors`); gob-registers `map[string]string` for session storage; per-route middleware (not global)
 
 #### CSRF Protection
 - Automatic CSRF token generation and validation
@@ -321,8 +422,9 @@ func TestMain(m *testing.M) {
 ```bash
 ./regius help                    # Show help
 ./regius version                 # Show version
-./regius new <app_name>          # Create new app
-                                 #   flags: --db <postgres|mysql|sqlite|...> (pre-fill .env DATABASE_TYPE)
+./regius new <app_name>          # Create new app (defaults: --db sqlite --renderer templ)
+                                 #   flags: --db <postgres|mysql|sqlite|...> (pre-fill .env DATABASE_TYPE; sqlite is default)
+                                 #          --renderer <templ|jet|go> (templ is default)
                                  #          -v, --verbose (stream go get / go mod tidy output)
 ./regius migrate [up|down|reset] # Run migrations
 ./regius migrate version         # Show current migration version
@@ -335,6 +437,28 @@ func TestMain(m *testing.M) {
 ./regius make gorm-model <name>  # Create GORM model
 ./regius make session            # Create session table
 ./regius make mail <name>        # Create mail templates
+./regius make api <name>         # Create CRUD API handler with pagination + envelope
+                                 #   --with-resource also generates resources/<name>_resource.go
+./regius make webhook <name>     # Create signed inbound webhook endpoint
+                                 #   --provider <generic|stripe|github> (generic is default)
+./regius make job <name>         # Create a background job (workers/<name>.go +
+                                 #   register.go hub + init.regius.go wiring + regius_jobs
+                                 #   table migration on first run)
+./regius make websocket <name>   # Create a WebSocket endpoint (handlers/ws_<name>.go +
+                                 #   route at /ws/<name> on the app routes, so the
+                                 #   session rides the handshake; echo handler +
+                                 #   WSBroadcast<Name> helper)
+./regius make crud <name>        # Create a full-stack web CRUD slice (model + migration +
+                                 #   handlers + views + routes at /<table>s; --renderer)
+./regius make resource <name>    # Create an API resource (JSON transformer for the envelope)
+./regius make middleware <name>  # Create a custom middleware stub (--global wires it in
+                                 #   routes.go before any route is registered)
+./regius make service <name>     # Create a service-layer stub; first run bootstraps the
+                                 #   services/services.go hub + wiring (h.Services.<Name>)
+./regius make locale <code>      # Create a new translation locale (e.g. fr)
+./regius dev                     # Start the app with hot-reload (watch + rebuild + restart;
+                                 #   runs templ generate + tailwind watcher alongside; open
+                                 #   tabs reload automatically — see Browser Live-Reload)
 ./regius down                    # Maintenance mode on
 ./regius up                      # Maintenance mode off
 ```
@@ -360,6 +484,16 @@ DATABASE_PASS=password
 
 ### Development Workflow
 
+#### Hot-Reload Development
+
+`regius dev` (implemented in `cli/dev_cmd.go`, `cli/dev_watcher.go`, `cli/dev_runner.go` + the per-platform `cli/dev_proc_{unix,windows}.go`) watches the app for changes to restart-worthy files (`.go`, `.templ`, `.jet`, `*.template`, `.env`/config, locale YAML), debounces events, rebuilds, and restarts the child process gracefully (SIGTERM to the process group on Unix, `taskkill /T` on Windows — build-tag separated helpers). Build failures keep the old process serving. `.templ` changes run `templ generate` first; a `tailwindcss --watch=always` subprocess (with `NODE_OPTIONS` cleared — it can carry flags that break the CLI) keeps the stylesheet fresh and its output is prefixed `[tailwind]`. This added `github.com/fsnotify/fsnotify` as a direct dependency of the CLI module (vendored in `cli/vendor/`).
+
+Config via flags (`--port`, `--build-delay`, `--no-tailwind`, `--no-templ`, `--no-browser-reload`, `--exit`, `--ignore`, `--watch`, `-v`) and env vars (`DEV_BUILD_DELAY`, `DEV_EXIT_ON_FAILURE`, `DEV_BINARY`, `DEV_RELOAD_ENABLED`, `DEV_RELOAD_PATH`; flags win).
+
+**Browser live-reload**: `regius dev` runs the child with `DEV_RELOAD_ENABLED` set explicitly (on by default; `--no-browser-reload` or an explicit `DEV_RELOAD_ENABLED=false` in `.env` turns it off), which activates the framework's `r.DevReload` middleware (see the middleware list above) so open tabs reload after restarts. The watcher also carves `public/css/output.css` out of the otherwise-ignored `public/` tree: a change there emits a css-reload signal (separate from restart signals) and triggers a best-effort POST to the middleware's loopback notify endpoint, so tabs reload after CSS-only tailwind rebuilds without a Go restart. Design note: the debounce state lives entirely on the watcher's goroutine (timer channel, not a `time.AfterFunc` closure) — a closure variant raced concurrently-arriving events and silently dropped signals.
+
+The **Taskfile is gone**: the scaffolded app ships only a Makefile. `make dev` calls `regius dev`; `make tailwind` / `make tailwind-watch` / `make build-css` handle the stylesheet (`tailwind` regenerates `assets/css/sources.generated.css` with templui paths for the templ renderer via `rendererTailwindTargets()` in `cli/new_cmd.go`; jet/go rely on the static sources file written at scaffold time by `patchCSSSources()` in `cli/renderer.go`).
+
 #### Creating New Features
 1. Use CLI commands to scaffold code (`make handler`, `make model`, etc.)
 2. Write tests first (table-driven where appropriate)
@@ -368,6 +502,7 @@ DATABASE_PASS=password
 5. Format code with `go fmt`
 6. Build and test manually
 7. **Check if the README needs updating** — when a feature adds user-facing behavior (new middleware, CLI command, config option, env var, or public API), update `README.md` (and `AGENTS.md`) to document it. The scaffolded `.env` template (`cmd/cli/templates/env`) must also be updated for any new env var so generated apps include it
+8. **Update translations when adding user-facing strings** — if a feature adds or changes text shown in templates, add the new keys to `cmd/cli/_skeleton/locales/en/en.yaml` and `es/es.yaml`, plus `cmd/cli/templates/locales/locale.yaml` so newly generated locales inherit the keys
 
 #### Code Generation
 - Use the CLI's `make` commands for consistent scaffolding
