@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -170,8 +172,13 @@ func (r *Regius) MigrateVersion(dsn string) (uint, bool, error) {
 
 // MigrationDSNForCLI builds a golang-migrate DSN from environment variables.
 // MySQL/MariaDB and SQLite require a protocol prefix that the raw driver DSN
-// omits.
+// omits; Postgres requires a full postgres:// URL.
 func (r *Regius) MigrationDSNForCLI() (string, error) {
+	switch strings.ToLower(os.Getenv("DATABASE_TYPE")) {
+	case "postgres", "postgresql":
+		return buildPostgresMigrationURL()
+	}
+
 	dsn, err := r.BuildDSN()
 	if err != nil {
 		return "", err
@@ -185,6 +192,48 @@ func (r *Regius) MigrationDSNForCLI() (string, error) {
 	default:
 		return dsn, nil
 	}
+}
+
+// buildPostgresMigrationURL builds a postgres:// URL from environment
+// variables. golang-migrate's postgres driver parses the database URL and
+// passes it to lib/pq, which accepts the postgres:// scheme but not the raw
+// key=value DSN format produced by BuildDSN.
+func buildPostgresMigrationURL() (string, error) {
+	get := func(name string) string {
+		return os.Getenv("DATABASE_" + name)
+	}
+
+	host := get("HOST")
+	port := get("PORT")
+	if host == "" {
+		host = "localhost"
+	}
+	if port == "" {
+		port = "5432"
+	}
+
+	u := &url.URL{
+		Scheme: "postgres",
+		Host:   net.JoinHostPort(host, port),
+		Path:   "/" + get("NAME"),
+	}
+
+	switch user, pass := get("USER"), get("PASS"); {
+	case user != "" && pass != "":
+		u.User = url.UserPassword(user, pass)
+	case user != "":
+		u.User = url.User(user)
+	}
+
+	q := u.Query()
+	if sslmode := get("SSL_MODE"); sslmode != "" {
+		q.Set("sslmode", sslmode)
+	}
+	q.Set("timezone", "UTC")
+	q.Set("connect_timeout", "5")
+	u.RawQuery = q.Encode()
+
+	return u.String(), nil
 }
 
 // importPopMigrationState copies migration version state from pop's
@@ -243,7 +292,13 @@ func (r *Regius) importPopMigrationState() error {
 		return err
 	}
 
-	if _, err := db.Exec("INSERT INTO schema_migrations (version, dirty) VALUES (?, false)", version); err != nil {
+	// lib/pq (and pgx) use positional placeholders ($1), while MySQL and
+	// SQLite use "?". golang-migrate's postgres driver is backed by lib/pq.
+	placeholder := "?"
+	if driver == "postgres" {
+		placeholder = "$1"
+	}
+	if _, err := db.Exec("INSERT INTO schema_migrations (version, dirty) VALUES ("+placeholder+", false)", version); err != nil {
 		return err
 	}
 

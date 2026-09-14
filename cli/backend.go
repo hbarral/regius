@@ -6,19 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-
-	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v4/stdlib"
 )
 
@@ -167,7 +167,15 @@ func (b *Backend) OpenDB() (*sql.DB, error) {
 }
 
 // MigrationDSNForCLI builds a golang-migrate DSN from environment variables.
+// golang-migrate requires a URL with a scheme (e.g. postgres://...), so the
+// key=value DSNs produced by BuildDSN are converted to the URL form each
+// database driver expects.
 func (b *Backend) MigrationDSNForCLI() (string, error) {
+	switch strings.ToLower(os.Getenv("DATABASE_TYPE")) {
+	case "postgres", "postgresql":
+		return buildPostgresMigrationURL()
+	}
+
 	dsn, err := b.BuildDSN()
 	if err != nil {
 		return "", err
@@ -181,6 +189,48 @@ func (b *Backend) MigrationDSNForCLI() (string, error) {
 	default:
 		return dsn, nil
 	}
+}
+
+// buildPostgresMigrationURL builds a postgres:// URL from environment
+// variables. golang-migrate's postgres driver parses the database URL and
+// passes it to lib/pq, which accepts the postgres:// scheme but not the raw
+// key=value DSN format produced by BuildDSN.
+func buildPostgresMigrationURL() (string, error) {
+	get := func(name string) string {
+		return os.Getenv("DATABASE_" + name)
+	}
+
+	host := get("HOST")
+	port := get("PORT")
+	if host == "" {
+		host = "localhost"
+	}
+	if port == "" {
+		port = "5432"
+	}
+
+	u := &url.URL{
+		Scheme: "postgres",
+		Host:   net.JoinHostPort(host, port),
+		Path:   "/" + get("NAME"),
+	}
+
+	switch user, pass := get("USER"), get("PASS"); {
+	case user != "" && pass != "":
+		u.User = url.UserPassword(user, pass)
+	case user != "":
+		u.User = url.User(user)
+	}
+
+	q := u.Query()
+	if sslmode := get("SSL_MODE"); sslmode != "" {
+		q.Set("sslmode", sslmode)
+	}
+	q.Set("timezone", "UTC")
+	q.Set("connect_timeout", "5")
+	u.RawQuery = q.Encode()
+
+	return u.String(), nil
 }
 
 func (b *Backend) migrationSource() string {
@@ -274,9 +324,9 @@ func (b *Backend) NewSeeder() *Seeder {
 	db, err := b.OpenDB()
 	if err != nil {
 		log.Printf("warning: failed to open database for seeder: %v", err)
-		return &Seeder{DB: nil, RootPath: b.RootPath}
+		return &Seeder{DB: nil, RootPath: b.RootPath, DBType: b.DBType}
 	}
-	return &Seeder{DB: db, RootPath: b.RootPath}
+	return &Seeder{DB: db, RootPath: b.RootPath, DBType: b.DBType}
 }
 
 // importPopMigrationState copies migration version state from pop's
@@ -332,7 +382,13 @@ func (b *Backend) importPopMigrationState() error {
 		return err
 	}
 
-	if _, err := db.Exec("INSERT INTO schema_migrations (version, dirty) VALUES (?, false)", version); err != nil {
+	// lib/pq (and pgx) use positional placeholders ($1), while MySQL and
+	// SQLite use "?". golang-migrate's postgres driver is backed by lib/pq.
+	placeholder := "?"
+	if driver == "postgres" {
+		placeholder = "$1"
+	}
+	if _, err := db.Exec("INSERT INTO schema_migrations (version, dirty) VALUES ("+placeholder+", false)", version); err != nil {
 		return err
 	}
 
