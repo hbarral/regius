@@ -1,0 +1,31 @@
+# Secrets and local configuration are never baked into the image;
+# they are injected as environment variables at runtime (compose env_file /
+# k8s configMap+secret). The binary reads everything from the environment.
+.env
+.env.*
+
+# Vendored dependencies are re-fetched in the builder via `go mod download`.
+vendor/
+
+# Local dev artifacts and build output.
+/tmp
+dist/
+coverage.out
+regius
+
+# SQLite data (default DB) lives in a mounted volume at /app/data, not in the image.
+data/
+_db-data/
+.db-data/
+
+# Deployment manifests and CI do not belong in the app image.
+deploy/
+.github/
+.git/
+.gitignore
+.gitattributes
+
+# Local scratch files (mirrors .gitignore).
+notes.md
+tags
+ignored
