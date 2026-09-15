@@ -1,0 +1,44 @@
+# Production multi-stage build for a Regius app (templ renderer).
+#
+# The templ renderer compiles .templ sources to Go and rebuilds the Tailwind
+# stylesheet against the templui component library, so both steps run here.
+
+# ---- builder ----
+FROM golang:1.25-alpine AS builder
+WORKDIR /src
+RUN apk add --no-cache nodejs npm gcc musl-dev
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# Compile templ sources (pinned to the framework's templVersion).
+RUN go run github.com/a-h/templ/cmd/templ@${TEMPL_VERSION} generate
+
+# Rebuild the Tailwind sources with the templui module path resolved inside the
+# container — the committed sources.generated.css holds a dev-machine path.
+RUN TEMPLUI_PATH="$(go list -mod=mod -m -f '{{.Dir}}' github.com/templui/templui)" && \
+    printf '%s\n' \
+      '@source "./**/*.templ";' \
+      '@source "./**/*.js";' \
+      "@source \"$$TEMPLUI_PATH/components/**/*.templ\";" \
+      "@source \"$$TEMPLUI_PATH/components/**/*.js\";" \
+      > ./assets/css/sources.generated.css && \
+    npx --yes @tailwindcss/cli -i assets/css/input.css -o public/css/output.css
+
+# CGO is required: the framework uses mattn/go-sqlite3 for sqlite.
+RUN CGO_ENABLED=1 go build -ldflags "-s -w" -o /out/app .
+
+# ---- runtime ----
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates
+RUN adduser -D -u 10001 regius
+WORKDIR /app
+COPY --from=builder /out/app ./app
+COPY --from=builder /src/public ./public
+COPY --from=builder /src/migrations ./migrations
+USER regius
+EXPOSE 4000
+ENTRYPOINT ["./app"]
+

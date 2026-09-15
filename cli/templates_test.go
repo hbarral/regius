@@ -69,6 +69,15 @@ func TestTemplatePathsExist(t *testing.T) {
 											}
 										}
 									}
+									if strings.Contains(formatStr, "templates/deploy/Dockerfile.%s") {
+										for _, renderer := range []string{"templ", "jet", "gotpl"} {
+											path := strings.Replace(formatStr, "%s", renderer, 1)
+											_, err := templateFS.ReadFile(path)
+											if err != nil {
+												t.Errorf("%s: templateFS.ReadFile(\"%s\") fails: %v", fset.Position(call.Pos()), path, err)
+											}
+										}
+									}
 								}
 							}
 						}
