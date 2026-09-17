@@ -138,6 +138,21 @@ func doNew(appName string) {
 	}
 	color.Green("  ✓ go.mod written")
 
+	// Dockerfile: the renderer-specific production build. Only the templ
+	// variant carries a ${TEMPL_VERSION} placeholder, substituted to the
+	// framework's pinned templ version (templVersion, renderer.go). The go
+	// renderer's template uses the "gotpl" suffix so the embedded file is not
+	// compiled as Go source by the CLI's own build (handlerTemplateSuffix).
+	df, err := templateFS.ReadFile(fmt.Sprintf("templates/deploy/Dockerfile.%s", handlerTemplateSuffix(renderer)))
+	if err != nil {
+		exitGracefully(err)
+	}
+	dockerfile := strings.ReplaceAll(string(df), "${TEMPL_VERSION}", templVersion)
+	if err := copyDataToFile([]byte(dockerfile), fmt.Sprintf("./%s/Dockerfile", appName)); err != nil {
+		exitGracefully(err)
+	}
+	color.Green("  ✓ Dockerfile written (%s)", renderer)
+
 	if err := os.Chdir("./" + appName); err != nil {
 		exitGracefully(err)
 	}

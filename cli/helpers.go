@@ -170,7 +170,7 @@ func exitGracefully(err error, msg ...string) {
 
 func checkForDB() {
 	if b.DBType == "" {
-		exitGracefully(errors.New("you must set DATABASE_TYPE in .env"))
+		exitGracefully(errors.New("you must set DATABASE_TYPE (in .env or the environment)"))
 	}
 
 	// SQLite uses a local file path (DATABASE_NAME, optional) and does not

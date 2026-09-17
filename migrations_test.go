@@ -214,5 +214,20 @@ func TestRegius_MigrationDSNForCLI_Postgres(t *testing.T) {
 	dsn, err := r.MigrationDSNForCLI()
 
 	require.NoError(t, err)
-	assert.Equal(t, "host=host port=5432 user=user dbname=db sslmode=disable timezone=UTC connect_timeout=5", dsn)
+	assert.Equal(t, "postgres://user@host:5432/db?connect_timeout=5&sslmode=disable&timezone=UTC", dsn)
+}
+
+func TestRegius_MigrationDSNForCLI_PostgresWithPassword(t *testing.T) {
+	t.Setenv("DATABASE_TYPE", "postgresql")
+	t.Setenv("DATABASE_HOST", "host")
+	t.Setenv("DATABASE_PORT", "5432")
+	t.Setenv("DATABASE_USER", "user")
+	t.Setenv("DATABASE_PASS", "p@ss word")
+	t.Setenv("DATABASE_NAME", "db")
+
+	r := &Regius{}
+	dsn, err := r.MigrationDSNForCLI()
+
+	require.NoError(t, err)
+	assert.Equal(t, "postgres://user:p%40ss%20word@host:5432/db?connect_timeout=5&timezone=UTC", dsn)
 }

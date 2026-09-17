@@ -21,6 +21,18 @@ const createSeedsTableSQL = `CREATE TABLE IF NOT EXISTS regius_seeds (
 type Seeder struct {
 	DB       *sql.DB
 	RootPath string
+	DBType   string
+}
+
+// placeholder returns the SQL placeholder used by the configured database
+// driver: Postgres (pgx) uses $1, while MySQL and SQLite use ?.
+func (s *Seeder) placeholder() string {
+	switch strings.ToLower(s.DBType) {
+	case "postgres", "postgresql":
+		return "$1"
+	default:
+		return "?"
+	}
 }
 
 // RunSeeds executes all pending .sql seed files in seeds/ ordered by filename.
@@ -52,8 +64,9 @@ func (s *Seeder) RunSeeds() error {
 	sort.Strings(sqlFiles)
 
 	for _, name := range sqlFiles {
+		ph := s.placeholder()
 		var exists int
-		err := s.DB.QueryRow("SELECT 1 FROM regius_seeds WHERE name = ?", name).Scan(&exists)
+		err := s.DB.QueryRow("SELECT 1 FROM regius_seeds WHERE name = "+ph, name).Scan(&exists)
 		if err == nil {
 			continue
 		}
@@ -70,7 +83,7 @@ func (s *Seeder) RunSeeds() error {
 			if _, err := tx.Exec(string(content)); err != nil {
 				return err
 			}
-			if _, err := tx.Exec("INSERT INTO regius_seeds (name) VALUES (?)", name); err != nil {
+			if _, err := tx.Exec("INSERT INTO regius_seeds (name) VALUES ("+ph+")", name); err != nil {
 				return err
 			}
 			return nil

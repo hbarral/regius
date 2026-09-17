@@ -1,0 +1,53 @@
+# Production compose stack: builds the app image from the local Dockerfile and
+# runs it alongside its dependencies. Config flows in from .env (see
+# `env_file:` below), so the same DATABASE_* / REDIS_* / COOKIE_* / I18N_*
+# conventions from local development carry straight through.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# SQLite (the default --db): the app stores its file at /app/data/<DATABASE_NAME>.db,
+# so that directory is mounted as a volume below to survive restarts. No postgres
+# is needed in this mode.
+#
+# Postgres/MySQL/MariaDB: set DATABASE_HOST=<service-name> in .env (e.g.
+# DATABASE_HOST=postgres) and the app connects to the postgres service instead.
+
+services:
+  app:
+    build:
+      context: .
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "${PORT:-4000}:4000"
+    volumes:
+      - app_data:/app/data
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: 'postgres:13.4'
+    ports:
+      - 5432:5432
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-regius}
+      POSTGRES_USER: ${POSTGRES_USER:-regius}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-regius}
+    volumes:
+      - data_postgres:/var/lib/postgresql/data/
+
+  redis:
+    image: 'redis:alpine'
+    ports:
+      - 6379:6379
+    restart: always
+    volumes:
+      - data_redis:/data
+
+volumes:
+  app_data:
+  data_postgres:
+  data_redis:

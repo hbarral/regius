@@ -73,7 +73,13 @@ type Regius struct {
 	// constructs it (mirroring SSE) so apps can mount r.WS.Handler on any
 	// route; the default route at WS_PATH is mounted only while WS_ENABLED
 	// is true. Broadcast from handlers with WSBroadcastJSON.
-	WS              *ws.Hub
+	WS *ws.Hub
+	// Notifier delivers typed notifications over both real-time
+	// transports (see notify.go). New always constructs it, wired to
+	// r.SSE and r.WS with the auth scaffolding's userID session key as
+	// the default identity. Mount Notifier.SSEHandler/WSHandler on app
+	// routes and send with NotifyAll/NotifyUser/NotifyTopic.
+	Notifier        *Notifier
 	Scalar          ScalarConfig
 	FileSystems     map[string]interface{}
 	S3              filesystems.FS
@@ -457,6 +463,7 @@ func (r *Regius) New(rootPath string) error {
 	r.I18n = r.config.i18n
 	r.SSE = NewSSEBroker()
 	r.WS = r.createWSHub()
+	r.Notifier = NewNotifier(r.SSE, r.WS, r.defaultNotifierIdentity())
 	r.Scalar = r.config.scalar
 
 	jobsManager, err := r.createJobsManager()

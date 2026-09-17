@@ -33,6 +33,11 @@ type ClientInfo struct {
 	ID          string    `json:"id"`
 	RemoteAddr  string    `json:"remote_addr"`
 	ConnectedAt time.Time `json:"connected_at"`
+	// Meta carries per-connection metadata set by HandlerWithMeta's
+	// metaFn at registration time (identity, tenant, …). It is immutable
+	// once registration completes, so hooks and concurrent goroutines may
+	// read it freely.
+	Meta map[string]string `json:"meta,omitempty"`
 }
 
 // Hub errors.
@@ -185,8 +190,20 @@ type Hub struct {
 	clients map[string]*client
 	nextID  atomic.Int64
 
-	onMessageMu sync.RWMutex
-	onMessage   func(info ClientInfo, ev Event)
+	hooksMu      sync.RWMutex
+	onMessage    []*messageHook
+	onConnect    []*lifecycleHook
+	onDisconnect []*lifecycleHook
+}
+
+// lifecycleHook and messageHook are registry entries so listeners can be
+// removed by pointer identity (function values are not comparable).
+type lifecycleHook struct {
+	fn func(info ClientInfo)
+}
+
+type messageHook struct {
+	fn func(info ClientInfo, ev Event)
 }
 
 // NewHub returns a Hub with the given options applied.
@@ -198,14 +215,60 @@ func NewHub(opts ...Option) *Hub {
 	return &Hub{cfg: cfg, clients: make(map[string]*client)}
 }
 
-// OnMessage installs the hook invoked for every inbound client message.
-// The hook runs on the client's read pump goroutine, so it must not block;
-// forward to a channel or goroutine for slow work. It may be replaced at
-// any time.
-func (h *Hub) OnMessage(fn func(info ClientInfo, ev Event)) {
-	h.onMessageMu.Lock()
-	h.onMessage = fn
-	h.onMessageMu.Unlock()
+// OnMessage registers fn as a listener for every inbound client message.
+// Listeners run on the client's read pump goroutine, so they must not
+// block; forward to a channel or goroutine for slow work. Multiple
+// listeners run in registration order; the returned function removes this
+// one (removal is optional — dropping the reference simply keeps the
+// listener installed for the hub's lifetime).
+func (h *Hub) OnMessage(fn func(info ClientInfo, ev Event)) func() {
+	entry := &messageHook{fn: fn}
+	h.hooksMu.Lock()
+	h.onMessage = append(h.onMessage, entry)
+	h.hooksMu.Unlock()
+	return func() { removeHook(&h.hooksMu, &h.onMessage, entry) }
+}
+
+// OnConnect registers fn as a listener invoked when a client registers.
+// It fires synchronously from the registering handler's goroutine, before
+// the client's pumps start, so the listener's bookkeeping is in place
+// before any message can arrive. Multiple listeners run in registration
+// order; the returned function removes this one.
+func (h *Hub) OnConnect(fn func(info ClientInfo)) func() {
+	entry := &lifecycleHook{fn: fn}
+	h.hooksMu.Lock()
+	h.onConnect = append(h.onConnect, entry)
+	h.hooksMu.Unlock()
+	return func() { removeHook(&h.hooksMu, &h.onConnect, entry) }
+}
+
+// OnDisconnect registers fn as a listener invoked exactly once per client
+// when it leaves the registry — client disconnect, oversized message,
+// liveness timeout, slow-client eviction, or Hub.Close. It fires after the
+// client was removed from the registry but before its connection finishes
+// closing. Multiple listeners run in registration order; the returned
+// function removes this one.
+func (h *Hub) OnDisconnect(fn func(info ClientInfo)) func() {
+	entry := &lifecycleHook{fn: fn}
+	h.hooksMu.Lock()
+	h.onDisconnect = append(h.onDisconnect, entry)
+	h.hooksMu.Unlock()
+	return func() { removeHook(&h.hooksMu, &h.onDisconnect, entry) }
+}
+
+// removeHook drops entry from list by pointer identity (function values
+// are not comparable). Generic over the entry type so all three hook lists
+// share one implementation.
+func removeHook[T any](mu *sync.RWMutex, list *[]*T, entry *T) {
+	mu.Lock()
+	out := (*list)[:0]
+	for _, e := range *list {
+		if e != entry {
+			out = append(out, e)
+		}
+	}
+	*list = out
+	mu.Unlock()
 }
 
 // Handler returns the http.HandlerFunc that upgrades requests with u (the
@@ -214,6 +277,15 @@ func (h *Hub) OnMessage(fn func(info ClientInfo, ev Event)) {
 // it bypasses session/CSRF middleware, so authenticated sockets should be
 // mounted under the app routes instead.
 func (h *Hub) Handler(u *Upgrader) http.HandlerFunc {
+	return h.HandlerWithMeta(u, nil)
+}
+
+// HandlerWithMeta is Handler with per-connection metadata: metaFn runs
+// during the handshake — where session-derived identity is available —
+// and its result is stored on ClientInfo.Meta, visible to the
+// OnConnect/OnDisconnect hooks, OnMessage, and Clients. A nil metaFn
+// behaves exactly like Handler.
+func (h *Hub) HandlerWithMeta(u *Upgrader, metaFn func(*http.Request) map[string]string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		upgrader := u
 		if upgrader == nil {
@@ -234,14 +306,20 @@ func (h *Hub) Handler(u *Upgrader) http.HandlerFunc {
 			return
 		}
 
-		h.register(conn)
+		var meta map[string]string
+		if metaFn != nil {
+			meta = metaFn(r)
+		}
+
+		h.register(conn, meta)
 	}
 }
 
 // register adds the connection to the hub and starts its pumps. The hub's
 // configured write timeout overrides whatever the upgrader carried, so a
-// hub's WithWriteTimeout governs its managed connections.
-func (h *Hub) register(conn *Conn) *ClientInfo {
+// hub's WithWriteTimeout governs its managed connections. The connect
+// hook fires after registration but before the pumps start.
+func (h *Hub) register(conn *Conn, meta map[string]string) *ClientInfo {
 	if h.cfg.writeTimeout > 0 {
 		conn.writeTimeout = h.cfg.writeTimeout
 	}
@@ -253,6 +331,7 @@ func (h *Hub) register(conn *Conn) *ClientInfo {
 			ID:          id,
 			RemoteAddr:  conn.RemoteAddr(),
 			ConnectedAt: time.Now(),
+			Meta:        meta,
 		},
 		conn: conn,
 		send: make(chan Event, h.cfg.clientBuffer),
@@ -263,6 +342,8 @@ func (h *Hub) register(conn *Conn) *ClientInfo {
 	h.mu.Lock()
 	h.clients[id] = c
 	h.mu.Unlock()
+
+	h.fireConnect(c.info)
 
 	go h.writePump(c)
 	go h.readPump(c)
@@ -308,15 +389,19 @@ func (h *Hub) Send(clientID string, ev Event) error {
 }
 
 // Close unregisters the client and closes its connection with the given
-// reason, performing the closing handshake.
+// reason, performing the closing handshake. The disconnect hook fires
+// like any other exit path.
 func (h *Hub) Close(clientID string, reason string) error {
-	h.mu.Lock()
+	h.mu.RLock()
 	c, ok := h.clients[clientID]
-	if ok {
-		delete(h.clients, clientID)
-	}
-	h.mu.Unlock()
+	h.mu.RUnlock()
 	if !ok {
+		return ErrClientNotFound
+	}
+
+	if !h.unregister(c) {
+		// A concurrent exit path won the race between the check above
+		// and the removal.
 		return ErrClientNotFound
 	}
 
@@ -350,13 +435,62 @@ func (h *Hub) slowClient(c *client) {
 
 // remove unregisters the client (if still present) and signals its pumps.
 func (h *Hub) remove(c *client, reason string) {
+	h.unregister(c)
+	c.shutdown(reason)
+}
+
+// unregister removes the client from the registry when it is still the
+// registered entry, firing the disconnect hook exactly once per client
+// (read-pump exit, write-pump failure, slow-client eviction, and Close all
+// funnel through here; double removals are no-ops). It reports whether
+// this call was the one that removed the client.
+func (h *Hub) unregister(c *client) bool {
 	h.mu.Lock()
-	if cur, ok := h.clients[c.info.ID]; ok && cur == c {
+	cur, ok := h.clients[c.info.ID]
+	removed := ok && cur == c
+	if removed {
 		delete(h.clients, c.info.ID)
 	}
 	h.mu.Unlock()
 
-	c.shutdown(reason)
+	if removed {
+		h.fireDisconnect(c.info)
+	}
+	return removed
+}
+
+// fireConnect invokes the connect listeners. The list is copied before
+// invoking so a listener may (un)register hooks without deadlocking on
+// hooksMu.
+func (h *Hub) fireConnect(info ClientInfo) {
+	h.hooksMu.RLock()
+	listeners := append([]*lifecycleHook(nil), h.onConnect...)
+	h.hooksMu.RUnlock()
+	for _, entry := range listeners {
+		entry.fn(info)
+	}
+}
+
+// fireDisconnect invokes the disconnect listeners; see fireConnect for the
+// copy-then-invoke rationale.
+func (h *Hub) fireDisconnect(info ClientInfo) {
+	h.hooksMu.RLock()
+	listeners := append([]*lifecycleHook(nil), h.onDisconnect...)
+	h.hooksMu.RUnlock()
+	for _, entry := range listeners {
+		entry.fn(info)
+	}
+}
+
+// fireMessage invokes the message listeners; see fireConnect for the
+// copy-then-invoke rationale.
+func (h *Hub) fireMessage(info ClientInfo, ev Event) {
+	h.hooksMu.RLock()
+	listeners := append([]*messageHook(nil), h.onMessage...)
+	h.hooksMu.RUnlock()
+	for _, entry := range listeners {
+		entry.fn(info, ev)
+	}
 }
 
 // readPump drains inbound messages until the connection dies, the liveness
@@ -384,12 +518,7 @@ func (h *Hub) readPump(c *client) {
 			return
 		}
 
-		h.onMessageMu.RLock()
-		fn := h.onMessage
-		h.onMessageMu.RUnlock()
-		if fn != nil {
-			fn(c.info, ev)
-		}
+		h.fireMessage(c.info, ev)
 	}
 }
 
