@@ -29,10 +29,10 @@ It includes tools for database migrations, code generation, and application mana
 			return
 		}
 
-		// Load .env file
-		if err := godotenv.Load(); err != nil {
-			exitWithError(fmt.Errorf("failed to load .env file: %w", err))
-		}
+		// Load .env if present. It is optional: the environment may be
+		// configured elsewhere, and godotenv.Load does not override any
+		// variable that is already set.
+		_ = godotenv.Load()
 
 		// Set up regius instance
 		path, err := os.Getwd()
