@@ -174,3 +174,16 @@ func TestRegiusGoModVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestLocalDevReplace(t *testing.T) {
+	const mod = "module example\n\ngo 1.25.0\n\nrequire (\n\tgithub.com/hbarral/regius v1.9.2\n)\n"
+
+	// Non-dev builds never inject a replace.
+	old := Version
+	Version = "v1.11.0"
+	defer func() { Version = old }()
+
+	if got := localDevReplace(mod); got != mod {
+		t.Fatalf("localDevReplace() must be a no-op on a release build, got:\n%s", got)
+	}
+}

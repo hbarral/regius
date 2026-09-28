@@ -133,6 +133,7 @@ func doNew(appName string) {
 	}
 	mod := strings.ReplaceAll(string(data), "${APP_NAME}", appName)
 	mod = strings.ReplaceAll(mod, "${REGIUS_VERSION}", regiusGoModVersion())
+	mod = localDevReplace(mod)
 	if err := copyDataToFile([]byte(mod), fmt.Sprintf("./%s/go.mod", appName)); err != nil {
 		exitGracefully(err)
 	}
