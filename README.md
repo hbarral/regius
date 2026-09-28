@@ -73,9 +73,9 @@ brew upgrade regius
 
 Download the suitable binary for your operating system from the links below:
 
-- [Linux](https://github.com/hbarral/regius/releases/download/v1.10.2/regius_Linux_x86_64.tar.gz)
-- [Windows](https://github.com/hbarral/regius/releases/download/v1.10.2/regius_Windows_x86_64.zip)
-- [Mac](https://github.com/hbarral/regius/releases/download/v1.10.2/regius_Darwin_x86_64.tar.gz)
+- [Linux](https://github.com/hbarral/regius/releases/download/v1.11.0/regius_Linux_x86_64.tar.gz)
+- [Windows](https://github.com/hbarral/regius/releases/download/v1.11.0/regius_Windows_x86_64.zip)
+- [Mac](https://github.com/hbarral/regius/releases/download/v1.11.0/regius_Darwin_x86_64.tar.gz)
 
 <details>
     <summary>Build from Source</summary>
@@ -1610,7 +1610,7 @@ WS_MAX_CLIENTS=0
 - Typed, UI-ready notifications delivered over both real-time transports at once — the SSE broker and the WebSocket hub — with one JSON shape and one browser listener.
 
   - `Notification` carries `id`, `title`, `body`, `level` (info | success | warning | error), an optional `link`, an optional `topic`, and `created_at`
-  - Three targets: `NotifyAll` (every connection on both transports), `NotifyUser` (session identity — the auth scaffolding's `userID` key by default), `NotifyTopic` (client-chosen routing topics)
+  - Three targets: `NotifyAll` (every connection on both transports), `NotifyUser` (session identity — the auth scaffolding's `userID` key by default, stored as either an int or a string UUID), `NotifyTopic` (client-chosen routing topics)
   - Both handler mounts live on app routes, so the session rides the request: `a.get("/sse/notify", app.Notifier.SSEHandler())` and `a.get("/ws/notify", app.Notifier.WSHandler(nil))`
   - Server-side identity only: client messages can subscribe to topics but can never change who they are; topics are public routing channels, not access control
 
@@ -1637,6 +1637,28 @@ if reached := app.NotifyUser("42", regius.NewNotification("info", "Order shipped
 // Everyone subscribed to a topic
 app.NotifyTopic("orders", regius.NewNotification("info", "Order shipped", "#1234"))
 ```
+
+**Sending a raw event (not a toast):**
+
+When you need a custom push channel — e.g. an order status update that must
+reach only the order's owner — deliver a raw `SSEEvent` with your own event
+name and payload, targeted to a single user or a topic (SSE only):
+
+```go
+app.NotifyUserEvent(order.UserID.String(), regius.SSEEvent{
+	Event: "order.status",
+	Data:  []byte(`{"order_id":"abc","payment_status":"approved"}`),
+})
+```
+
+
+> **Custom identity:** the default `userID` session key resolves both integer and string-UUID values. For a different convention, override it (nil restores the default):
+>
+> ```go
+> app.WithNotifierIdentity(func(r *http.Request) string {
+> 	return sessionValue(r, "account_id") // your own lookup
+> })
+> ```
 
 3. Listen in the browser — one listener shape for both transports, deduplicated by ID:
 
@@ -1667,6 +1689,8 @@ socket.send(JSON.stringify({ event: "notify.subscribe", data: "orders" }));
 | `NotifyAll(note)` | every connection on both transports | — (dedup client-side by `note.id`) |
 | `NotifyUser(userID, note)` | connections whose handshake identified that user | connections reached (0 = offline) |
 | `NotifyTopic(topic, note)` | subscribers of the topic (WS message or SSE `?topics=`) | connections reached |
+| `NotifyUserEvent(userID, ev)` | that user's SSE connections (raw custom event, no toast envelope) | connections reached (0 = offline) |
+| `NotifyTopicEvent(topic, ev)` | the topic's SSE subscribers (raw custom event) | connections reached |
 
 - Delivery is best-effort and in-memory: offline users get nothing (no replay), and the registries are single-process — the same limitation as the WebSocket hub
 - Topic names are validated (`a-z A-Z 0-9 _ . -`, 1–64 chars); an invalid `?topics=` value on the SSE stream is a 400
