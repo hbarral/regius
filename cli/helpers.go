@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/format"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -97,6 +98,35 @@ func regiusGoModVersion() string {
 		v = "v" + v
 	}
 	return v
+}
+
+// localDevReplace injects a replace directive into the generated go.mod that
+// points github.com/hbarral/regius at the local framework checkout. It only
+// does so for local dev builds (Version == "dev") and only when the checkout
+// can be located; release builds and CI smoke tests resolve the framework from
+// the module proxy instead, so a broken relative replace can never leak into a
+// scaffolded app and make `go get`/`go build` fail.
+func localDevReplace(mod string) string {
+	if Version != "dev" {
+		return mod
+	}
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/hbarral/regius").Output()
+	if err != nil {
+		return mod
+	}
+	dir := strings.TrimSpace(string(out))
+	if dir == "" || dir == "." {
+		return mod
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return mod
+	}
+	replace := "\nreplace github.com/hbarral/regius => " + abs + "\n"
+	if i := strings.Index(mod, "require ("); i >= 0 {
+		return mod[:i] + replace + mod[i:]
+	}
+	return mod + replace
 }
 
 // normalizeDBType maps the user-facing DATABASE_TYPE aliases (sqlite3,
