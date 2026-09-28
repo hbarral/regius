@@ -126,6 +126,30 @@ func notifySSEClient(t *testing.T, server *httptest.Server, user, topics string)
 	return stream
 }
 
+// readSSEEvent reads the next SSE event with the given event name and
+// returns its data line verbatim, skipping unrelated events.
+func readSSERawEvent(t *testing.T, stream *sseStream, eventName string) string {
+	t.Helper()
+
+	event := ""
+	for {
+		line, err := stream.readLineWithTimeout(2 * time.Second)
+		if err != nil {
+			t.Fatalf("sse read error = %v", err)
+		}
+		line = strings.TrimRight(line, "\n")
+		switch {
+		case strings.HasPrefix(line, "event: "):
+			event = strings.TrimPrefix(line, "event: ")
+		case strings.HasPrefix(line, "data: "):
+			if event != eventName {
+				continue
+			}
+			return strings.TrimPrefix(line, "data: ")
+		}
+	}
+}
+
 // readSSENotification reads the next notification event from an SSE
 // stream.
 func readSSENotification(t *testing.T, stream *sseStream) Notification {
@@ -702,6 +726,157 @@ func TestIntegration_NotifierSessionIdentity(t *testing.T) {
 	}
 }
 
+// TestIntegration_NotifierStringSessionIdentity verifies the default
+// identity resolves a userID stored as a string (e.g. a UUID), not just
+// an integer. This covers scaling apps that keep userID as user.ID.String().
+func TestIntegration_NotifierStringSessionIdentity(t *testing.T) {
+	app := newTestApp(t, map[string]string{"COOKIE_NAME": "session"})
+
+	app.Routes.Get("/fake-login", func(w http.ResponseWriter, r *http.Request) {
+		app.Session.Put(r.Context(), "userID", "b0b6d9f5-aaaa-1111-2222-333333333333")
+		w.WriteHeader(http.StatusOK)
+	})
+	app.Routes.Get("/sse/notify", app.Notifier.SSEHandler())
+
+	ts := httptest.NewServer(app.Handler())
+	defer ts.Close()
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("cookie jar error = %v", err)
+	}
+	client := &http.Client{Jar: jar}
+	resp, err := client.Get(ts.URL + "/fake-login")
+	if err != nil {
+		t.Fatalf("fake-login error = %v", err)
+	}
+	resp.Body.Close()
+
+	var cookie *http.Cookie
+	for _, c := range jar.Cookies(parsedURL(t, ts.URL)) {
+		if c.Name == app.Session.Cookie.Name {
+			cookie = c
+		}
+	}
+	if cookie == nil {
+		t.Fatal("no session cookie after login")
+	}
+
+	sse := notifySSEClientWithCookie(t, ts.URL, cookie)
+	defer sse.close()
+
+	const id = "b0b6d9f5-aaaa-1111-2222-333333333333"
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if users := app.Notifier.ConnectedUsers(); len(users) == 1 && users[0] == id {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := app.Notifier.ConnectedUsers(); len(got) != 1 || got[0] != id {
+		t.Fatalf("ConnectedUsers() = %v, want [%s]", got, id)
+	}
+
+	note := NewNotification("success", "paid", "order confirmed")
+	if got := app.NotifyUser(id, note); got != 1 {
+		t.Fatalf("NotifyUser(%s) reached %d connections, want 1", id, got)
+	}
+	if got := readSSENotification(t, sse); got.ID != note.ID {
+		t.Fatalf("sse got ID %s, want %s", got.ID, note.ID)
+	}
+}
+
+// TestNotifier_WithNotifierIdentity verifies a custom identity function
+// replaces (and can restore) the default session-based identity.
+func TestNotifier_WithNotifierIdentity(t *testing.T) {
+	app := newTestApp(t, map[string]string{"COOKIE_NAME": "session"})
+
+	custom := func(r *http.Request) string { return r.Header.Get("X-User") }
+	app.WithNotifierIdentity(custom)
+
+	if app.Notifier == nil {
+		t.Fatal("WithNotifierIdentity did not build a Notifier")
+	}
+
+	app.Routes.Get("/sse/notify", app.Notifier.SSEHandler())
+	ts := httptest.NewServer(app.Handler())
+	defer ts.Close()
+
+	sse := notifySSEClientWithHeader(t, ts.URL, "X-User", "custom-9")
+	defer sse.close()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if users := app.Notifier.ConnectedUsers(); len(users) == 1 && users[0] == "custom-9" {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := app.Notifier.ConnectedUsers(); len(got) != 1 || got[0] != "custom-9" {
+		t.Fatalf("ConnectedUsers() = %v, want [custom-9]", got)
+	}
+
+	// Restoring nil identity rebuilds the notifier with the default.
+	app.WithNotifierIdentity(nil)
+	if app.Notifier == nil {
+		t.Fatal("WithNotifierIdentity(nil) did not rebuild the Notifier")
+	}
+}
+
+// TestNotifier_NotifyUserEvent verifies a raw SSE event reaches only the
+// targeted user's SSE connections, with a custom event name and untouched
+// data (no "notification" envelope).
+func TestNotifier_NotifyUserEvent(t *testing.T) {
+	notifier, server := newTestNotifier(t)
+
+	alice := notifySSEClient(t, server, "alice", "")
+	bob := notifySSEClient(t, server, "bob", "")
+
+	ev := SSEEvent{Event: "order.status", Data: []byte(`{"order_id":"o1","payment_status":"approved"}`)}
+
+	if got := notifier.NotifyUserEvent("alice", ev); got != 1 {
+		t.Fatalf("NotifyUserEvent(alice) reached %d connections, want 1", got)
+	}
+	if got := readSSERawEvent(t, alice, "order.status"); got != string(ev.Data) {
+		t.Fatalf("alice got data %q, want %q", got, string(ev.Data))
+	}
+
+	// bob must not receive the event: a subsequent event for bob proves the
+	// stream is still open and delivery is correctly filtered.
+	if got := notifier.NotifyUserEvent("bob", SSEEvent{Event: "order.status", Data: []byte(`{"order_id":"o2"}`)}); got != 1 {
+		t.Fatalf("NotifyUserEvent(bob) reached %d connections, want 1", got)
+	}
+	if got := readSSERawEvent(t, bob, "order.status"); got != `{"order_id":"o2"}` {
+		t.Fatalf("bob got data %q, want %q", got, `{"order_id":"o2"}`)
+	}
+}
+
+// TestNotifier_NotifyTopicEvent verifies a raw SSE event reaches only
+// subscribers of a topic.
+func TestNotifier_NotifyTopicEvent(t *testing.T) {
+	notifier, server := newTestNotifier(t)
+
+	sub := notifySSEClient(t, server, "u1", "orders")
+	nonSub := notifySSEClient(t, server, "u2", "")
+
+	ev := SSEEvent{Event: "order.status", Data: []byte(`{"order_id":"o1"}`)}
+	if got := notifier.NotifyTopicEvent("orders", ev); got != 1 {
+		t.Fatalf("NotifyTopicEvent(orders) reached %d connections, want 1", got)
+	}
+	if got := readSSERawEvent(t, sub, "order.status"); got != `{"order_id":"o1"}` {
+		t.Fatalf("subscriber got data %q, want %q", got, `{"order_id":"o1"}`)
+	}
+
+	// A non-subscriber still receives an unrelated custom event, proving the
+	// filter keys on topic rather than dropping the connection entirely.
+	if got := notifier.NotifyUserEvent("u2", SSEEvent{Event: "ping", Data: []byte(`ok`)}); got != 1 {
+		t.Fatalf("NotifyUserEvent(u2) reached %d connections, want 1", got)
+	}
+	if got := readSSERawEvent(t, nonSub, "ping"); got != "ok" {
+		t.Fatalf("non-subscriber got data %q, want %q", got, "ok")
+	}
+}
+
 // TestIntegration_NotifyHelpers_NilSafety verifies the Regius helpers on
 // a zero-value app (no Notifier constructed).
 func TestIntegration_NotifyHelpers_NilSafety(t *testing.T) {
@@ -737,6 +912,33 @@ func notifySSEClientWithCookie(t *testing.T, base string, cookie *http.Cookie) *
 		t.Fatalf("request error = %v", err)
 	}
 	req.AddCookie(cookie)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		cancel()
+		t.Fatalf("sse connect error = %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		cancel()
+		resp.Body.Close()
+		t.Fatalf("sse connect status = %d, want 200", resp.StatusCode)
+	}
+
+	return &sseStream{resp: resp, reader: bufio.NewReader(resp.Body), cancel: cancel}
+}
+
+// notifySSEClientWithHeader opens the notification stream carrying an
+// arbitrary header (for tests that exercise a custom identity function).
+func notifySSEClientWithHeader(t *testing.T, base, header, value string) *sseStream {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/sse/notify", nil)
+	if err != nil {
+		cancel()
+		t.Fatalf("request error = %v", err)
+	}
+	req.Header.Set(header, value)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

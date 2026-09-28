@@ -128,7 +128,9 @@ func (n *Notifier) identityOf(r *http.Request) string {
 
 // defaultNotifierIdentity is the identity function New wires into
 // r.Notifier: the auth scaffolding's "userID" session key
-// (Session.Put(ctx, "userID", user.ID)). Zero/absent means anonymous.
+// (Session.Put(ctx, "userID", user.ID)). Scaling apps may store userID as
+// an integer (GetInt) or a string such as a UUID (GetString); both resolve
+// to the same identity. Absent means anonymous.
 func (r *Regius) defaultNotifierIdentity() func(*http.Request) string {
 	return func(req *http.Request) string {
 		if r.Session == nil {
@@ -137,8 +139,19 @@ func (r *Regius) defaultNotifierIdentity() func(*http.Request) string {
 		if userID := r.Session.GetInt(req.Context(), "userID"); userID != 0 {
 			return strconv.Itoa(userID)
 		}
-		return ""
+		return r.Session.GetString(req.Context(), "userID")
 	}
+}
+
+// WithNotifierIdentity sets the identity function used to resolve a
+// connection's user key for user-targeted delivery and (re)builds the
+// Notifier over r.SSE and r.WS. Passing nil restores the default
+// session-based identity (userID session key, int or string).
+func (r *Regius) WithNotifierIdentity(fn func(*http.Request) string) {
+	if fn == nil {
+		fn = r.defaultNotifierIdentity()
+	}
+	r.Notifier = NewNotifier(r.SSE, r.WS, fn)
 }
 
 // NotifyAll delivers note to every connection on both transports via the
@@ -166,6 +179,26 @@ func (r *Regius) NotifyTopic(topic string, note Notification) int {
 		return 0
 	}
 	return r.Notifier.NotifyTopic(topic, note)
+}
+
+// NotifyUserEvent delivers a raw SSE event to a single user's SSE
+// connections via the app's notifier and returns how many it reached; see
+// Notifier.NotifyUserEvent.
+func (r *Regius) NotifyUserEvent(userID string, ev SSEEvent) int {
+	if r.Notifier == nil {
+		return 0
+	}
+	return r.Notifier.NotifyUserEvent(userID, ev)
+}
+
+// NotifyTopicEvent delivers a raw SSE event to a topic's SSE subscribers
+// via the app's notifier and returns how many it reached; see
+// Notifier.NotifyTopicEvent.
+func (r *Regius) NotifyTopicEvent(topic string, ev SSEEvent) int {
+	if r.Notifier == nil {
+		return 0
+	}
+	return r.Notifier.NotifyTopicEvent(topic, ev)
 }
 
 // WSHandler returns the http.HandlerFunc for the notification socket.
@@ -266,6 +299,19 @@ func (n *Notifier) NotifyUser(userID string, note Notification) int {
 		n.sendSSE(func(entry *notifierEntry) bool { return entry.user == userID }, sseEv)
 }
 
+// NotifyUserEvent delivers a raw SSE event (custom event name + data) to
+// the given user's SSE connections only. Unlike NotifyUser it does not
+// wrap the payload in the "notification" envelope nor touch the WebSocket
+// hub: it is for app-specific, privacy-sensitive push, such as an order
+// status update that must reach only the order's owner. Returns the
+// number of SSE connections reached (0 = offline).
+func (n *Notifier) NotifyUserEvent(userID string, ev SSEEvent) int {
+	if userID == "" {
+		return 0
+	}
+	return n.sendSSE(func(entry *notifierEntry) bool { return entry.user == userID }, ev)
+}
+
 // NotifyTopic delivers note to every connection subscribed to topic
 // (carrying the topic name in the notification's Topic field). Topics
 // are opt-in public channels — any connected client may subscribe to any
@@ -277,13 +323,25 @@ func (n *Notifier) NotifyTopic(topic string, note Notification) int {
 	}
 	note.Topic = topic
 	sseEv, wsEv := notifyEnvelope(note)
-	return n.sendWS(func(entry *notifierEntry) bool {
+	match := func(entry *notifierEntry) bool {
 		_, ok := entry.topics[topic]
 		return ok
-	}, wsEv) + n.sendSSE(func(entry *notifierEntry) bool {
+	}
+	return n.sendWS(match, wsEv) + n.sendSSE(match, sseEv)
+}
+
+// NotifyTopicEvent delivers a raw SSE event (custom event name + data) to
+// every SSE connection subscribed to topic. Like topics themselves, this
+// is routing, not access control: any subscriber can receive it. Returns
+// the number of SSE connections reached.
+func (n *Notifier) NotifyTopicEvent(topic string, ev SSEEvent) int {
+	if !notifyTopicPattern.MatchString(topic) {
+		return 0
+	}
+	return n.sendSSE(func(entry *notifierEntry) bool {
 		_, ok := entry.topics[topic]
 		return ok
-	}, sseEv)
+	}, ev)
 }
 
 // Subscribers reports how many connections currently listen to topic
