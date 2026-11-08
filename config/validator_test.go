@@ -68,6 +68,14 @@ func TestValidator_MultipleFailures(t *testing.T) {
 	assert.True(t, strings.Contains(msg, "\n  -"))
 }
 
+func TestIsJSON(t *testing.T) {
+	assert.NoError(t, IsJSON(`{"a":1}`))
+	assert.NoError(t, IsJSON(`[]`))
+	assert.NoError(t, IsJSON(`[{"name":"info"}]`))
+	assert.Error(t, IsJSON(`not-json`))
+	assert.Error(t, IsJSON(``))
+}
+
 func TestIsBool(t *testing.T) {
 	assert.NoError(t, IsBool("true"))
 	assert.NoError(t, IsBool("false"))
@@ -153,7 +161,7 @@ func TestDefaultValidator_AllValid(t *testing.T) {
 		"HASH_ALGORITHM", "SECURE", "DEBUG", "CORS_ENABLED",
 		"SECURITY_HEADERS_ENABLED", "API_KEY_AUTH_ENABLED",
 		"REQUEST_ID_ENABLED", "I18N_ENABLED", "CORS_MAX_AGE",
-		"HSTS_MAX_AGE", "IP_FILTER_STATUS_CODE", "SMTP_PORT")
+		"HSTS_MAX_AGE", "IP_FILTER_STATUS_CODE", "SMTP_PORT", "MAIL_ACCOUNTS")
 	defer restoreEnv(save)
 
 	t.Setenv("PORT", "8080")
@@ -179,7 +187,7 @@ func TestDefaultValidator_AllValid(t *testing.T) {
 }
 
 func TestDefaultValidator_InvalidValues(t *testing.T) {
-	save := saveEnv("PORT", "DATABASE_TYPE", "CACHE", "HASH_ALGORITHM", "SMTP_PORT")
+	save := saveEnv("PORT", "DATABASE_TYPE", "CACHE", "HASH_ALGORITHM", "SMTP_PORT", "MAIL_ACCOUNTS")
 	defer restoreEnv(save)
 
 	t.Setenv("PORT", "99999")
@@ -204,7 +212,7 @@ func TestDefaultValidator_OptionalUnset(t *testing.T) {
 		"HASH_ALGORITHM", "SECURE", "DEBUG", "CORS_ENABLED",
 		"SECURITY_HEADERS_ENABLED", "API_KEY_AUTH_ENABLED",
 		"REQUEST_ID_ENABLED", "I18N_ENABLED", "CORS_MAX_AGE",
-		"HSTS_MAX_AGE", "IP_FILTER_STATUS_CODE", "SMTP_PORT")
+		"HSTS_MAX_AGE", "IP_FILTER_STATUS_CODE", "SMTP_PORT", "MAIL_ACCOUNTS")
 	defer restoreEnv(save)
 
 	v := DefaultValidator()

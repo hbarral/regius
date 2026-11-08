@@ -340,6 +340,7 @@ Seed files are plain `.sql` files executed in a single transaction, and each is 
 - `regius make session`: Create session table in database.
 - `regius make key`: Generate 32-character encryption key.
 - `regius make mail <name>`: Create mail templates.
+- `regius make mail-account <name>`: Add a named mail account to `MAIL_ACCOUNTS` in `.env` (e.g. `no-reply`, `info`), each with its own credentials and From address.
 - `regius make api <name>`: Create a CRUD API handler with pagination + response envelope, mounted in routes-api.go. Pass `--with-resource` to also generate an API resource (JSON transformer).
 - `regius make webhook <name>`: Create a signed inbound webhook endpoint (providers: generic, github, stripe) mounted at /api/webhooks/<name>.
 - `regius make job <name>`: Create a background job (typed payload, handler, enqueue helper) in the workers directory; on first run it also bootstraps the workers/register.go hub, wires RegisterAll into init.regius.go, and scaffolds the regius_jobs table migration.
@@ -1002,6 +1003,107 @@ DEV_RELOAD_PATH=/__dev          # base path for the reload endpoints
       // render the form again with errors...
   }
 ```
+
+</details>
+
+<a name="mailer-system"></a>
+<details>
+    <summary>Mailer System (single + multiple accounts)</summary>
+
+Regius ships a background mailer that renders HTML + plain-text templates,
+inlines CSS via go-premailer, and delivers over SMTP or an API provider
+(mailgun, sparkpost, sendgrid).
+
+**Default account (backward compatible)** — configured with the single-account
+env vars and exposed as `app.Mail`:
+
+```properties
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=apikey
+SMTP_PASSWORD=secret
+SMTP_ENCRYPTION=tls
+MAIL_DOMAIN=example.com
+FROM_NAME=Example
+FROM_ADDRESS=no-reply@example.com
+
+# or an API transport instead of SMTP
+MAILER_API=sendgrid
+MAILER_KEY=...
+MAILER_URL=https://api.sendgrid.com
+```
+
+```go
+msg := mailer.Message{
+    To:       user.Email,
+    Subject:  "Welcome",
+    Template: "welcome",
+    Data:     map[string]interface{}{"User": user},
+}
+h.App.Mail.Jobs <- msg
+res := <-h.App.Mail.Results
+if res.Error != nil { /* handle */ }
+```
+
+**Multiple accounts** — set `MAIL_ACCOUNTS` to a JSON array of accounts. Each
+account is an independent mailer with its own transport, credentials, From
+address, and (optionally) templates directory. The single-account settings
+above become the `"default"` account; additional named accounts are registered
+alongside it and reached via `app.MailAccount(name)` or `app.Mailer.Account(name)`:
+
+```properties
+MAIL_ACCOUNTS='[
+  {"name":"no-reply","from_address":"no-reply@example.com","username":"nr","password":"secret1"},
+  {"name":"info","from_address":"info@example.com","host":"smtp.example.com","port":587,"username":"info","password":"secret2","encryption":"tls"},
+  {"name":"billing","from_address":"billing@example.com","api":"sendgrid","api_key":"...","api_url":"https://api.sendgrid.com"}
+]'
+```
+
+Each account object accepts the same fields as the default account: `name`,
+`domain`, `templates`, `host`, `port`, `username`, `password`, `encryption`
+(`tls` | `ssl` | `none`), `from_address`, `from_name`, `api`, `api_key`, and
+`api_url`. When `templates` is omitted it falls back to the app's `mail/`
+directory.
+
+Omitted **transport** fields (`host`, `port`, `encryption`, `domain`, `api`,
+`api_key`, `api_url`, `from_name`) are inherited from the default account at
+startup, so a named mailbox only needs its own identity: `name`,
+`from_address`, `username`, and `password` (the identity fields are never
+inherited).
+
+You can add accounts by hand, or scaffold them with the CLI:
+
+```bash
+regius make mail-account no-reply
+regius make mail-account info --from info@example.com --username info --password secret
+regius make mail-account billing --api sendgrid --api-key KEY --api-url https://api.sendgrid.com
+```
+
+`regius make mail-account` merges the account into the `MAIL_ACCOUNTS` JSON
+array in `.env` (it refuses to overwrite an existing account name) and derives
+the From address from `MAIL_DOMAIN` when `--from` is not given.
+
+```go
+info, err := app.MailAccount("info")
+if err != nil { /* account not configured */ }
+
+info.Jobs <- mailer.Message{
+    To:       "customer@example.com",
+    Subject:  "How can we help?",
+    Template: "info",
+}
+res := <-info.Results
+if res.Error != nil { /* handle */ }
+```
+
+- `app.Mailer.Accounts()` returns all registered accounts; `app.Mailer.Default()`
+  returns the default.
+- `regius make mail <name>` creates `mail/<name>.html.template` and
+  `mail/<name>.plain.template`.
+- `regius make mail-account <name>` adds a named account to `MAIL_ACCOUNTS`.
+- The auth scaffolding sends password-reset mail through the named account in
+  `RESET_PASSWORD_MAILER_ACCOUNT` when set, otherwise through the default
+  account.
 
 </details>
 
@@ -2120,6 +2222,18 @@ MAILER_API=
 MAILER_KEY=
 MAILER_URL=
 
+# additional named mail accounts (JSON array). Each account has its own
+# transport settings and From address; name is the lookup key used with
+# app.MailAccount("info") or app.Mailer.Account("info").
+# The single-account SMTP_*/MAILER_*/FROM_* settings above become the
+# "default" account (and remain available via app.Mail).
+#
+# MAIL_ACCOUNTS='[
+#   {"name":"no-reply","from_address":"no-reply@${APP_NAME}.com","username":"","password":""},
+#   {"name":"info","from_address":"info@${APP_NAME}.com","host":"smtp.example.com","port":587,"username":"","password":"","encryption":"tls"}
+# ]'
+MAIL_ACCOUNTS=
+
 # internationalization (i18n). Enabled by default.
 # DEFAULT_LOCALE is used when no locale cookie or Accept-Language header is present.
 # SUPPORTED_LOCALES is a comma-separated list of available languages.
@@ -2218,6 +2332,9 @@ MYSQL_ROOT_PASSWORD=
 
 # reset password settings
 RESET_PASSWORD_MAILER_FROM="no-reply@${APP_NAME}.com"
+# optional named mail account (from MAIL_ACCOUNTS) to send reset emails from;
+# leave empty to use the default account (app.Mail).
+RESET_PASSWORD_MAILER_ACCOUNT=
 # support email
 SUPPORT_EMAIL="support@$testapp.com"
 

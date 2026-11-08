@@ -1,6 +1,7 @@
 package regius
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -64,8 +65,18 @@ type Regius struct {
 	// constructs it (memory backend by default) so Enqueue works everywhere;
 	// workers and the scheduler run only while enabled (JOBS_ENABLED) and
 	// started — ListenAndServe does both when enabled.
-	Jobs   *jobs.Manager
-	Mail   mailer.Mail
+	Jobs *jobs.Manager
+	// Mail is the default mail account, configured through the single-account
+	// SMTP_*/MAILER_*/FROM_* environment variables. It remains available for
+	// backward compatibility; use Mailer (or MailAccount) to reach additional
+	// named accounts.
+	Mail mailer.Mail
+	// Mailer is the registry of named mail accounts. The default account is
+	// registered as "default" (and mirrored in Mail); extra accounts come from
+	// the MAIL_ACCOUNTS environment variable (a JSON array of mailer.Account).
+	// New always constructs it, so Mailer.Start() is safe to call even when no
+	// accounts are configured.
+	Mailer *mailer.Manager
 	Server Server
 	I18n   I18nConfig
 	SSE    *SSEBroker
@@ -233,9 +244,7 @@ func (r *Regius) New(rootPath string) error {
 	r.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
 	r.RootPath = rootPath
 
-	if os.Getenv("SMTP_HOST") != "" || os.Getenv("MAILER_API") != "" {
-		r.Mail = r.createMailer()
-	}
+	r.Mailer = r.createMailerManager()
 
 	exploded := strings.Split(os.Getenv("ALLOWED_FILETYPES"), ",")
 	var allowedTypes []string
@@ -519,9 +528,7 @@ func (r *Regius) New(rootPath string) error {
 
 	r.createRenderer()
 	r.FileSystems = r.initFileSystems()
-	if os.Getenv("SMTP_HOST") != "" || os.Getenv("MAILER_API") != "" {
-		go r.Mail.ListenForMail()
-	}
+	r.Mailer.Start()
 
 	return nil
 }
@@ -791,6 +798,61 @@ func (r *Regius) createMailer() mailer.Mail {
 	}
 
 	return m
+}
+
+// createMailerManager builds the mail account registry. The default account is
+// read from the single-account SMTP_*/MAILER_*/FROM_* env vars and registered
+// as "default" (mirrored in r.Mail); additional named accounts are read from
+// the MAIL_ACCOUNTS env var as a JSON array of mailer.Account.
+func (r *Regius) createMailerManager() *mailer.Manager {
+	manager := mailer.NewManager()
+
+	if os.Getenv("SMTP_HOST") != "" || os.Getenv("MAILER_API") != "" {
+		r.Mail = r.createMailer()
+		if err := manager.Register("default", &r.Mail); err != nil {
+			r.ErrorLog.Printf("mailer: %v", err)
+		}
+	}
+
+	for _, account := range r.parseMailAccounts() {
+		mail := account.ToMail(r.RootPath + "/mail")
+		// Let partial accounts reuse the default transport (host/port/
+		// encryption/API), while keeping their own identity (username/
+		// password/from_address).
+		mail.InheritFrom(r.Mail)
+		if err := manager.Register(account.Name, mail); err != nil {
+			r.ErrorLog.Printf("mailer: %v", err)
+		}
+	}
+
+	return manager
+}
+
+// parseMailAccounts reads MAIL_ACCOUNTS (a JSON array of mailer.Account).
+// Malformed JSON is logged and skipped rather than aborting startup.
+func (r *Regius) parseMailAccounts() []mailer.Account {
+	raw := strings.TrimSpace(os.Getenv("MAIL_ACCOUNTS"))
+	if raw == "" {
+		return nil
+	}
+
+	var accounts []mailer.Account
+	if err := json.Unmarshal([]byte(raw), &accounts); err != nil {
+		r.ErrorLog.Printf("mailer: invalid MAIL_ACCOUNTS JSON: %v", err)
+		return nil
+	}
+
+	return accounts
+}
+
+// MailAccount returns the named mail account, or the default account when name
+// is empty. It returns an error when no mail accounts are configured or the
+// requested account does not exist.
+func (r *Regius) MailAccount(name string) (*mailer.Mail, error) {
+	if r.Mailer == nil {
+		return nil, fmt.Errorf("mailer: no mail accounts configured")
+	}
+	return r.Mailer.Account(name)
 }
 
 func (r *Regius) createClientRedisCache() *cache.RedisCache {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 	"time"
 
@@ -45,6 +46,51 @@ type Result struct {
 	Error   error
 }
 
+// Account describes the configuration for a single mail account. It is used
+// to register named accounts (e.g. "no-reply", "info") in addition to the
+// default account. Every account carries its own transport settings, so each
+// can use a different SMTP server, API provider, or From address.
+type Account struct {
+	Name        string `json:"name"`
+	Domain      string `json:"domain"`
+	Templates   string `json:"templates"`
+	Host        string `json:"host"`
+	Port        int    `json:"port"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	Encryption  string `json:"encryption"`
+	FromAddress string `json:"from_address"`
+	FromName    string `json:"from_name"`
+	API         string `json:"api"`
+	APIKey      string `json:"api_key"`
+	APIUrl      string `json:"api_url"`
+}
+
+// ToMail converts the account into a ready-to-use Mail. When the account does
+// not define a templates directory, templatesDir is used.
+func (a Account) ToMail(templatesDir string) *Mail {
+	tpl := a.Templates
+	if tpl == "" {
+		tpl = templatesDir
+	}
+	return &Mail{
+		Domain:      a.Domain,
+		Templates:   tpl,
+		Host:        a.Host,
+		Port:        a.Port,
+		Username:    a.Username,
+		Password:    a.Password,
+		Encryption:  a.Encryption,
+		FromAddress: a.FromAddress,
+		FromName:    a.FromName,
+		Jobs:        make(chan Message, 20),
+		Results:     make(chan Result, 20),
+		API:         a.API,
+		APIKey:      a.APIKey,
+		APIUrl:      a.APIUrl,
+	}
+}
+
 func (m *Mail) ListenForMail() {
 	for {
 		msg := <-m.Jobs
@@ -54,6 +100,37 @@ func (m *Mail) ListenForMail() {
 		} else {
 			m.Results <- Result{true, nil}
 		}
+	}
+}
+
+// InheritFrom fills zero-valued transport settings from base. The account
+// identity fields (Username, Password, FromAddress) are deliberately left
+// alone, so a named account can be a different mailbox on the same server while
+// reusing the default host/port/encryption/API configuration.
+func (m *Mail) InheritFrom(base Mail) {
+	if m.Domain == "" {
+		m.Domain = base.Domain
+	}
+	if m.Host == "" {
+		m.Host = base.Host
+	}
+	if m.Port == 0 {
+		m.Port = base.Port
+	}
+	if m.Encryption == "" {
+		m.Encryption = base.Encryption
+	}
+	if m.FromName == "" {
+		m.FromName = base.FromName
+	}
+	if m.API == "" {
+		m.API = base.API
+	}
+	if m.APIKey == "" {
+		m.APIKey = base.APIKey
+	}
+	if m.APIUrl == "" {
+		m.APIUrl = base.APIUrl
 	}
 }
 
@@ -268,4 +345,77 @@ func (m *Mail) inlineCSS(s string) (string, error) {
 	}
 
 	return html, nil
+}
+
+// Manager is a registry of named mail accounts. It holds the default account
+// (also exposed via Regius.Mail for backward compatibility) plus any number of
+// additional named accounts, each with its own transport configuration and its
+// own buffered Jobs/Results channels.
+type Manager struct {
+	defaultName string
+	accounts    map[string]*Mail
+}
+
+// NewManager creates an empty mail account manager.
+func NewManager() *Manager {
+	return &Manager{accounts: make(map[string]*Mail)}
+}
+
+// Register adds a named account. Names are case-insensitive; the first account
+// registered becomes the default. Registering a duplicate name returns an error.
+func (m *Manager) Register(name string, mail *Mail) error {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		return fmt.Errorf("mailer: account name cannot be empty")
+	}
+	if mail == nil {
+		return fmt.Errorf("mailer: account %q cannot be nil", name)
+	}
+	if _, ok := m.accounts[name]; ok {
+		return fmt.Errorf("mailer: account %q already registered", name)
+	}
+	if m.defaultName == "" {
+		m.defaultName = name
+	}
+	m.accounts[name] = mail
+	return nil
+}
+
+// Account returns the named account. An empty name returns the default account.
+func (m *Manager) Account(name string) (*Mail, error) {
+	if name == "" {
+		name = m.defaultName
+	}
+	if name == "" {
+		return nil, fmt.Errorf("mailer: no default account configured")
+	}
+	mail, ok := m.accounts[strings.ToLower(name)]
+	if !ok {
+		return nil, fmt.Errorf("mailer: account %q not configured", name)
+	}
+	return mail, nil
+}
+
+// Default returns the default account, or nil when no accounts are configured.
+func (m *Manager) Default() *Mail {
+	if m.defaultName == "" {
+		return nil
+	}
+	return m.accounts[m.defaultName]
+}
+
+// Accounts returns a copy of the registered accounts keyed by name.
+func (m *Manager) Accounts() map[string]*Mail {
+	out := make(map[string]*Mail, len(m.accounts))
+	for k, v := range m.accounts {
+		out[k] = v
+	}
+	return out
+}
+
+// Start launches the background mail worker for every registered account.
+func (m *Manager) Start() {
+	for _, mail := range m.accounts {
+		go mail.ListenForMail()
+	}
 }

@@ -24,6 +24,7 @@ func init() {
 	makeCmd.AddCommand(makeSessionCmd)
 	makeCmd.AddCommand(makeKeyCmd)
 	makeCmd.AddCommand(makeMailCmd)
+	makeCmd.AddCommand(makeMailAccountCmd)
 	makeCmd.AddCommand(makeGormModelCmd)
 	makeCmd.AddCommand(makeLocaleCmd)
 	makeCmd.AddCommand(makeAPICmd)

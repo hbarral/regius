@@ -247,6 +247,18 @@ func (h *Handlers) PostForgot(w http.ResponseWriter, r *http.Request) {
 	template := "password-reset"
 	from := os.Getenv("RESET_PASSWORD_MAILER_FROM")
 
+	// Send from the named account when RESET_PASSWORD_MAILER_ACCOUNT is set,
+	// otherwise fall back to the default account (h.App.Mail).
+	mail := h.App.Mail
+	if accountName := os.Getenv("RESET_PASSWORD_MAILER_ACCOUNT"); accountName != "" {
+		account, err := h.App.MailAccount(accountName)
+		if err != nil {
+			h.App.ErrorStatus(w, http.StatusBadRequest)
+			return
+		}
+		mail = *account
+	}
+
 	msg := mailer.Message{
 		To:       u.Email,
 		Subject:  subject,
@@ -254,8 +266,8 @@ func (h *Handlers) PostForgot(w http.ResponseWriter, r *http.Request) {
 		Data:     data,
 		From:     from,
 	}
-	h.App.Mail.Jobs <- msg
-	res := <-h.App.Mail.Results
+	mail.Jobs <- msg
+	res := <-mail.Results
 	if res.Error != nil {
 		h.App.ErrorStatus(w, http.StatusBadRequest)
 		return

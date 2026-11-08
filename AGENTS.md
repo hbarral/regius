@@ -256,6 +256,17 @@ func TestMain(m *testing.M) {
 - HTML templates
 - Uses `github.com/vanng822/go-premailer` for HTML processing
 
+#### Mail Accounts
+- `Regius.Mail` (`mailer.Mail`) is the default account configured by the single-account env vars (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_ENCRYPTION`, `MAIL_DOMAIN`, `FROM_NAME`, `FROM_ADDRESS`, `MAILER_API`, `MAILER_KEY`, `MAILER_URL`); it is registered as `"default"` for backward compatibility.
+- `Regius.Mailer` (`*mailer.Manager`) is the named-account registry. `New()` always constructs it; `New()` also starts one `ListenForMail` worker goroutine per registered account via `Mailer.Start()` (replacing the previous single `go r.Mail.ListenForMail()`).
+- `MAIL_ACCOUNTS` is a JSON array of `mailer.Account` objects, each with its own `name`, `domain`, `templates`, `host`, `port`, `username`, `password`, `encryption` (`tls`|`ssl`|`none`), `from_address`, `from_name`, `api`, `api_key`, and `api_url`. `templates` falls back to the app's `mail/` directory. Names are case-insensitive and must be unique; malformed JSON is logged and skipped.
+- `mailer.Mail.InheritFrom(base)` fills zero-valued **transport** fields (`Domain`, `Host`, `Port`, `Encryption`, `FromName`, `API`, `APIKey`, `APIUrl`) from the default account; the identity fields (`Username`, `Password`, `FromAddress`) are never inherited. `createMailerManager` calls it for each `MAIL_ACCOUNTS` entry, so a named mailbox only needs `name` + `from_address` + `username` + `password`.
+- Look up accounts with `app.MailAccount(name)` or `app.Mailer.Account(name)` (empty name returns the default); `app.Mailer.Accounts()` returns a copy of the registry, `app.Mailer.Default()` the default account. Each account has its own buffered `Jobs`/`Results` channels, so the `mail.Jobs <- msg; res := <-mail.Results` handoff is unchanged per account.
+- `mailer.Account.ToMail(templatesDir)` converts an account config into a ready `*mailer.Mail` (with channels allocated); used by `createMailerManager` in `regius.go`.
+- CLI: `regius make mail-account <name>` merges a named account into the `MAIL_ACCOUNTS` JSON array in `.env` (flags: `--from`, `--from-name`, `--domain`, `--host`, `--port`, `--username`, `--password`, `--encryption`, `--api`, `--api-key`, `--api-url`); it derives the From address from `MAIL_DOMAIN` when `--from` is absent, and refuses to overwrite an existing account name. The helper is `appendMailAccount`/`readMailAccounts` in `cli/make_mail_account_cmd.go` (the CLI has its own `mailAccount` struct — it cannot import the root module).
+- The auth scaffolding sends password-reset mail through the account named in `RESET_PASSWORD_MAILER_ACCOUNT` when set, otherwise through the default account (`h.App.Mail`); `RESET_PASSWORD_MAILER_FROM` still overrides the From address.
+- Config validation: `config.IsJSON` validates `MAIL_ACCOUNTS` in `DefaultValidator`.
+
 ### Web Framework Components
 
 #### Router
@@ -447,6 +458,9 @@ The scaffolded app defaults to **templ** (`github.com/a-h/templ`) with the [temp
 ./regius make gorm-model <name>  # Create GORM model
 ./regius make session            # Create session table
 ./regius make mail <name>        # Create mail templates
+./regius make mail-account <name> # Add a named mail account to MAIL_ACCOUNTS in .env
+                                 #   --from, --host, --port, --username, --password,
+                                 #   --encryption, --api, --api-key, --api-url
 ./regius make api <name>         # Create CRUD API handler with pagination + envelope
                                  #   --with-resource also generates resources/<name>_resource.go
 ./regius make webhook <name>     # Create signed inbound webhook endpoint

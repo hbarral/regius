@@ -1,6 +1,8 @@
 package regius
 
 import (
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -230,6 +232,72 @@ func TestCreateMailer(t *testing.T) {
 	assert.Equal(t, 20, cap(m.Results))
 }
 
+func TestCreateMailerManager_DefaultAndNamedAccounts(t *testing.T) {
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	t.Setenv("SMTP_PORT", "587")
+	t.Setenv("FROM_ADDRESS", "noreply@example.com")
+	t.Setenv("MAIL_ACCOUNTS", `[
+		{"name":"info","from_address":"info@example.com","host":"smtp.example.com","port":587,"username":"info","password":"p"},
+		{"name":"billing","from_address":"billing@example.com","api":"sendgrid","api_key":"k","api_url":"https://api.sendgrid.com"}
+	]`)
+
+	r := &Regius{RootPath: "/app/root", ErrorLog: log.New(io.Discard, "", 0)}
+	mgr := r.createMailerManager()
+
+	require.NotNil(t, mgr)
+	assert.Equal(t, 3, len(mgr.Accounts()))
+
+	def, err := mgr.Account("default")
+	require.NoError(t, err)
+	assert.Equal(t, "noreply@example.com", def.FromAddress)
+
+	info, err := mgr.Account("info")
+	require.NoError(t, err)
+	assert.Equal(t, "info@example.com", info.FromAddress)
+	assert.Equal(t, "smtp.example.com", info.Host)
+	assert.Equal(t, 587, info.Port)
+
+	billing, err := mgr.Account("billing")
+	require.NoError(t, err)
+	assert.Equal(t, "billing@example.com", billing.FromAddress)
+	assert.Equal(t, "sendgrid", billing.API)
+
+	// r.Mail mirrors the default account.
+	assert.Equal(t, def.FromAddress, r.Mail.FromAddress)
+}
+
+func TestCreateMailerManager_NoAccounts(t *testing.T) {
+	t.Setenv("SMTP_HOST", "")
+	t.Setenv("MAILER_API", "")
+	t.Setenv("MAIL_ACCOUNTS", "")
+
+	r := &Regius{RootPath: "/app/root", ErrorLog: log.New(io.Discard, "", 0)}
+	mgr := r.createMailerManager()
+
+	require.NotNil(t, mgr)
+	assert.Empty(t, mgr.Accounts())
+	assert.Nil(t, mgr.Default())
+}
+
+func TestParseMailAccounts_InvalidJSON(t *testing.T) {
+	t.Setenv("MAIL_ACCOUNTS", `not-json`)
+	r := &Regius{ErrorLog: log.New(io.Discard, "", 0)}
+	assert.Empty(t, r.parseMailAccounts())
+}
+
+func TestMailAccount(t *testing.T) {
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	r := &Regius{RootPath: "/app/root", ErrorLog: log.New(io.Discard, "", 0)}
+	r.Mailer = r.createMailerManager()
+
+	mail, err := r.MailAccount("")
+	require.NoError(t, err)
+	assert.NotNil(t, mail)
+
+	_, err = r.MailAccount("missing")
+	assert.Error(t, err)
+}
+
 func TestCreateFileSystems_NoneConfigured(t *testing.T) {
 	for _, k := range []string{"MINIO_SECRET", "SFTP_HOST", "WEBDAV_HOST", "S3_KEY"} {
 		t.Setenv(k, "")
@@ -352,8 +420,9 @@ func TestCheckDotEnv_NonexistentDir_ReturnsError(t *testing.T) {
 // (no database, no cache, cookie session). It verifies the bootstrap wires the
 // core fields without panicking.
 //
-// Note: New() starts a goroutine r.Mail.ListenForMail() which blocks on the
-// Jobs channel forever; this is an intentional, benign leak for the test.
+// Note: New() starts one goroutine per mail account (via r.Mailer.Start())
+// which blocks on the Jobs channel forever; this is an intentional, benign
+// leak for the test.
 func TestNew_MinimalSuccess(t *testing.T) {
 	// Ensure no external services are required.
 	t.Setenv("DATABASE_TYPE", "")

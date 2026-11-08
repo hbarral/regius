@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -158,6 +159,12 @@ func DefaultValidator() *Validator {
 		Validate:    IsPort,
 	})
 
+	v.AddRule(ValidationRule{
+		Key:         "MAIL_ACCOUNTS",
+		Description: "JSON array of additional mail accounts",
+		Validate:    IsJSON,
+	})
+
 	return v
 }
 
@@ -228,6 +235,15 @@ func IsHTTPStatusCode(value string) error {
 }
 
 // IsIP checks that the value is a valid IP address.
+// IsJSON checks that the value is valid JSON. It is used to validate
+// structured environment variables such as MAIL_ACCOUNTS.
+func IsJSON(value string) error {
+	if !json.Valid([]byte(value)) {
+		return fmt.Errorf("must be valid JSON")
+	}
+	return nil
+}
+
 func IsIP(value string) error {
 	if net.ParseIP(value) == nil {
 		return fmt.Errorf("must be a valid IP address, got %q", value)

@@ -151,6 +151,18 @@ MAILER_API=
 MAILER_KEY=
 MAILER_URL=
 
+# additional named mail accounts (JSON array). Each account has its own
+# transport settings and From address; name is the lookup key used with
+# app.MailAccount("info") or app.Mailer.Account("info").
+# The single-account SMTP_*/MAILER_*/FROM_* settings above become the
+# "default" account (and remain available via app.Mail).
+#
+# MAIL_ACCOUNTS='[
+#   {"name":"no-reply","from_address":"no-reply@${APP_NAME}.com","username":"","password":""},
+#   {"name":"info","from_address":"info@${APP_NAME}.com","host":"smtp.example.com","port":587,"username":"","password":"","encryption":"tls"}
+# ]'
+MAIL_ACCOUNTS=
+
 # internationalization (i18n). Enabled by default.
 # DEFAULT_LOCALE is used when no locale cookie or Accept-Language header is present.
 # SUPPORTED_LOCALES is a comma-separated list of available languages.
@@ -249,6 +261,9 @@ MYSQL_ROOT_PASSWORD=
 
 # reset password settings
 RESET_PASSWORD_MAILER_FROM="no-reply@${APP_NAME}.com"
+# optional named mail account (from MAIL_ACCOUNTS) to send reset emails from;
+# leave empty to use the default account (app.Mail).
+RESET_PASSWORD_MAILER_ACCOUNT=
 # support email
 SUPPORT_EMAIL="support@${APP_NAME}.com"
 
